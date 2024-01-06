@@ -8,8 +8,7 @@
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 
 #include "channel.hpp"
-#include "eprosima.hpp"
-#include "jni_class.hpp"
+#include "eprosima_namespace.hpp"
 #include "publisher.hpp"
 #include "rclmodoki.hpp"
 #include "subscription.hpp"
@@ -23,20 +22,20 @@ public:
         dds::DomainParticipantFactory::get_instance()->create_participant(domain_id, dds::PARTICIPANT_QOS_DEFAULT);
   }
 
-  void destroy(JNIEnv *env) {
+  void destroy() {
     for (auto *publisher : publisher_list_) {
       delete publisher;
     }
     for (auto *subscription : subscription_list_) {
-      subscription->destroy(env);
+      subscription->destroy();
     }
     delete this;
   }
 
-  void spin(JNIEnv *env) {
-    SubscriptionCallback *callback;
+  void spin() {
+    SubscriptionCallback* callback;
     while (channel_.consume(callback)) {
-      callback->invoke(env);
+      callback->invoke();
       delete callback;
     }
   }
@@ -51,10 +50,8 @@ public:
   }
 
   Subscription *create_subscription(MessageType &message_type, const std::string &topic, const dds::TopicQos &qos,
-                                    jobject callback_gref, JNIClass *callback_class, jmethodID callback_mid,
-                                    jmethodID message_mid) {
-    subscription_list_.emplace_front(new Subscription(participant_, message_type, topic, qos, callback_gref,
-                                                      callback_class, callback_mid, message_mid, channel_));
+                                    std::function<void(void*)> callback_function) {
+    subscription_list_.emplace_front(new Subscription(participant_, message_type, topic, qos, callback_function, channel_));
     return subscription_list_.front();
   }
 
@@ -66,7 +63,7 @@ private:
   dds::DomainParticipant *participant_;
   std::forward_list<Publisher *> publisher_list_;
   std::forward_list<Subscription *> subscription_list_;
-  Channel<SubscriptionCallback *> channel_;
+  Channel<SubscriptionCallback*> channel_;
 };
 
 } // namespace rclmodoki

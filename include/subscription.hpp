@@ -13,51 +13,43 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "channel.hpp"
-#include "eprosima.hpp"
-#include "jni_class.hpp"
 #include "rclmodoki.hpp"
 
 namespace rclmodoki {
 
 class SubscriptionCallback {
 public:
-  SubscriptionCallback(MessageType &message_type, jobject callback_gref, jmethodID callback_mid, jmethodID message_mid,
-                       void *message)
-      : message_type_(message_type), callback_gref_(callback_gref), callback_mid_(callback_mid),
-        message_mid_(message_mid), message_(message) {}
+  SubscriptionCallback(MessageType &message_type, std::function<void(void*)> callback_function, void* message)
+      : message_type_(message_type), callback_function_(callback_function),
+        message_(message) {}
 
   ~SubscriptionCallback() {
     message_type_.type_support.delete_data(message_);
   }
 
-  void invoke(JNIEnv *env) {
-    env->CallVoidMethod(callback_gref_, callback_mid_,
-                        message_type_.cpp_to_kt(MessageCpp{env, message_type_.jni_class, message_mid_, message_}));
+  void invoke() {
+    callback_function_(message_);
   }
 
 private:
   MessageType &message_type_;
-  jobject callback_gref_;
-  jmethodID callback_mid_;
-  jmethodID message_mid_;
-  void *message_;
+  std::function<void(void*)> callback_function_;
+  void* message_;
 };
 
 class SubscriptionListener : public dds::DataReaderListener {
 public:
-  SubscriptionListener(MessageType &message_type, jobject callback_gref, jmethodID callback_mid, jmethodID message_mid,
-                       Channel<SubscriptionCallback *> &channel)
-      : message_type_(message_type), callback_gref_(callback_gref), callback_mid_(callback_mid),
-        message_mid_(message_mid), channel_(channel) {}
+  SubscriptionListener(MessageType &message_type, std::function<void(void*)> callback_function, Channel<SubscriptionCallback *> &channel)
+      : message_type_(message_type), callback_function_(callback_function), channel_(channel) {}
 
   void on_subscription_matched(dds::DataReader *, const dds::SubscriptionMatchedStatus &status) override {
     count = status.current_count;
   }
 
   void on_data_available(dds::DataReader *reader) override {
-    void *message = message_type_.type_support.create_data();
+    void* message = message_type_.type_support.create_data();
     if (reader->take_next_sample(message, &sample_info_) == ReturnCode_t::RETCODE_OK && sample_info_.valid_data) {
-      channel_.produce(new SubscriptionCallback(message_type_, callback_gref_, callback_mid_, message_mid_, message));
+      channel_.produce(new SubscriptionCallback(message_type_, callback_function_, message));
     }
   }
 
@@ -66,19 +58,17 @@ public:
 private:
   dds::SampleInfo sample_info_;
   MessageType &message_type_;
-  jobject callback_gref_;
-  jmethodID callback_mid_;
-  jmethodID message_mid_;
   Channel<SubscriptionCallback *> &channel_;
+  std::function<void(void*)> callback_function_;
 };
 
 class Subscription {
 public:
   Subscription(dds::DomainParticipant *participant, MessageType &message_type, const std::string &topic,
-               const dds::TopicQos &qos, jobject callback_gref, JNIClass *callback_class, jmethodID callback_mid,
-               jmethodID message_mid, Channel<SubscriptionCallback *> &channel)
-      : participant_(participant), callback_gref_(callback_gref), callback_class_(callback_class),
-        listener_(message_type, callback_gref, callback_mid, message_mid, channel) {
+               const dds::TopicQos &qos, std::function<void(void*)> callback_function,
+               Channel<SubscriptionCallback *> &channel)
+      : participant_(participant),
+        listener_(message_type, callback_function, channel) {
     message_type.type_support.register_type(participant_);
     topic_ = participant_->create_topic(topic, message_type.type_support.get_type_name(), qos);
     subscriber_ = participant_->create_subscriber(dds::SUBSCRIBER_QOS_DEFAULT);
@@ -89,9 +79,7 @@ public:
     reader_ = subscriber_->create_datareader(topic_, reader_qos, &listener_);
   }
 
-  void destroy(JNIEnv *env) {
-    callback_class_->destroy(env);
-    env->DeleteGlobalRef(callback_gref_);
+  void destroy() {
     delete this;
   }
 
@@ -111,8 +99,6 @@ private:
   dds::Subscriber *subscriber_;
   dds::DataReader *reader_;
   SubscriptionListener listener_;
-  jobject callback_gref_;
-  JNIClass *callback_class_;
 };
 
 } // namespace rclmodoki

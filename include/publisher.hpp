@@ -9,8 +9,6 @@
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
-#include "eprosima.hpp"
-#include "message.hpp"
 #include "rclmodoki.hpp"
 
 namespace rclmodoki {
@@ -46,10 +44,9 @@ public:
     participant_->delete_topic(topic_);
   }
 
-  void publish(JNIEnv *env, jobject message) const {
-    auto msg = message_type_.kt_to_cpp(MessageKt{env, message_type_.jni_class, message});
-    writer_->write(msg);
-    message_type_.type_support.delete_data(msg);
+  void publish(void* message) const {
+    writer_->write(message);
+    message_type_.type_support.delete_data(message);
   }
 
   int32_t get_subscription_count() {
