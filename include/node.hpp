@@ -10,10 +10,10 @@
 #include "channel.hpp"
 #include "eprosima_namespace.hpp"
 #include "publisher.hpp"
-#include "rclmodoki.hpp"
+#include "rcl_like_wrapper.hpp"
 #include "subscription.hpp"
 
-namespace rclmodoki {
+namespace rcl_like_wrapper {
 
 class Node {
 public:
@@ -66,4 +66,4 @@ private:
   Channel<SubscriptionCallback*> channel_;
 };
 
-} // namespace rclmodoki
+} // namespace rcl_like_wrapper

@@ -4,6 +4,6 @@
 
 #include "eprosima_namespace.hpp"
 
-namespace rclmodoki {
+namespace rcl_like_wrapper {
 
-} // namespace rclmodoki
+} // namespace rcl_like_wrapper

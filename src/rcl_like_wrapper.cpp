@@ -1,8 +1,8 @@
 #include "node.hpp"
 #include "qos.hpp"
-#include "rclmodoki.hpp"
+#include "rcl_like_wrapper.hpp"
 
-namespace rclmodoki {
+namespace rcl_like_wrapper {
 
 static MessageTypes message_types;
 
@@ -56,10 +56,10 @@ int32_t subscription_get_publisher_count(int64_t subscription_ptr) {
   return subscription->get_publisher_count();
 }
 
-void rclmodoki_init(const MessageTypes &types) {
+void rcl_like_wrapper_init(const MessageTypes &types) {
   // Init MessageTypes
   message_types = types;
 }
 
 }
-// namespace rclmodoki
+// namespace rcl_like_wrapper

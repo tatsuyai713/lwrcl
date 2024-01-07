@@ -1,8 +1,8 @@
-#include "rclmodoki.hpp"
+#include "rcl_like_wrapper.hpp"
 #include "sensor_msgs/msg/Image.h"
 #include "sensor_msgs/msg/ImagePubSubTypes.h"
 
-using namespace rclmodoki;
+using namespace rcl_like_wrapper;
 
 void myCallbackFunction(void* message) {
     sensor_msgs::msg::Image* my_message = static_cast<sensor_msgs::msg::Image*>(message);
@@ -38,10 +38,10 @@ int main() {
     // Directly create a unique pointer
     std::unique_ptr<sensor_msgs::msg::ImagePubSubType> imagePubSubType = std::make_unique<sensor_msgs::msg::ImagePubSubType>();
 
-    // Directly create rclmodoki::MessageType with a raw pointer
-    messageTypes["sensor_msgs::msg::Image"] = rclmodoki::MessageType(imagePubSubType.get());
+    // Directly create rcl_like_wrapper::MessageType with a raw pointer
+    messageTypes["sensor_msgs::msg::Image"] = rcl_like_wrapper::MessageType(imagePubSubType.get());
 
-    rclmodoki_init(messageTypes);
+    rcl_like_wrapper_init(messageTypes);
 
     // Create a node with domain ID 0
     int64_t node_ptr = node_create_node(0);

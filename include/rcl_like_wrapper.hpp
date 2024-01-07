@@ -12,7 +12,7 @@
 
 #include "eprosima_namespace.hpp"
 
-namespace rclmodoki {
+namespace rcl_like_wrapper {
 
 
 class MessageType {
@@ -48,6 +48,6 @@ void publisher_publish_impl(int64_t publisher_ptr, void* message);
 int32_t publisher_get_subscription_count(int64_t publisher_ptr);
 int64_t subscription_create_subscription(int64_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos& qos, std::function<void(void*)> callback);
 int32_t subscription_get_publisher_count(int64_t subscription_ptr);
-void rclmodoki_init(const MessageTypes &types);
+void rcl_like_wrapper_init(const MessageTypes &types);
 
-} // namespace rclmodoki
+} // namespace rcl_like_wrapper

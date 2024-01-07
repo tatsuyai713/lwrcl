@@ -4,7 +4,7 @@
 #include <mutex>
 #include <queue>
 
-namespace rclmodoki {
+namespace rcl_like_wrapper {
 
 template <class T> class Channel {
 public:
@@ -41,4 +41,4 @@ private:
   std::condition_variable cv_;
 };
 
-} // namespace rclmodoki
+} // namespace rcl_like_wrapper

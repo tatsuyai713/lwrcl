@@ -9,9 +9,9 @@
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
-#include "rclmodoki.hpp"
+#include "rcl_like_wrapper.hpp"
 
-namespace rclmodoki {
+namespace rcl_like_wrapper {
 
 class PublisherListener : public dds::DataWriterListener {
 public:
@@ -62,4 +62,4 @@ private:
   MessageType &message_type_;
 };
 
-} // namespace rclmodoki
+} // namespace rcl_like_wrapper

@@ -13,9 +13,9 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "channel.hpp"
-#include "rclmodoki.hpp"
+#include "rcl_like_wrapper.hpp"
 
-namespace rclmodoki {
+namespace rcl_like_wrapper {
 
 class SubscriptionCallback {
 public:
@@ -101,4 +101,4 @@ private:
   SubscriptionListener listener_;
 };
 
-} // namespace rclmodoki
+} // namespace rcl_like_wrapper

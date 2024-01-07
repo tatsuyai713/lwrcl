@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16.3)
-project(rclmodoki)
+project(rcl_like_wrapper)
 
 # Find requirements
 if(NOT fastcdr_FOUND)
