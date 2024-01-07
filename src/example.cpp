@@ -1,7 +1,8 @@
 #include "rclmodoki.hpp"
-
 #include "sensor_msgs/msg/Image.h"
 #include "sensor_msgs/msg/ImagePubSubTypes.h"
+
+using namespace rclmodoki;
 
 void myCallbackFunction(void* message) {
     sensor_msgs::msg::Image* my_message = static_cast<sensor_msgs::msg::Image*>(message);
@@ -9,13 +10,31 @@ void myCallbackFunction(void* message) {
     std::cout << "Received data: " << my_message->header().stamp().sec() << std::endl;
 }
 
-int main() {
-    using namespace rclmodoki;
+void publishMessage(int64_t publisher_ptr) {
+    int data_value = 0;
+    while (true) {
+        // Simulate sending data periodically
+        sensor_msgs::msg::Image* my_message = new sensor_msgs::msg::Image();
+        my_message->header().stamp().sec() = data_value;
+        data_value++;
 
-    MessageType myMessageType(new sensor_msgs::msg::ImagePubSubType());
+        // Publish the message
+        publisher_publish_impl(publisher_ptr, my_message);
+
+        // Sleep for a while
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+}
+
+int main() {
     MessageTypes messageTypes;
 
-    messageTypes["sensor_msgs::msg::Image"] = myMessageType;
+    // Directly create a unique pointer
+    std::unique_ptr<sensor_msgs::msg::ImagePubSubType> imagePubSubType = std::make_unique<sensor_msgs::msg::ImagePubSubType>();
+
+    // Directly create rclmodoki::MessageType with a raw pointer
+    messageTypes["sensor_msgs::msg::Image"] = rclmodoki::MessageType(imagePubSubType.get());
+
     rclmodoki_init(messageTypes);
 
     // Create a node with domain ID 0
@@ -32,22 +51,7 @@ int main() {
 
     // Start a thread to simulate a publisher sending data periodically
     std::thread publisher_thread([&]() {
-        int data_value = 0;
-        while (true) {
-            // Simulate sending data periodically
-            sensor_msgs::msg::Image* my_message = new sensor_msgs::msg::Image();
-            my_message->header().stamp().sec() = data_value;
-            data_value++;
-
-            // Publish the message
-            publisher_publish_impl(publisher_ptr, my_message);
-
-            // Delete the message to avoid memory leak
-            delete my_message;
-
-            // Sleep for a while
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
+        publishMessage(publisher_ptr);
     });
 
     // Main application loop
