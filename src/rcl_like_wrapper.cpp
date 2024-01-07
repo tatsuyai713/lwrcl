@@ -33,12 +33,26 @@ void node_stop_spin(intptr_t node_ptr) {
   node->stop_spin();
 }
 
-// Publisher
-intptr_t publisher_create_publisher(intptr_t node_ptr, std::string message_type_name, std::string topic,
-                                 dds::TopicQos& qos) {
+// Create a publisher with the specified message type, topic, and QoS.
+intptr_t publisher_create_publisher(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos& qos) {
   auto node = reinterpret_cast<Node *>(node_ptr);
+
+  // Check if the message type exists in the map
+  if (message_types.find(message_type_name) == message_types.end()) {
+    // Handle error: Message type not found
+    return 0;
+  }
+
   // Creating a publisher with the specified message type, topic, and QoS.
-  return reinterpret_cast<intptr_t>(node->create_publisher(message_types.at(message_type_name), std::string("rt/") + topic, qos));
+  auto publisher = node->create_publisher(message_types.at(message_type_name), std::string("rt/") + topic, qos);
+
+  // Check if the publisher creation was successful
+  if (!publisher) {
+    // Handle error: Publisher creation failed
+    return 0;
+  }
+
+  return reinterpret_cast<intptr_t>(publisher);
 }
 
 void publisher_publish_impl(intptr_t publisher_ptr, void* message) {
@@ -53,9 +67,16 @@ int32_t publisher_get_subscription_count(intptr_t publisher_ptr) {
   return publisher->get_subscription_count();
 }
 
-// Subscription
+// Create a subscription with the specified message type, topic, QoS, and callback function.
 intptr_t subscription_create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos& qos, std::function<void(void*)> callback) {
     auto node = reinterpret_cast<Node*>(node_ptr);
+
+    // Check if the message type exists in the map
+    if (message_types.find(message_type_name) == message_types.end()) {
+        // Handle error: Message type not found
+        return 0;
+    }
+
     MessageType& message_type = message_types.at(message_type_name);
 
     // Creating a subscription with the specified message type, topic, QoS, and callback function.
@@ -63,6 +84,12 @@ intptr_t subscription_create_subscription(intptr_t node_ptr, std::string message
         // Call the provided callback with the message data.
         callback(message_data);
     });
+
+    // Check if the subscription creation was successful
+    if (!subscription) {
+        // Handle error: Subscription creation failed
+        return 0;
+    }
 
     return reinterpret_cast<intptr_t>(subscription);
 }
