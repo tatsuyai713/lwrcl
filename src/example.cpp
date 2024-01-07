@@ -12,17 +12,23 @@ void myCallbackFunction(void* message) {
 
 void publishMessage(int64_t publisher_ptr) {
     int data_value = 0;
+    auto start_time = std::chrono::steady_clock::now();
+
     while (true) {
         // Simulate sending data periodically
-        sensor_msgs::msg::Image* my_message = new sensor_msgs::msg::Image();
+        auto my_message = std::make_unique<sensor_msgs::msg::Image>();
         my_message->header().stamp().sec() = data_value;
         data_value++;
 
         // Publish the message
-        publisher_publish_impl(publisher_ptr, my_message);
+        publisher_publish_impl(publisher_ptr, my_message.release());  // Release ownership and pass the raw pointer
 
-        // Sleep for a while
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        // Calculate next publication time
+        auto next_time = start_time + std::chrono::seconds(1);
+        start_time = std::chrono::steady_clock::now();
+
+        // Sleep until the next publication time
+        std::this_thread::sleep_until(next_time);
     }
 }
 
