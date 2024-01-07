@@ -24,7 +24,7 @@ void publishMessage(int64_t publisher_ptr) {
         publisher_publish_impl(publisher_ptr, my_message.release());  // Release ownership and pass the raw pointer
 
         // Calculate next publication time
-        start_time += std::chrono::nanoseconds(100000000);
+        start_time += std::chrono::milliseconds(100);
 
         // Sleep until the next publication time
         std::this_thread::sleep_until(start_time);
