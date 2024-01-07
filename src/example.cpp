@@ -24,11 +24,11 @@ void publishMessage(int64_t publisher_ptr) {
         publisher_publish_impl(publisher_ptr, my_message.release());  // Release ownership and pass the raw pointer
 
         // Calculate next publication time
-        auto next_time = start_time + std::chrono::seconds(1);
-        start_time = std::chrono::steady_clock::now();
+        start_time += std::chrono::nanoseconds(100000000);
 
         // Sleep until the next publication time
-        std::this_thread::sleep_until(next_time);
+        std::this_thread::sleep_until(start_time);
+
     }
 }
 
