@@ -28,6 +28,19 @@ public:
     return true;
   }
 
+  bool consume_nowait(T &x) {
+    std::lock_guard<std::mutex> lock{mtx_};
+
+    if (queue_.empty()) {
+      return false;
+    }
+
+    x = std::move(queue_.front());
+    queue_.pop();
+    cv_.notify_all();
+    return true;
+  }
+
   void close() {
     std::lock_guard<std::mutex> lock{mtx_};
     closed_ = true;

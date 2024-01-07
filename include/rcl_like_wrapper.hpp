@@ -42,6 +42,7 @@ using MessageTypes = std::unordered_map<std::string, MessageType>;
 int64_t node_create_node(int64_t domain_id);
 void node_destroy_node(int64_t node_ptr);
 void node_spin(int64_t node_ptr);
+void node_spin_once(int64_t node_ptr);
 void node_stop_spin(int64_t node_ptr);
 int64_t publisher_create_publisher(int64_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos& qos);
 void publisher_publish_impl(int64_t publisher_ptr, void* message);

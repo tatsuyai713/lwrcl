@@ -64,12 +64,12 @@ int main() {
     while (true) {
         // Perform other tasks in your application
 
-        // Spin the node to handle incoming messages
-        node_spin(node_ptr);
-
         // Check the number of publishers in the subscription
         int32_t publisher_count = subscription_get_publisher_count(subscription_ptr);
         std::cout << "Number of publishers: " << publisher_count << std::endl;
+
+        // Spin the node to handle incoming messages
+        node_spin_once(node_ptr);
 
         // Sleep for a while
         std::this_thread::sleep_for(std::chrono::milliseconds(100));

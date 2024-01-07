@@ -21,6 +21,11 @@ void node_spin(int64_t node_ptr) {
   node->spin();
 }
 
+void node_spin_once(int64_t node_ptr) {
+  auto node = reinterpret_cast<Node *>(node_ptr);
+  node->spin_once();
+}
+
 void node_stop_spin(int64_t node_ptr) {
   auto node = reinterpret_cast<Node *>(node_ptr);
   node->stop_spin();

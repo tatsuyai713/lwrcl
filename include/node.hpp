@@ -40,6 +40,14 @@ public:
     }
   }
 
+  void spin_once() {
+    SubscriptionCallback* callback;
+    if (channel_.consume_nowait(callback)) {
+      callback->invoke();
+      delete callback;
+    }
+  }
+
   void stop_spin() {
     channel_.close();
   }
