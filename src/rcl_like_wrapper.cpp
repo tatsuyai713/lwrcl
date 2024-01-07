@@ -67,6 +67,13 @@ int32_t publisher_get_subscription_count(intptr_t publisher_ptr) {
   return publisher->get_subscription_count();
 }
 
+void publisher_destroy_publisher(intptr_t publisher_ptr) {
+    auto publisher = reinterpret_cast<Publisher*>(publisher_ptr);
+    if (publisher) {
+        delete publisher;
+    }
+}
+
 // Create a subscription with the specified message type, topic, QoS, and callback function.
 intptr_t subscription_create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos& qos, std::function<void(void*)> callback) {
     auto node = reinterpret_cast<Node*>(node_ptr);
@@ -98,6 +105,13 @@ int32_t subscription_get_publisher_count(intptr_t subscription_ptr) {
   auto subscription = reinterpret_cast<Subscription *>(subscription_ptr);
   // Getting the publisher count associated with the subscription.
   return subscription->get_publisher_count();
+}
+
+void subscription_destroy_subscription(intptr_t subscription_ptr) {
+    auto subscription = reinterpret_cast<Subscription*>(subscription_ptr);
+    if (subscription) {
+        delete subscription;
+    }
 }
 
 void rcl_like_wrapper_init(const MessageTypes &types) {

@@ -87,12 +87,13 @@ public:
     return listener_.count;
   }
 
-private:
   ~Subscription() {
     subscriber_->delete_datareader(reader_);
     participant_->delete_subscriber(subscriber_);
     participant_->delete_topic(topic_);
   }
+  
+private:
 
   dds::DomainParticipant *participant_;
   dds::Topic *topic_;

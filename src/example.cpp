@@ -9,7 +9,13 @@ void myCallbackFunction(void* message) {
         std::cerr << "Error: Received null message in callback." << std::endl;
         return;
     }
+
     sensor_msgs::msg::Image* my_message = static_cast<sensor_msgs::msg::Image*>(message);
+    if (my_message == nullptr) {
+        std::cerr << "Error: Failed to cast message to sensor_msgs::msg::Image." << std::endl;
+        return;
+    }
+
     // Handle the received message
     std::cout << "Received data: " << my_message->header().frame_id() << std::endl;
 }
@@ -25,6 +31,10 @@ void publishMessage(intptr_t publisher_ptr) {
         data_value++;
 
         // Publish the message
+        if (publisher_ptr == 0) {
+            std::cerr << "Error: Invalid publisher pointer." << std::endl;
+            return;
+        }
         publisher_publish_impl(publisher_ptr, my_message.release());  // Release ownership and pass the raw pointer
 
         // Calculate next publication time
@@ -32,7 +42,6 @@ void publishMessage(intptr_t publisher_ptr) {
 
         // Sleep until the next publication time
         std::this_thread::sleep_until(start_time);
-
     }
 }
 
@@ -49,15 +58,30 @@ int main() {
 
     // Create a node with domain ID 0
     intptr_t node_ptr = node_create_node(0);
+    if (node_ptr == 0) {
+        std::cerr << "Error: Failed to create a node." << std::endl;
+        return 1;
+    }
 
     // Create a publisher with a topic named "MyTopic1" and default QoS
     dds::TopicQos topic_qos = dds::TOPIC_QOS_DEFAULT;
     intptr_t publisher_ptr = publisher_create_publisher(node_ptr, "sensor_msgs::msg::Image", "MyTopic1", topic_qos);
+    if (publisher_ptr == 0) {
+        std::cerr << "Error: Failed to create a publisher." << std::endl;
+        node_destroy_node(node_ptr);
+        return 1;
+    }
 
     // Create a subscription with a topic named "MyTopic2" and default QoS
     intptr_t subscription_ptr = subscription_create_subscription(
         node_ptr, "sensor_msgs::msg::Image", "MyTopic2", topic_qos, myCallbackFunction
     );
+    if (subscription_ptr == 0) {
+        std::cerr << "Error: Failed to create a subscription." << std::endl;
+        publisher_destroy_publisher(publisher_ptr);
+        node_destroy_node(node_ptr);
+        return 1;
+    }
 
     // Start a thread to simulate a publisher sending data periodically
     std::thread publisher_thread([&]() {
@@ -83,6 +107,8 @@ int main() {
     publisher_thread.join();
 
     // Clean up
+    subscription_destroy_subscription(subscription_ptr);
+    publisher_destroy_publisher(publisher_ptr);
     node_stop_spin(node_ptr);
     node_destroy_node(node_ptr);
 
