@@ -14,30 +14,39 @@
 
 namespace rcl_like_wrapper {
 
-
+// Class representing a message type with associated TypeSupport.
 class MessageType {
 public:
+    // Constructor that takes a pointer to a TopicDataType and initializes the TypeSupport.
     MessageType(eprosima::fastdds::dds::TopicDataType *message_type)
         : type_support(message_type) {}
 
+    // Copy constructor that copies the TypeSupport from another MessageType.
     MessageType(const MessageType& other)
         : type_support(other.type_support) {}
 
+    // Default constructor that initializes the TypeSupport to nullptr.
     MessageType() : type_support(nullptr) {}
 
+    // Copy assignment operator that assigns the TypeSupport from another MessageType.
     MessageType& operator=(const MessageType& other) {
+        // Check for self-assignment to avoid unnecessary operations.
         if (this != &other) {
             type_support = other.type_support;
         }
         return *this;
     }
 
+    // Destructor; no dynamic memory management, so default implementation is used.
     ~MessageType() {}
 
+    // Member variable representing the TypeSupport associated with the message type.
     eprosima::fastdds::dds::TypeSupport type_support;
 };
 
+// Alias for a map that associates message type names (strings) with MessageType instances.
 using MessageTypes = std::unordered_map<std::string, MessageType>;
+
 
 int64_t node_create_node(int64_t domain_id);
 void node_destroy_node(int64_t node_ptr);

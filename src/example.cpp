@@ -5,6 +5,10 @@
 using namespace rcl_like_wrapper;
 
 void myCallbackFunction(void* message) {
+    if (message == nullptr) {
+        std::cerr << "Error: Received null message in callback." << std::endl;
+        return;
+    }
     sensor_msgs::msg::Image* my_message = static_cast<sensor_msgs::msg::Image*>(message);
     // Handle the received message
     std::cout << "Received data: " << my_message->header().stamp().sec() << std::endl;
