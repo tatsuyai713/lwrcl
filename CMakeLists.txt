@@ -14,7 +14,7 @@ set(FAST_DDS_PATH /opt/fast-dds/include)
 set(ROS_DATA_TYPES_PATH /opt/fast-dds-libs/include)
 
 
-add_library(${PROJECT_NAME} SHARED src/${PROJECT_NAME}.cpp )
+add_library(${PROJECT_NAME} SHARED src/${PROJECT_NAME}.cpp src/message_type.cpp)
 target_include_directories(${PROJECT_NAME} PUBLIC include ${FAST_DDS_PATH} ${ROS_DATA_TYPES_PATH})
 
 link_directories(/opt/fast-dds-libs/lib)
