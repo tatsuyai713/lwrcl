@@ -11,10 +11,10 @@ void myCallbackFunction(void* message) {
     }
     sensor_msgs::msg::Image* my_message = static_cast<sensor_msgs::msg::Image*>(message);
     // Handle the received message
-    std::cout << "Received data: " << my_message->header().stamp().sec() << std::endl;
+    std::cout << "Received data: " << my_message->header().frame_id() << std::endl;
 }
 
-void publishMessage(int64_t publisher_ptr) {
+void publishMessage(intptr_t publisher_ptr) {
     int data_value = 0;
     auto start_time = std::chrono::steady_clock::now();
 
@@ -48,14 +48,14 @@ int main() {
     rcl_like_wrapper_init(messageTypes);
 
     // Create a node with domain ID 0
-    int64_t node_ptr = node_create_node(0);
+    intptr_t node_ptr = node_create_node(0);
 
     // Create a publisher with a topic named "MyTopic1" and default QoS
     dds::TopicQos topic_qos = dds::TOPIC_QOS_DEFAULT;
-    int64_t publisher_ptr = publisher_create_publisher(node_ptr, "sensor_msgs::msg::Image", "MyTopic1", topic_qos);
+    intptr_t publisher_ptr = publisher_create_publisher(node_ptr, "sensor_msgs::msg::Image", "MyTopic1", topic_qos);
 
     // Create a subscription with a topic named "MyTopic2" and default QoS
-    int64_t subscription_ptr = subscription_create_subscription(
+    intptr_t subscription_ptr = subscription_create_subscription(
         node_ptr, "sensor_msgs::msg::Image", "MyTopic2", topic_qos, myCallbackFunction
     );
 

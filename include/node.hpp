@@ -17,7 +17,7 @@ namespace rcl_like_wrapper {
 
 class Node {
 public:
-  Node(uint32_t domain_id) {
+  Node(uint16_t domain_id) {
     participant_ =
         dds::DomainParticipantFactory::get_instance()->create_participant(domain_id, dds::PARTICIPANT_QOS_DEFAULT);
   }
