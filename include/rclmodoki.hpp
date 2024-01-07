@@ -39,9 +39,6 @@ public:
 
 using MessageTypes = std::unordered_map<std::string, MessageType>;
 
-
-using MessageTypes = std::unordered_map<std::string, MessageType>;
-
 int64_t node_create_node(int64_t domain_id);
 void node_destroy_node(int64_t node_ptr);
 void node_spin(int64_t node_ptr);

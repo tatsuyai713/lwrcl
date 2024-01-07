@@ -3,6 +3,12 @@
 #include "sensor_msgs/msg/Image.h"
 #include "sensor_msgs/msg/ImagePubSubTypes.h"
 
+void myCallbackFunction(void* message) {
+    sensor_msgs::msg::Image* my_message = static_cast<sensor_msgs::msg::Image*>(message);
+    // Handle the received message
+    std::cout << "Received data: " << my_message->header().stamp().sec() << std::endl;
+}
+
 int main() {
     using namespace rclmodoki;
 
@@ -20,15 +26,8 @@ int main() {
     int64_t publisher_ptr = publisher_create_publisher(node_ptr, "sensor_msgs::msg::Image", "MyTopic1", topic_qos);
 
     // Create a subscription with a topic named "MyTopic2" and default QoS
-    std::function<void(void*)> callbackFunction = [](void* message) {
-        sensor_msgs::msg::Image* my_message = static_cast<sensor_msgs::msg::Image*>(message);
-        // Handle the received message
-        std::cout << "Received data: " << my_message->header().stamp().sec() << std::endl;
-    };
-
-    // subscription_create_subscription に std::function を渡す
     int64_t subscription_ptr = subscription_create_subscription(
-        node_ptr, "sensor_msgs::msg::Image", "MyTopic2", topic_qos, callbackFunction
+        node_ptr, "sensor_msgs::msg::Image", "MyTopic2", topic_qos, myCallbackFunction
     );
 
     // Start a thread to simulate a publisher sending data periodically
@@ -42,6 +41,9 @@ int main() {
 
             // Publish the message
             publisher_publish_impl(publisher_ptr, my_message);
+
+            // Delete the message to avoid memory leak
+            delete my_message;
 
             // Sleep for a while
             std::this_thread::sleep_for(std::chrono::seconds(1));
