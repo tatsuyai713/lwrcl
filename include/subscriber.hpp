@@ -37,9 +37,9 @@ private:
   void* message_;
 };
 
-class SubscriptionListener : public dds::DataReaderListener {
+class SubscriberListener : public dds::DataReaderListener {
 public:
-  SubscriptionListener(MessageType &message_type, std::function<void(void*)> callback_function, Channel<SubscriptionCallback *> &channel)
+  SubscriberListener(MessageType &message_type, std::function<void(void*)> callback_function, Channel<SubscriptionCallback *> &channel)
       : message_type_(message_type), callback_function_(callback_function), channel_(channel) {}
 
   void on_subscription_matched(dds::DataReader *, const dds::SubscriptionMatchedStatus &status) override {
@@ -62,9 +62,9 @@ private:
   std::function<void(void*)> callback_function_;
 };
 
-class Subscription {
+class Subscriber {
 public:
-  Subscription(dds::DomainParticipant *participant, MessageType &message_type, const std::string &topic,
+  Subscriber(dds::DomainParticipant *participant, MessageType &message_type, const std::string &topic,
                const dds::TopicQos &qos, std::function<void(void*)> callback_function,
                Channel<SubscriptionCallback *> &channel)
       : participant_(participant),
@@ -87,7 +87,7 @@ public:
     return listener_.count;
   }
 
-  ~Subscription() {
+  ~Subscriber() {
     subscriber_->delete_datareader(reader_);
     participant_->delete_subscriber(subscriber_);
     participant_->delete_topic(topic_);
@@ -99,7 +99,7 @@ private:
   dds::Topic *topic_;
   dds::Subscriber *subscriber_;
   dds::DataReader *reader_;
-  SubscriptionListener listener_;
+  SubscriberListener listener_;
 };
 
 } // namespace rcl_like_wrapper

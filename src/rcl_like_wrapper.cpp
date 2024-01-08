@@ -61,10 +61,10 @@ void publisher_publish_impl(intptr_t publisher_ptr, void* message) {
   publisher->publish(message);
 }
 
-int32_t publisher_get_subscription_count(intptr_t publisher_ptr) {
+int32_t publisher_get_subscriber_count(intptr_t publisher_ptr) {
   auto publisher = reinterpret_cast<Publisher *>(publisher_ptr);
   // Getting the subscription count associated with the publisher.
-  return publisher->get_subscription_count();
+  return publisher->get_subscriber_count();
 }
 
 void publisher_destroy_publisher(intptr_t publisher_ptr) {
@@ -74,8 +74,8 @@ void publisher_destroy_publisher(intptr_t publisher_ptr) {
     }
 }
 
-// Create a subscription with the specified message type, topic, QoS, and callback function.
-intptr_t subscription_create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos& qos, std::function<void(void*)> callback) {
+// Create a Subscriber with the specified message type, topic, QoS, and callback function.
+intptr_t subscriber_create_subscriber(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos& qos, std::function<void(void*)> callback) {
     auto node = reinterpret_cast<Node*>(node_ptr);
 
     // Check if the message type exists in the map
@@ -86,31 +86,31 @@ intptr_t subscription_create_subscription(intptr_t node_ptr, std::string message
 
     MessageType& message_type = message_types.at(message_type_name);
 
-    // Creating a subscription with the specified message type, topic, QoS, and callback function.
-    auto subscription = node->create_subscription(message_type, std::string("rt/") + topic, qos, [callback](void* message_data) {
+    // Creating a Subscriber with the specified message type, topic, QoS, and callback function.
+    auto subscriber = node->create_subscriber(message_type, std::string("rt/") + topic, qos, [callback](void* message_data) {
         // Call the provided callback with the message data.
         callback(message_data);
     });
 
-    // Check if the subscription creation was successful
-    if (!subscription) {
-        // Handle error: Subscription creation failed
+    // Check if the Subscriber creation was successful
+    if (!subscriber) {
+        // Handle error: Subscriber creation failed
         return 0;
     }
 
-    return reinterpret_cast<intptr_t>(subscription);
+    return reinterpret_cast<intptr_t>(subscriber);
 }
 
-int32_t subscription_get_publisher_count(intptr_t subscription_ptr) {
-  auto subscription = reinterpret_cast<Subscription *>(subscription_ptr);
-  // Getting the publisher count associated with the subscription.
-  return subscription->get_publisher_count();
+int32_t subscriber_get_publisher_count(intptr_t subscriber_ptr) {
+  auto subscriber = reinterpret_cast<Subscriber *>(subscriber_ptr);
+  // Getting the Publisher count associated with the Subscriber.
+  return subscriber->get_publisher_count();
 }
 
-void subscription_destroy_subscription(intptr_t subscription_ptr) {
-    auto subscription = reinterpret_cast<Subscription*>(subscription_ptr);
-    if (subscription) {
-        delete subscription;
+void subscriber_destroy_subscriber(intptr_t subscriber_ptr) {
+    auto subscriber = reinterpret_cast<Subscriber*>(subscriber_ptr);
+    if (subscriber) {
+        delete subscriber;
     }
 }
 

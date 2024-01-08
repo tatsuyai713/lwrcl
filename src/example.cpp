@@ -73,10 +73,10 @@ int main() {
     }
 
     // Create a subscription with a topic named "MyTopic2" and default QoS
-    intptr_t subscription_ptr = subscription_create_subscription(
+    intptr_t subscriber_ptr = subscriber_create_subscriber(
         node_ptr, "sensor_msgs::msg::Image", "MyTopic2", topic_qos, myCallbackFunction
     );
-    if (subscription_ptr == 0) {
+    if (subscriber_ptr == 0) {
         std::cerr << "Error: Failed to create a subscription." << std::endl;
         publisher_destroy_publisher(publisher_ptr);
         node_destroy_node(node_ptr);
@@ -93,7 +93,7 @@ int main() {
         // Perform other tasks in your application
 
         // Check the number of publishers in the subscription
-        int32_t publisher_count = subscription_get_publisher_count(subscription_ptr);
+        int32_t publisher_count = subscriber_get_publisher_count(subscriber_ptr);
         std::cout << "Number of publishers: " << publisher_count << std::endl;
 
         // Spin the node to handle incoming messages
@@ -107,7 +107,7 @@ int main() {
     publisher_thread.join();
 
     // Clean up
-    subscription_destroy_subscription(subscription_ptr);
+    subscriber_destroy_subscriber(subscriber_ptr);
     publisher_destroy_publisher(publisher_ptr);
     node_stop_spin(node_ptr);
     node_destroy_node(node_ptr);

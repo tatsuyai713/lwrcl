@@ -11,7 +11,7 @@
 #include "eprosima_namespace.hpp"
 #include "publisher.hpp"
 #include "rcl_like_wrapper.hpp"
-#include "subscription.hpp"
+#include "subscriber.hpp"
 
 namespace rcl_like_wrapper {
 
@@ -57,9 +57,9 @@ public:
     return publisher_list_.front();
   }
 
-  Subscription *create_subscription(MessageType &message_type, const std::string &topic, const dds::TopicQos &qos,
+  Subscriber *create_subscriber(MessageType &message_type, const std::string &topic, const dds::TopicQos &qos,
                                     std::function<void(void*)> callback_function) {
-    subscription_list_.emplace_front(new Subscription(participant_, message_type, topic, qos, callback_function, channel_));
+    subscription_list_.emplace_front(new Subscriber(participant_, message_type, topic, qos, callback_function, channel_));
     return subscription_list_.front();
   }
 
@@ -70,7 +70,7 @@ private:
 
   dds::DomainParticipant *participant_;
   std::forward_list<Publisher *> publisher_list_;
-  std::forward_list<Subscription *> subscription_list_;
+  std::forward_list<Subscriber *> subscription_list_;
   Channel<SubscriptionCallback*> channel_;
 };
 

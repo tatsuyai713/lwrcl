@@ -49,7 +49,7 @@ public:
     message_type_.type_support.delete_data(message);
   }
 
-  int32_t get_subscription_count() {
+  int32_t get_subscriber_count() {
     return listener_.count;
   }
 
