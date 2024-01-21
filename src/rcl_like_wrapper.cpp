@@ -55,7 +55,7 @@ intptr_t publisher_create_publisher(intptr_t node_ptr, std::string message_type_
   return reinterpret_cast<intptr_t>(publisher);
 }
 
-void publisher_publish_impl(intptr_t publisher_ptr, void* message) {
+void publisher_publish(intptr_t publisher_ptr, void* message) {
   auto publisher = reinterpret_cast<Publisher *>(publisher_ptr);
   // Publishing the message using the specified publisher.
   publisher->publish(message);
@@ -112,6 +112,22 @@ void subscriber_destroy_subscriber(intptr_t subscriber_ptr) {
     if (subscriber) {
         delete subscriber;
     }
+}
+
+// Create a timer 
+intptr_t timer_create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void(void*)> callback, void* user_ptr) {
+  auto node = reinterpret_cast<Node *>(node_ptr);
+
+    // Creating a Timer with callback function.
+    auto timer = node->create_timer(period, callback, user_ptr);
+
+    // Check if the Timer creation was successful
+    if (!timer) {
+        // Handle error: Timer creation failed
+        return 0;
+    }
+
+    return reinterpret_cast<intptr_t>(timer);
 }
 
 void rcl_like_wrapper_init(const MessageTypes &types) {

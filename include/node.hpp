@@ -12,6 +12,7 @@
 #include "publisher.hpp"
 #include "rcl_like_wrapper.hpp"
 #include "subscriber.hpp"
+#include "timer.hpp"
 
 namespace rcl_like_wrapper {
 
@@ -63,6 +64,11 @@ public:
     return subscription_list_.front();
   }
 
+  Timer *create_timer(std::chrono::milliseconds period, std::function<void(void*)> callback_function, void* this_ptr) {
+    timer_list_.emplace_front(new Timer(period, callback_function, this_ptr));
+    return timer_list_.front();
+  }
+
 private:
   ~Node() {
     dds::DomainParticipantFactory::get_instance()->delete_participant(participant_);
@@ -71,6 +77,7 @@ private:
   dds::DomainParticipant *participant_;
   std::forward_list<Publisher *> publisher_list_;
   std::forward_list<Subscriber *> subscription_list_;
+  std::forward_list<Timer *> timer_list_;
   Channel<SubscriptionCallback*> channel_;
 };
 
