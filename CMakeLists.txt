@@ -22,3 +22,8 @@ add_executable(example_spin src/example_spin.cpp)
 add_executable(example_timer src/example_timer.cpp)
 target_link_libraries(example_spin PRIVATE pthread ${PROJECT_NAME} fastrtps std_msgs sensor_msgs)
 target_link_libraries(example_timer PRIVATE pthread ${PROJECT_NAME} fastrtps std_msgs sensor_msgs)
+
+# Install targets
+install(TARGETS ${PROJECT_NAME} example_spin example_timer
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION bin)
