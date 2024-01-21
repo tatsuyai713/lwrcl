@@ -27,3 +27,6 @@ target_link_libraries(example_timer PRIVATE pthread ${PROJECT_NAME} fastrtps std
 install(TARGETS ${PROJECT_NAME} example_spin example_timer
         LIBRARY DESTINATION lib
         RUNTIME DESTINATION bin)
+
+# Install headers
+install(DIRECTORY include/ DESTINATION include/rcl_like_wrapper)
