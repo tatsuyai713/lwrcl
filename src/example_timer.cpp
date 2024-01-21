@@ -98,6 +98,7 @@ int main()
     {
         std::cerr << "Error: Failed to create a timer." << std::endl;
         publisher_destroy_publisher(publisher_ptr);
+        subscriber_destroy_subscriber(subscriber_ptr);
         node_destroy_node(node_ptr);
         return 1;
     }
