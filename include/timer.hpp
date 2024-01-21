@@ -33,7 +33,7 @@ namespace rcl_like_wrapper
       clock_gettime(CLOCK_REALTIME, &lastTime);
 
       auto start_time = std::chrono::steady_clock::now();
-      
+
       while (!stop_flag_)
       {
         clock_gettime(CLOCK_REALTIME, &curTime);
@@ -46,7 +46,7 @@ namespace rcl_like_wrapper
           printf("Interval = %10ld.%09ld\n", curTime.tv_sec - lastTime.tv_sec, curTime.tv_nsec - lastTime.tv_nsec);
         }
         lastTime = curTime;
-        
+
         callback_function_();
 
         // Calculate next publication time

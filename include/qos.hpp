@@ -4,6 +4,7 @@
 
 #include "eprosima_namespace.hpp"
 
-namespace rcl_like_wrapper {
+namespace rcl_like_wrapper
+{
 
 } // namespace rcl_like_wrapper

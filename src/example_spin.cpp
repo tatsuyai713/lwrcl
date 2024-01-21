@@ -67,8 +67,8 @@ int main()
     int data_value = 0;
     Rate rate(std::chrono::milliseconds(100));
 
-      struct timespec curTime, lastTime;
-      clock_gettime(CLOCK_REALTIME, &lastTime);
+    struct timespec curTime, lastTime;
+    clock_gettime(CLOCK_REALTIME, &lastTime);
     // Main application loop
     while (true)
     {
@@ -78,7 +78,6 @@ int main()
         int32_t publisher_count = subscriber_get_publisher_count(subscriber_ptr);
         std::cout << "Number of publishers: " << publisher_count << std::endl;
 
-
         // Simulate sending data periodically
         auto my_message = std::make_unique<sensor_msgs::msg::Image>();
         my_message->header().stamp().sec() = data_value;
@@ -87,19 +86,19 @@ int main()
         clock_gettime(CLOCK_REALTIME, &curTime);
         if (curTime.tv_nsec < lastTime.tv_nsec)
         {
-          printf("Interval = %10ld.%09ld\n", curTime.tv_sec - lastTime.tv_sec - 1, curTime.tv_nsec + 1000000000 - lastTime.tv_nsec);
+            printf("Interval = %10ld.%09ld\n", curTime.tv_sec - lastTime.tv_sec - 1, curTime.tv_nsec + 1000000000 - lastTime.tv_nsec);
         }
         else
         {
-          printf("Interval = %10ld.%09ld\n", curTime.tv_sec - lastTime.tv_sec, curTime.tv_nsec - lastTime.tv_nsec);
+            printf("Interval = %10ld.%09ld\n", curTime.tv_sec - lastTime.tv_sec, curTime.tv_nsec - lastTime.tv_nsec);
         }
         lastTime = curTime;
 
-        publisher_publish(publisher_ptr, my_message.release());  // Release ownership and pass the raw pointer
+        publisher_publish(publisher_ptr, my_message.release()); // Release ownership and pass the raw pointer
 
         // Spin the node to handle incoming messages
         node_spin_once(node_ptr);
-        
+
         rate.sleep();
     }
 
