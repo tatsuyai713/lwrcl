@@ -66,7 +66,9 @@ int main()
 
     int data_value = 0;
     Rate rate(std::chrono::milliseconds(100));
-    
+
+      struct timespec curTime, lastTime;
+      clock_gettime(CLOCK_REALTIME, &lastTime);
     // Main application loop
     while (true)
     {
@@ -82,7 +84,16 @@ int main()
         my_message->header().stamp().sec() = data_value;
         data_value++;
 
-        printf("Publish!\n");
+        clock_gettime(CLOCK_REALTIME, &curTime);
+        if (curTime.tv_nsec < lastTime.tv_nsec)
+        {
+          printf("Interval = %10ld.%09ld\n", curTime.tv_sec - lastTime.tv_sec - 1, curTime.tv_nsec + 1000000000 - lastTime.tv_nsec);
+        }
+        else
+        {
+          printf("Interval = %10ld.%09ld\n", curTime.tv_sec - lastTime.tv_sec, curTime.tv_nsec - lastTime.tv_nsec);
+        }
+        lastTime = curTime;
 
         publisher_publish(publisher_ptr, my_message.release());  // Release ownership and pass the raw pointer
 

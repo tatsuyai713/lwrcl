@@ -46,8 +46,7 @@ namespace rcl_like_wrapper
           printf("Interval = %10ld.%09ld\n", curTime.tv_sec - lastTime.tv_sec, curTime.tv_nsec - lastTime.tv_nsec);
         }
         lastTime = curTime;
-
-        std::cout << "Message: SENT" << std::endl;
+        
         callback_function_();
 
         // Calculate next publication time
