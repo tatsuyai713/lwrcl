@@ -14,9 +14,11 @@ set(FAST_DDS_PATH /opt/fast-dds/include)
 set(ROS_DATA_TYPES_PATH /opt/fast-dds-libs/include)
 
 
-add_library(${PROJECT_NAME} SHARED src/${PROJECT_NAME}.cpp src/message_type.cpp)
+add_library(${PROJECT_NAME} SHARED src/${PROJECT_NAME}.cpp)
 target_include_directories(${PROJECT_NAME} PUBLIC include ${FAST_DDS_PATH} ${ROS_DATA_TYPES_PATH})
 
 link_directories(/opt/fast-dds-libs/lib)
-add_executable(example src/example.cpp)
-target_link_libraries(example PRIVATE pthread ${PROJECT_NAME} fastrtps std_msgs sensor_msgs)
+add_executable(example_spin src/example_spin.cpp)
+add_executable(example_timer src/example_timer.cpp)
+target_link_libraries(example_spin PRIVATE pthread ${PROJECT_NAME} fastrtps std_msgs sensor_msgs)
+target_link_libraries(example_timer PRIVATE pthread ${PROJECT_NAME} fastrtps std_msgs sensor_msgs)

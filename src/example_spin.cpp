@@ -23,54 +23,6 @@ void myCallbackFunction(void *message)
     std::cout << "Received data: " << my_message->header().frame_id() << std::endl;
 }
 
-void myTimerFunction(int test, void* ptr) {
-
-    if (ptr == nullptr) {
-        std::cerr << "Error: nullptr in callback." << std::endl;
-        return;
-    }
-    void* publisher_ptr = ptr;
-
-    int data_value = 0;
-    // Simulate sending data periodically
-    auto my_message = std::make_unique<sensor_msgs::msg::Image>();
-    my_message->header().stamp().sec() = data_value;
-    data_value++;
-
-    // Publish the message
-    if (publisher_ptr == nullptr) {
-        std::cerr << "Error: Invalid publisher pointer." << std::endl;
-        return;
-    }
-    printf("%d\n",test);
-    publisher_publish(reinterpret_cast<intptr_t>(publisher_ptr), my_message.release()); // Release ownership and pass the raw pointer
-}
-
-// void publishMessage(intptr_t publisher_ptr) {
-//     int data_value = 0;
-//     auto start_time = std::chrono::steady_clock::now();
-
-//     while (true) {
-//         // Simulate sending data periodically
-//         auto my_message = std::make_unique<sensor_msgs::msg::Image>();
-//         my_message->header().stamp().sec() = data_value;
-//         data_value++;
-
-//         // Publish the message
-//         if (publisher_ptr == 0) {
-//             std::cerr << "Error: Invalid publisher pointer." << std::endl;
-//             return;
-//         }
-//         publisher_publish(publisher_ptr, my_message.release());  // Release ownership and pass the raw pointer
-
-//         // Calculate next publication time
-//         start_time += std::chrono::milliseconds(100);
-
-//         // Sleep until the next publication time
-//         std::this_thread::sleep_until(start_time);
-//     }
-// }
-
 int main()
 {
     MessageTypes messageTypes;
@@ -111,23 +63,10 @@ int main()
         node_destroy_node(node_ptr);
         return 1;
     }
+
+    int data_value = 0;
+    Rate rate(std::chrono::milliseconds(100));
     
-    int test=100;
-    intptr_t timer_ptr = timer_create_timer(node_ptr, std::chrono::milliseconds(100), [test, publisher_ptr]() { myTimerFunction(test, reinterpret_cast<void*>(publisher_ptr)); });
-
-    if (timer_ptr == 0)
-    {
-        std::cerr << "Error: Failed to create a timer." << std::endl;
-        publisher_destroy_publisher(publisher_ptr);
-        node_destroy_node(node_ptr);
-        return 1;
-    }
-
-    // Start a thread to simulate a publisher sending data periodically
-    // std::thread publisher_thread([&]() {
-    //     publishMessage(publisher_ptr);
-    // });
-
     // Main application loop
     while (true)
     {
@@ -137,15 +76,21 @@ int main()
         int32_t publisher_count = subscriber_get_publisher_count(subscriber_ptr);
         std::cout << "Number of publishers: " << publisher_count << std::endl;
 
+
+        // Simulate sending data periodically
+        auto my_message = std::make_unique<sensor_msgs::msg::Image>();
+        my_message->header().stamp().sec() = data_value;
+        data_value++;
+
+        printf("Publish!\n");
+
+        publisher_publish(publisher_ptr, my_message.release());  // Release ownership and pass the raw pointer
+
         // Spin the node to handle incoming messages
         node_spin_once(node_ptr);
-
-        // Sleep for a while
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
+        rate.sleep();
     }
-
-    // Stop the publisher thread
-    // publisher_thread.join();
 
     // Clean up
     subscriber_destroy_subscriber(subscriber_ptr);
