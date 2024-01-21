@@ -115,11 +115,11 @@ void subscriber_destroy_subscriber(intptr_t subscriber_ptr) {
 }
 
 // Create a timer 
-intptr_t timer_create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void(void*)> callback, void* user_ptr) {
+intptr_t timer_create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback) {
   auto node = reinterpret_cast<Node *>(node_ptr);
 
     // Creating a Timer with callback function.
-    auto timer = node->create_timer(period, callback, user_ptr);
+    auto timer = node->create_timer(period, callback);
 
     // Check if the Timer creation was successful
     if (!timer) {

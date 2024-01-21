@@ -64,8 +64,8 @@ public:
     return subscription_list_.front();
   }
 
-  Timer *create_timer(std::chrono::milliseconds period, std::function<void(void*)> callback_function, void* this_ptr) {
-    timer_list_.emplace_front(new Timer(period, callback_function, this_ptr));
+  Timer *create_timer(std::chrono::milliseconds period, std::function<void()> callback_function) {
+    timer_list_.emplace_front(new Timer(period, callback_function));
     return timer_list_.front();
   }
 

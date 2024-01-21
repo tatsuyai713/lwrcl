@@ -23,8 +23,8 @@ void myCallbackFunction(void *message)
     std::cout << "Received data: " << my_message->header().frame_id() << std::endl;
 }
 
-void myTimerFunction(void* ptr) {
-    int test = 7;
+void myTimerFunction(int test, void* ptr) {
+
     if (ptr == nullptr) {
         std::cerr << "Error: nullptr in callback." << std::endl;
         return;
@@ -111,9 +111,10 @@ int main()
         node_destroy_node(node_ptr);
         return 1;
     }
+    
+    int test=100;
+    intptr_t timer_ptr = timer_create_timer(node_ptr, std::chrono::milliseconds(100), [test, publisher_ptr]() { myTimerFunction(test, reinterpret_cast<void*>(publisher_ptr)); });
 
-    intptr_t timer_ptr = timer_create_timer(
-        node_ptr, std::chrono::milliseconds(100), myTimerFunction, reinterpret_cast<void*>(publisher_ptr));
     if (timer_ptr == 0)
     {
         std::cerr << "Error: Failed to create a timer." << std::endl;

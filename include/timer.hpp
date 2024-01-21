@@ -11,14 +11,12 @@ namespace rcl_like_wrapper
 class Timer
 {
 public:
-    // コールバック関数が複数の引数を受け取るように変更
-    template <typename Function, typename... Args>
-    Timer(std::chrono::milliseconds period, Function&& callback_function, Args&&... args)
-        : period_(period), stop_flag_(false)
-    {
-        // コールバック関数をstd::functionにラップし、引数を束縛
-        callback_function_ = std::bind(std::forward<Function>(callback_function), std::forward<Args>(args)...);
+    using CallbackFunction = std::function<void()>;
 
+    // コールバック関数が複数の引数を受け取るように変更
+    Timer(std::chrono::milliseconds period, CallbackFunction callback_function)
+        : period_(period), stop_flag_(false), callback_function_(callback_function)
+    {
         thread_ = std::thread(&Timer::runThread, this);
         std::cout << "Publisher running." << std::endl;
     }
@@ -66,7 +64,7 @@ public:
     }
 
 private:
-    std::function<void()> callback_function_;
+    CallbackFunction callback_function_;
     std::thread thread_;
     bool stop_flag_;
     std::chrono::milliseconds period_;
