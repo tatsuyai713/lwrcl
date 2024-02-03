@@ -70,7 +70,7 @@ namespace rcl_like_wrapper
       return publisher_list_.front();
     }
 
-    Subscriber *create_subscriber(MessageType &message_type, const std::string &topic, const dds::TopicQos &qos,
+    Subscriber *create_subscription(MessageType &message_type, const std::string &topic, const dds::TopicQos &qos,
                                   std::function<void(void *)> callback_function)
     {
       subscription_list_.emplace_front(new Subscriber(participant_, message_type, topic, qos, callback_function, channel_));

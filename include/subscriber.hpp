@@ -81,7 +81,7 @@ namespace rcl_like_wrapper
     {
       message_type.type_support.register_type(participant_);
       topic_ = participant_->create_topic(topic, message_type.type_support.get_type_name(), qos);
-      subscriber_ = participant_->create_subscriber(dds::SUBSCRIBER_QOS_DEFAULT);
+      subscriber_ = participant_->create_subscription(dds::SUBSCRIBER_QOS_DEFAULT);
 
       dds::DataReaderQos reader_qos = dds::DATAREADER_QOS_DEFAULT;
       reader_qos.endpoint().history_memory_policy = rtps::PREALLOCATED_WITH_REALLOC_MEMORY_MODE;

@@ -141,7 +141,7 @@ namespace rcl_like_wrapper
     MessageType &message_type = message_types.at(message_type_name);
 
     // Creating a Subscriber with the specified message type, topic, QoS, and callback function.
-    auto subscriber = node->create_subscriber(message_type, std::string("rt/") + topic, qos, [callback](void *message_data)
+    auto subscriber = node->create_subscription(message_type, std::string("rt/") + topic, qos, [callback](void *message_data)
                                               {
         // Call the provided callback with the message data.
         callback(message_data); });
