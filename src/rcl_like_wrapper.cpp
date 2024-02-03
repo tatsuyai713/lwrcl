@@ -49,7 +49,7 @@ namespace rcl_like_wrapper
   }
 
   // Node
-  intptr_t node_create_node(uint16_t domain_id)
+  intptr_t create_node(uint16_t domain_id)
   {
     return reinterpret_cast<intptr_t>(new Node(domain_id));
   }

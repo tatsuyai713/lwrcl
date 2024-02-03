@@ -42,7 +42,7 @@ namespace rcl_like_wrapper
     // Alias for a map that associates message type names (strings) with MessageType instances.
     using MessageTypes = std::unordered_map<std::string, MessageType>;
 
-    intptr_t node_create_node(uint16_t domain_id);
+    intptr_t create_node(uint16_t domain_id);
     void node_destroy_node(intptr_t node_ptr);
     void node_spin(intptr_t node_ptr);
     void node_spin_once(intptr_t node_ptr);

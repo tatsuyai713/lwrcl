@@ -36,7 +36,7 @@ int main()
     rcl_like_wrapper_init(messageTypes);
 
     // Create a node with domain ID 0
-    intptr_t node_ptr = node_create_node(0);
+    intptr_t node_ptr = create_node(0);
     if (node_ptr == 0)
     {
         std::cerr << "Error: Failed to create a node." << std::endl;
