@@ -80,7 +80,7 @@ int main()
     }
 
     // Create a subscription with a topic named "MyTopic2" and default QoS
-    intptr_t subscriber_ptr = subscriber_create_subscriber(
+    intptr_t subscriber_ptr = subscriber_create_subscription(
         node_ptr, "sensor_msgs::msg::Image", "MyTopic2", topic_qos, myCallbackFunction);
     if (subscriber_ptr == 0)
     {

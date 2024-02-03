@@ -127,7 +127,7 @@ namespace rcl_like_wrapper
   }
 
   // Create a Subscriber with the specified message type, topic, QoS, and callback function.
-  intptr_t subscriber_create_subscriber(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos &qos, std::function<void(void *)> callback)
+  intptr_t subscriber_create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos &qos, std::function<void(void *)> callback)
   {
     auto node = reinterpret_cast<Node *>(node_ptr);
 
