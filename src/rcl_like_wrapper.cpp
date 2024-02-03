@@ -79,7 +79,7 @@ namespace rcl_like_wrapper
   }
 
   // Create a publisher with the specified message type, topic, and QoS.
-  intptr_t publisher_create_publisher(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos &qos)
+  intptr_t create_publisher(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos &qos)
   {
     auto node = reinterpret_cast<Node *>(node_ptr);
 
@@ -103,7 +103,7 @@ namespace rcl_like_wrapper
     return reinterpret_cast<intptr_t>(publisher);
   }
 
-  void publisher_publish(intptr_t publisher_ptr, void *message)
+  void publish(intptr_t publisher_ptr, void *message)
   {
     auto publisher = reinterpret_cast<Publisher *>(publisher_ptr);
     // Publishing the message using the specified publisher.
@@ -117,7 +117,7 @@ namespace rcl_like_wrapper
     return publisher->get_subscriber_count();
   }
 
-  void publisher_destroy_publisher(intptr_t publisher_ptr)
+  void destroy_publisher(intptr_t publisher_ptr)
   {
     auto publisher = reinterpret_cast<Publisher *>(publisher_ptr);
     if (publisher)
@@ -127,7 +127,7 @@ namespace rcl_like_wrapper
   }
 
   // Create a Subscriber with the specified message type, topic, QoS, and callback function.
-  intptr_t subscriber_create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos &qos, std::function<void(void *)> callback)
+  intptr_t create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos &qos, std::function<void(void *)> callback)
   {
     auto node = reinterpret_cast<Node *>(node_ptr);
 
@@ -163,7 +163,7 @@ namespace rcl_like_wrapper
     return subscriber->get_publisher_count();
   }
 
-  void subscriber_destroy_subscriber(intptr_t subscriber_ptr)
+  void destroy_subscriber(intptr_t subscriber_ptr)
   {
     auto subscriber = reinterpret_cast<Subscriber *>(subscriber_ptr);
     if (subscriber)
@@ -173,7 +173,7 @@ namespace rcl_like_wrapper
   }
 
   // Create a timer
-  intptr_t timer_create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback)
+  intptr_t create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback)
   {
     auto node = reinterpret_cast<Node *>(node_ptr);
 

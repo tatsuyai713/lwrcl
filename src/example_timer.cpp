@@ -46,7 +46,7 @@ void myTimerFunction(int test, void *ptr)
         return;
     }
     printf("%d\n", test);
-    publisher_publish(reinterpret_cast<intptr_t>(publisher_ptr), my_message.release()); // Release ownership and pass the raw pointer
+    publish(reinterpret_cast<intptr_t>(publisher_ptr), my_message.release()); // Release ownership and pass the raw pointer
 }
 
 int main()
@@ -71,7 +71,7 @@ int main()
 
     // Create a publisher with a topic named "MyTopic1" and default QoS
     dds::TopicQos topic_qos = dds::TOPIC_QOS_DEFAULT;
-    intptr_t publisher_ptr = publisher_create_publisher(node_ptr, "sensor_msgs::msg::Image", "MyTopic1", topic_qos);
+    intptr_t publisher_ptr = create_publisher(node_ptr, "sensor_msgs::msg::Image", "MyTopic1", topic_qos);
     if (publisher_ptr == 0)
     {
         std::cerr << "Error: Failed to create a publisher." << std::endl;
@@ -80,25 +80,25 @@ int main()
     }
 
     // Create a subscription with a topic named "MyTopic2" and default QoS
-    intptr_t subscriber_ptr = subscriber_create_subscription(
+    intptr_t subscriber_ptr = create_subscription(
         node_ptr, "sensor_msgs::msg::Image", "MyTopic2", topic_qos, myCallbackFunction);
     if (subscriber_ptr == 0)
     {
         std::cerr << "Error: Failed to create a subscription." << std::endl;
-        publisher_destroy_publisher(publisher_ptr);
+        destroy_publisher(publisher_ptr);
         node_destroy_node(node_ptr);
         return 1;
     }
 
     int test = 100;
-    intptr_t timer_ptr = timer_create_timer(node_ptr, std::chrono::milliseconds(test), [test, publisher_ptr]()
+    intptr_t timer_ptr = create_timer(node_ptr, std::chrono::milliseconds(test), [test, publisher_ptr]()
                                             { myTimerFunction(test, reinterpret_cast<void *>(publisher_ptr)); });
 
     if (timer_ptr == 0)
     {
         std::cerr << "Error: Failed to create a timer." << std::endl;
-        publisher_destroy_publisher(publisher_ptr);
-        subscriber_destroy_subscriber(subscriber_ptr);
+        destroy_publisher(publisher_ptr);
+        destroy_subscriber(subscriber_ptr);
         node_destroy_node(node_ptr);
         return 1;
     }
@@ -107,8 +107,8 @@ int main()
     node_spin(node_ptr);
 
     // Clean up
-    subscriber_destroy_subscriber(subscriber_ptr);
-    publisher_destroy_publisher(publisher_ptr);
+    destroy_subscriber(subscriber_ptr);
+    destroy_publisher(publisher_ptr);
     node_stop_spin(node_ptr);
     node_destroy_node(node_ptr);
 
