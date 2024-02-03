@@ -163,7 +163,7 @@ namespace rcl_like_wrapper
     return subscriber->get_publisher_count();
   }
 
-  void destroy_subscriber(intptr_t subscriber_ptr)
+  void destroy_subscription(intptr_t subscriber_ptr)
   {
     auto subscriber = reinterpret_cast<Subscriber *>(subscriber_ptr);
     if (subscriber)
@@ -188,6 +188,15 @@ namespace rcl_like_wrapper
     }
 
     return reinterpret_cast<intptr_t>(timer);
+  }
+
+  void destroy_timer(intptr_t timer_ptr)
+  {
+    auto timer = reinterpret_cast<Timer *>(timer_ptr);
+    if (timer)
+    {
+      delete timer;
+    }
   }
 
   void rcl_like_wrapper_init(const MessageTypes &types)

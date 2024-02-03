@@ -103,7 +103,7 @@ int main()
     }
 
     // Clean up
-    destroy_subscriber(subscriber_ptr);
+    destroy_subscription(subscriber_ptr);
     destroy_publisher(publisher_ptr);
     stop_spin(node_ptr);
     destroy_node(node_ptr);

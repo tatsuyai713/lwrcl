@@ -53,8 +53,9 @@ namespace rcl_like_wrapper
     void destroy_publisher(intptr_t publisher_ptr);
     intptr_t create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos &qos, std::function<void(void *)> callback);
     int32_t get_publisher_count(intptr_t subscriber_ptr);
-    void destroy_subscriber(intptr_t subscriber_ptr);
-    intptr_t create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback);
+    void destroy_subscription(intptr_t subscriber_ptr);
+    intptr_t create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback);  
+    void destroy_timer(intptr_t timer_ptr);
     void rcl_like_wrapper_init(const MessageTypes &types);
 
 } // namespace rcl_like_wrapper
