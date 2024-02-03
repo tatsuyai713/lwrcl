@@ -20,7 +20,7 @@ namespace rcl_like_wrapper
     public:
         Rate(std::chrono::milliseconds period);
         ~Rate();
-        void sleep();
+        void sleep(void);
 
     private:
         std::chrono::milliseconds period_;
