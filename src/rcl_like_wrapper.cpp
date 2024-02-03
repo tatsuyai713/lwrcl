@@ -54,25 +54,25 @@ namespace rcl_like_wrapper
     return reinterpret_cast<intptr_t>(new Node(domain_id));
   }
 
-  void node_destroy_node(intptr_t node_ptr)
+  void destroy_node(intptr_t node_ptr)
   {
     auto node = reinterpret_cast<Node *>(node_ptr);
     node->destroy();
   }
 
-  void node_spin(intptr_t node_ptr)
+  void spin(intptr_t node_ptr)
   {
     auto node = reinterpret_cast<Node *>(node_ptr);
     node->spin();
   }
 
-  void node_spin_once(intptr_t node_ptr)
+  void spin_once(intptr_t node_ptr)
   {
     auto node = reinterpret_cast<Node *>(node_ptr);
     node->spin_once();
   }
 
-  void node_stop_spin(intptr_t node_ptr)
+  void stop_spin(intptr_t node_ptr)
   {
     auto node = reinterpret_cast<Node *>(node_ptr);
     node->stop_spin();
@@ -110,7 +110,7 @@ namespace rcl_like_wrapper
     publisher->publish(message);
   }
 
-  int32_t publisher_get_subscriber_count(intptr_t publisher_ptr)
+  int32_t get_subscriber_count(intptr_t publisher_ptr)
   {
     auto publisher = reinterpret_cast<Publisher *>(publisher_ptr);
     // Getting the subscription count associated with the publisher.
@@ -156,7 +156,7 @@ namespace rcl_like_wrapper
     return reinterpret_cast<intptr_t>(subscriber);
   }
 
-  int32_t subscriber_get_publisher_count(intptr_t subscriber_ptr)
+  int32_t get_publisher_count(intptr_t subscriber_ptr)
   {
     auto subscriber = reinterpret_cast<Subscriber *>(subscriber_ptr);
     // Getting the Publisher count associated with the Subscriber.

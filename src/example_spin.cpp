@@ -49,7 +49,7 @@ int main()
     if (publisher_ptr == 0)
     {
         std::cerr << "Error: Failed to create a publisher." << std::endl;
-        node_destroy_node(node_ptr);
+        destroy_node(node_ptr);
         return 1;
     }
 
@@ -60,7 +60,7 @@ int main()
     {
         std::cerr << "Error: Failed to create a subscription." << std::endl;
         destroy_publisher(publisher_ptr);
-        node_destroy_node(node_ptr);
+        destroy_node(node_ptr);
         return 1;
     }
 
@@ -75,7 +75,7 @@ int main()
         // Perform other tasks in your application
 
         // Check the number of publishers in the subscription
-        int32_t publisher_count = subscriber_get_publisher_count(subscriber_ptr);
+        int32_t publisher_count = get_publisher_count(subscriber_ptr);
         std::cout << "Number of publishers: " << publisher_count << std::endl;
 
         // Simulate sending data periodically
@@ -97,7 +97,7 @@ int main()
         publish(publisher_ptr, my_message.release()); // Release ownership and pass the raw pointer
 
         // Spin the node to handle incoming messages
-        node_spin_once(node_ptr);
+        spin_once(node_ptr);
 
         rate.sleep();
     }
@@ -105,8 +105,8 @@ int main()
     // Clean up
     destroy_subscriber(subscriber_ptr);
     destroy_publisher(publisher_ptr);
-    node_stop_spin(node_ptr);
-    node_destroy_node(node_ptr);
+    stop_spin(node_ptr);
+    destroy_node(node_ptr);
 
     return 0;
 }
