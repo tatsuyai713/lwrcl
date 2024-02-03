@@ -36,6 +36,14 @@ Execute only one callback function.
 void spin_once(intptr_t node_ptr);
 ```
 
+### spin_some
+
+Execute some queued callback function.
+
+```
+void spin_some(intptr_t node_ptr);
+```
+
 ### stop_spin
 
 Stop the infinite loop of spin function.

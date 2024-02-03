@@ -59,6 +59,16 @@ namespace rcl_like_wrapper
       }
     }
 
+    void spin_some()
+    {
+      SubscriptionCallback *callback;
+      while (channel_.consume_nowait(callback))
+      {
+        callback->invoke();
+        delete callback;
+      }
+    }
+
     void stop_spin()
     {
       channel_.close();

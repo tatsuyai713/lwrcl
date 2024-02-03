@@ -46,6 +46,7 @@ namespace rcl_like_wrapper
     void destroy_node(intptr_t node_ptr);
     void spin(intptr_t node_ptr);
     void spin_once(intptr_t node_ptr);
+    void spin_some(intptr_t node_ptr);
     void stop_spin(intptr_t node_ptr);
     intptr_t create_publisher(intptr_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos &qos);
     void publish(intptr_t publisher_ptr, void *message);

@@ -72,6 +72,12 @@ namespace rcl_like_wrapper
     node->spin_once();
   }
 
+  void spin_some(intptr_t node_ptr)
+  {
+    auto node = reinterpret_cast<Node *>(node_ptr);
+    node->spin_some();
+  }
+
   void stop_spin(intptr_t node_ptr)
   {
     auto node = reinterpret_cast<Node *>(node_ptr);
