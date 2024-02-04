@@ -1,6 +1,0 @@
-config:
-  shared_memory: false # ROS 2 compatible topic doesn't support shared memory. (Only Fast DDS Topic) 
-  ros2_topic: true
-  domain_number: 0
-  topics:
-    - name: "pose_topic"

@@ -1,8 +1,0 @@
-
-#include "geometry_msgs/msg/Pose.idl" 
-struct CustomMessage
-{
-	unsigned long index;
-	string message;
-	geometry_msgs::msg::Pose pose[1024];
-};

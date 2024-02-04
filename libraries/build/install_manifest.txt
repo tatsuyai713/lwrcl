@@ -1,3 +1,0 @@
-/opt/fast-dds-libs/lib/librcl_like_wrapper.so
-/opt/fast-dds-libs/include/rcl_like_wrapper.hpp
-/opt/fast-dds-libs/include/eprosima_namespace.hpp
