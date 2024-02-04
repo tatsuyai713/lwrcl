@@ -1,0 +1,1 @@
+/usr/bin/c++  -std=c++14 -pthread -g CMakeFiles/example_timer.dir/src/example_timer.cpp.o -o example_timer   -L/opt/fast-dds-libs/lib  -L/opt/fast-dds/lib  -Wl,-rpath,/opt/fast-dds-libs/lib:/opt/fast-dds/lib: -lpthread -lfastrtps -lstd_msgs -lsensor_msgs -lrcl_like_wrapper 

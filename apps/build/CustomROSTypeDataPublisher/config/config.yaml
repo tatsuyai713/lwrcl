@@ -1,0 +1,5 @@
+config:
+  domain_number: 0
+  topics:
+    - name: "pose_topic"
+      interval_ms: 100
