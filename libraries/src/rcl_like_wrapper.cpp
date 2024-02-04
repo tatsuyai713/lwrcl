@@ -43,10 +43,9 @@ namespace rcl_like_wrapper
 
   MessageType::~MessageType() {}
 
-  namespace
-  {
-    MessageTypes message_types;
-  }
+  
+  MessageTypes message_types;
+
 
   // Node
   intptr_t create_node(uint16_t domain_id)

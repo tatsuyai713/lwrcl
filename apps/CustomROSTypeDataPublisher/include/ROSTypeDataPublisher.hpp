@@ -29,7 +29,6 @@ public:
 
     //!Publish
     void callbackPublish(int test);
-    std::shared_ptr<CustomMessage> publish_msg_;
 
 private:
 
@@ -40,7 +39,9 @@ private:
     intptr_t publisher_ptr_;
     intptr_t timer_ptr_;
     std::function<void()> timer_callback_;
-
+    MessageTypes message_types_;
+    std::shared_ptr<CustomMessage> publish_msg_;
+    std::unique_ptr<CustomMessagePubSubType> custom_pubsubtype_;
 
 };
 
