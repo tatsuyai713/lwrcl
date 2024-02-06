@@ -45,7 +45,7 @@ void myTimerFunction(int test, void *ptr)
         std::cerr << "Error: Invalid publisher pointer." << std::endl;
         return;
     }
-    publish(reinterpret_cast<intptr_t>(publisher_ptr), my_message.release()); // Release ownership and pass the raw pointer
+    publish(reinterpret_cast<intptr_t>(publisher_ptr), my_message.get()); // Pass the raw pointer
 }
 
 int main()
