@@ -94,7 +94,7 @@ int main()
         }
         lastTime = curTime;
 
-        publish(publisher_ptr, my_message.release()); // Release ownership and pass the raw pointer
+        publish(publisher_ptr, my_message.get()); // Pass the raw pointer
 
         // Spin the node to handle incoming messages
         spin_once(node_ptr);
