@@ -68,7 +68,6 @@ namespace rcl_like_wrapper
         MessageTypes message_types_;                  // Supported message types for this node
         bool rclw_node_stop_flag_;                    // Flag to indicate the node should stop processing
         std::mutex mutex_;                            // Mutex to protect access to the nodes list
-        void safelyDestroyNode();
 
     public:
         RCLWNode(uint16_t domain_number);

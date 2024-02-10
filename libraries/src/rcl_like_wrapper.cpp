@@ -48,12 +48,7 @@ namespace rcl_like_wrapper
   }
 
   RCLWNode::~RCLWNode()
-  {
-    safelyDestroyNode();
-  }
-
-  void RCLWNode::safelyDestroyNode()
-  {
+  {    
     std::lock_guard<std::mutex> lock(mutex_);
     if (node_ptr_ != 0)
     {
@@ -82,9 +77,6 @@ namespace rcl_like_wrapper
         stop_spin(node_ptr_);
       }
       spin_thread.join(); // Wait for the spin thread to finish
-
-      // Clean up the node using the safelyDestroyNode method
-      safelyDestroyNode();
     }
   }
 

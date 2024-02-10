@@ -17,7 +17,6 @@ ROSTypeDataPublisher::ROSTypeDataPublisher(uint16_t domain_number)
 }
 
 ROSTypeDataPublisher::~ROSTypeDataPublisher() {
-    RCLWNode::~RCLWNode();
 }
 
 bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
@@ -31,7 +30,7 @@ bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
         std::cout << "Topic name: " << topic_name_ << ", Interval: " << interval_ms_ << " ms" << std::endl;
     }
 
-    if (interval_ms_ == 0) {
+    if (interval_ms_ <= 0) {
         std::cerr << "Interval Time Error!" << std::endl;
         return false;
     }
@@ -40,7 +39,6 @@ bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
     publisher_ptr_ = create_publisher(node_ptr_, "CustomMessage", topic_name_, topic_qos);
     if (!publisher_ptr_) {
         std::cerr << "Error: Failed to create a publisher." << std::endl;
-        destroy_node(node_ptr_);
         return false;
     }
 
@@ -49,7 +47,6 @@ bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
     timer_ptr_ = create_timer(node_ptr_, std::chrono::milliseconds(interval_ms_), timer_callback_);
     if (!timer_ptr_) {
         std::cerr << "Error: Failed to create a timer." << std::endl;
-        destroy_node(node_ptr_);
         return false;
     }
 
