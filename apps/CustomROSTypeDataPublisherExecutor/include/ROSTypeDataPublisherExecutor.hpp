@@ -10,10 +10,10 @@
 #include <yaml-cpp/yaml.h>
 
 using namespace rcl_like_wrapper;
-class ROSTypeDataPublisher : public RCLWNode {
+class ROSTypeDataPublisherExecutor : public RCLWNode {
 public:
-    ROSTypeDataPublisher();
-    virtual ~ROSTypeDataPublisher();
+    ROSTypeDataPublisherExecutor();
+    virtual ~ROSTypeDataPublisherExecutor();
 
     // Override init and run methods from RCLWNode
     bool init(const std::string& config_file_path) override;

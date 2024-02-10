@@ -50,6 +50,11 @@ namespace rcl_like_wrapper
       participant_->delete_topic(topic_);
     }
 
+    void destroy()
+    {
+      delete this;
+    }
+    
     void publish(void *message) const
     {
       writer_->write(message);

@@ -8,6 +8,7 @@ endif()
 
 add_subdirectory(rcl_like_wrapper_example)
 add_subdirectory(CustomROSTypeDataPublisher)
+add_subdirectory(CustomROSTypeDataPublisherExecutor)
 add_subdirectory(CustomROSTypeDataSubscriber)
 
 

@@ -30,7 +30,7 @@ namespace rcl_like_wrapper
     {
       for (auto *publisher : publisher_list_)
       {
-        delete publisher;
+        publisher->destroy();
       }
       for (auto *subscription : subscription_list_)
       {

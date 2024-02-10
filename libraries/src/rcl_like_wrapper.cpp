@@ -1,3 +1,11 @@
+#include <csignal>
+#include <cstring>
+#include <iostream>
+#include <atomic>
+#include <thread>
+#include <mutex>
+#include <algorithm>
+#include <functional>
 #include "node.hpp"
 #include "qos.hpp"
 #include "rcl_like_wrapper.hpp"
@@ -5,30 +13,113 @@
 namespace rcl_like_wrapper
 {
 
-  Rate::Rate(std::chrono::milliseconds period)
-      : period_(period)
+  RCLWNode::RCLWNode() : domain_number_(0), node_ptr_(0), rclw_node_stop_flag_(0)
+  {
+  }
+
+  void RCLWNode::spin()
+  {
+    if (node_ptr_ != 0)
+    {
+      // Start spinning in a separate thread to allow periodic check of the stop flag
+      std::thread spin_thread([this]()
+                              { rcl_like_wrapper::spin(node_ptr_); });
+
+      // Continuously check if the stop flag has been set
+      while (!rclw_node_stop_flag_)
+      {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Sleep to reduce CPU usage
+      }
+
+      // Once the flag is set, stop spinning and join the thread
+      if (node_ptr_ != 0)
+      {
+        stop_spin(node_ptr_);
+      }
+      spin_thread.join(); // Ensure the spinning stops before exiting
+
+      // Safely destroy the node
+      if (node_ptr_ != 0)
+      {
+        auto node = reinterpret_cast<Node *>(node_ptr_);
+        node->destroy();
+        node_ptr_ = 0; // Ensure the pointer is cleared after destruction
+      }
+    }
+  }
+
+  void RCLWNode::stop()
+  {
+    if (node_ptr_ != 0)
+    {
+      stop_spin(node_ptr_);
+    }
+  }
+
+  Executor::Executor() : running_(false) {}
+
+  Executor::~Executor() { stop(); }
+
+  void Executor::add_node(intptr_t node_ptr)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    nodes_.push_back(node_ptr);
+  }
+
+  void Executor::remove_node(intptr_t node_ptr)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    nodes_.erase(std::remove(nodes_.begin(), nodes_.end(), node_ptr), nodes_.end());
+  }
+
+  void Executor::start()
+  {
+    running_ = true;
+    worker_thread_ = std::thread(&Executor::spin, this);
+  }
+
+  void Executor::stop()
+  {
+    running_ = false;
+    if (worker_thread_.joinable())
+    {
+      worker_thread_.join();
+    }
+  }
+
+  void Executor::spin()
+  {
+    while (running_)
+    {
+      for (auto node_ptr : nodes_)
+      {
+        spin_some(node_ptr);
+      }
+      std::this_thread::sleep_for(std::chrono::microseconds(1));
+    }
+  }
+
+  Rate::Rate(std::chrono::milliseconds period) : period_(period)
   {
     start_time_ = std::chrono::steady_clock::now();
   }
 
-  Rate::~Rate()
-  {
-  }
+  Rate::~Rate() {}
 
   void Rate::sleep()
   {
-    // Calculate next publication time
-    start_time_ += period_;
-
-    // Sleep until the next publication time
-    std::this_thread::sleep_until(start_time_);
+    auto now = std::chrono::steady_clock::now();
+    if (start_time_ + period_ > now)
+    {
+      std::this_thread::sleep_until(start_time_ + period_);
+    }
+    start_time_ += period_; // 次の周期の開始時刻を更新
   }
 
   MessageType::MessageType(eprosima::fastdds::dds::TopicDataType *message_type)
       : type_support(message_type) {}
 
-  MessageType::MessageType(const MessageType &other)
-      : type_support(other.type_support) {}
+  MessageType::MessageType(const MessageType &other) : type_support(other.type_support) {}
 
   MessageType::MessageType() : type_support(nullptr) {}
 
@@ -43,11 +134,8 @@ namespace rcl_like_wrapper
 
   MessageType::~MessageType() {}
 
-  
   MessageTypes message_types;
 
-
-  // Node
   intptr_t create_node(uint16_t domain_id)
   {
     return reinterpret_cast<intptr_t>(new Node(domain_id));
@@ -83,26 +171,20 @@ namespace rcl_like_wrapper
     node->stop_spin();
   }
 
-  // Create a publisher with the specified message type, topic, and QoS.
   intptr_t create_publisher(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos &qos)
   {
     auto node = reinterpret_cast<Node *>(node_ptr);
 
-    // Check if the message type exists in the map
     if (message_types.find(message_type_name) == message_types.end())
     {
-      // Handle error: Message type not found
-      return 0;
+      return 0; // Handle error: Message type not found
     }
 
-    // Creating a publisher with the specified message type, topic, and QoS.
     auto publisher = node->create_publisher(message_types.at(message_type_name), std::string("rt/") + topic, qos);
 
-    // Check if the publisher creation was successful
     if (!publisher)
     {
-      // Handle error: Publisher creation failed
-      return 0;
+      return 0; // Handle error: Publisher creation failed
     }
 
     return reinterpret_cast<intptr_t>(publisher);
@@ -111,14 +193,12 @@ namespace rcl_like_wrapper
   void publish(intptr_t publisher_ptr, void *message)
   {
     auto publisher = reinterpret_cast<Publisher *>(publisher_ptr);
-    // Publishing the message using the specified publisher.
     publisher->publish(message);
   }
 
   int32_t get_subscriber_count(intptr_t publisher_ptr)
   {
     auto publisher = reinterpret_cast<Publisher *>(publisher_ptr);
-    // Getting the subscription count associated with the publisher.
     return publisher->get_subscriber_count();
   }
 
@@ -131,31 +211,23 @@ namespace rcl_like_wrapper
     }
   }
 
-  // Create a Subscriber with the specified message type, topic, QoS, and callback function.
   intptr_t create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos &qos, std::function<void(void *)> callback)
   {
     auto node = reinterpret_cast<Node *>(node_ptr);
 
-    // Check if the message type exists in the map
     if (message_types.find(message_type_name) == message_types.end())
     {
-      // Handle error: Message type not found
-      return 0;
+      return 0; // Handle error: Message type not found
     }
 
     MessageType &message_type = message_types.at(message_type_name);
 
-    // Creating a Subscriber with the specified message type, topic, QoS, and callback function.
     auto subscriber = node->create_subscription(message_type, std::string("rt/") + topic, qos, [callback](void *message_data)
-                                              {
-        // Call the provided callback with the message data.
-        callback(message_data); });
+                                                { callback(message_data); });
 
-    // Check if the Subscriber creation was successful
     if (!subscriber)
     {
-      // Handle error: Subscriber creation failed
-      return 0;
+      return 0; // Handle error: Subscriber creation failed
     }
 
     return reinterpret_cast<intptr_t>(subscriber);
@@ -164,7 +236,6 @@ namespace rcl_like_wrapper
   int32_t get_publisher_count(intptr_t subscriber_ptr)
   {
     auto subscriber = reinterpret_cast<Subscriber *>(subscriber_ptr);
-    // Getting the Publisher count associated with the Subscriber.
     return subscriber->get_publisher_count();
   }
 
@@ -177,19 +248,15 @@ namespace rcl_like_wrapper
     }
   }
 
-  // Create a timer
   intptr_t create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback)
   {
     auto node = reinterpret_cast<Node *>(node_ptr);
 
-    // Creating a Timer with callback function.
     auto timer = node->create_timer(period, callback);
 
-    // Check if the Timer creation was successful
     if (!timer)
     {
-      // Handle error: Timer creation failed
-      return 0;
+      return 0; // Handle error: Timer creation failed
     }
 
     return reinterpret_cast<intptr_t>(timer);
@@ -206,7 +273,6 @@ namespace rcl_like_wrapper
 
   void rcl_like_wrapper_init(const MessageTypes &types)
   {
-    // Initializing MessageTypes.
     message_types = types;
   }
 

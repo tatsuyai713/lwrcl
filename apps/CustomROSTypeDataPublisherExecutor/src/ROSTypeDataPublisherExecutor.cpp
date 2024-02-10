@@ -1,8 +1,8 @@
-#include "ROSTypeDataPublisher.hpp"
+#include "ROSTypeDataPublisherExecutor.hpp"
 #include <iostream>
 #include <chrono>
 
-ROSTypeDataPublisher::ROSTypeDataPublisher()
+ROSTypeDataPublisherExecutor::ROSTypeDataPublisherExecutor()
     : RCLWNode(), topic_name_("default_topic"), interval_ms_(1000) {
 
     // Initialization of custom publisher subtype
@@ -14,11 +14,11 @@ ROSTypeDataPublisher::ROSTypeDataPublisher()
     publish_msg_ = std::make_shared<CustomMessage>();
 }
 
-ROSTypeDataPublisher::~ROSTypeDataPublisher() {
+ROSTypeDataPublisherExecutor::~ROSTypeDataPublisherExecutor() {
     // Cleanup resources if necessary
 }
 
-bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
+bool ROSTypeDataPublisherExecutor::init(const std::string& config_file_path) {
     // Load configuration from YAML file
     YAML::Node node = YAML::LoadFile(config_file_path);
     YAML::Node config = node["config"];
@@ -65,7 +65,7 @@ bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
     return true;
 }
 
-void ROSTypeDataPublisher::callbackPublish(int test) {
+void ROSTypeDataPublisherExecutor::callbackPublish(int test) {
     // Update and publish message
     publish_msg_->index(publish_msg_->index() + 1);
     std::string s = "BigData" + std::to_string(publish_msg_->index() % 10);
