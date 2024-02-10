@@ -61,7 +61,7 @@ namespace rcl_like_wrapper
 
   void RCLWNode::stop()
   {
-    rclw_node_stop_flag_ = false;
+    rclw_node_stop_flag_ = true;
   }
 
   intptr_t RCLWNode::get_node_pointer()
@@ -97,7 +97,7 @@ namespace rcl_like_wrapper
 
   void Executor::stop()
   {
-    running_ = true;
+    running_ = false;
   }
 
   void Executor::spin()
