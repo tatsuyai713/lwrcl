@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
     std::cout << "Using config file at: " << configPath1 << std::endl;
     
     if (rosLikeNode1.init(configPath1)) {
-        executor.add_node(reinterpret_cast<intptr_t>(&rosLikeNode1));
+        executor.add_node(rosLikeNode1.get_node_pointer());
     } else {
         std::cerr << "Failed to initialize the ROSTypeDataPublisherExecutor." << std::endl;
         return 1;
@@ -44,18 +44,14 @@ int main(int argc, char **argv) {
     std::cout << "Using config file at: " << configPath2 << std::endl;
     
     if (rosLikeNode2.init(configPath2)) {
-        executor.add_node(reinterpret_cast<intptr_t>(&rosLikeNode2));
+        executor.add_node(rosLikeNode2.get_node_pointer());
     } else {
         std::cerr << "Failed to initialize the ROSTypeDataPublisherExecutor." << std::endl;
         return 1;
     }
 
     // Wait for the ROS-like node to finish
-    executor.start();
     executor.spin();
-
-    // Stop Executor
-    executor.stop();
 
     return 0;
 }

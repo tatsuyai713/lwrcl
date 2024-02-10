@@ -50,15 +50,30 @@ namespace rcl_like_wrapper
 
   void RCLWNode::stop()
   {
+    rclw_node_stop_flag_ = false;
     if (node_ptr_ != 0)
     {
       stop_spin(node_ptr_);
     }
   }
 
-  Executor::Executor() : running_(false) {}
+  intptr_t RCLWNode::get_node_pointer()
+  {
+    if (node_ptr_ != 0)
+    {
+      return node_ptr_;
+    }
+    return 0;
+  }
 
-  Executor::~Executor() { stop(); }
+  Executor::Executor() : running_(true)
+  {
+  }
+
+  Executor::~Executor()
+  {
+    stop();
+  }
 
   void Executor::add_node(intptr_t node_ptr)
   {
@@ -72,26 +87,21 @@ namespace rcl_like_wrapper
     nodes_.erase(std::remove(nodes_.begin(), nodes_.end(), node_ptr), nodes_.end());
   }
 
-  void Executor::start()
-  {
-    running_ = true;
-    worker_thread_ = std::thread(&Executor::spin, this);
-  }
-
   void Executor::stop()
   {
     running_ = false;
-    if (worker_thread_.joinable())
-    {
-      worker_thread_.join();
-    }
   }
 
   void Executor::spin()
   {
     while (running_)
     {
-      for (auto node_ptr : nodes_)
+      std::vector<intptr_t> nodes_copy;
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        nodes_copy = nodes_;
+      }
+      for (auto node_ptr : nodes_copy)
       {
         spin_some(node_ptr);
       }
@@ -104,7 +114,9 @@ namespace rcl_like_wrapper
     start_time_ = std::chrono::steady_clock::now();
   }
 
-  Rate::~Rate() {}
+  Rate::~Rate()
+  {
+  }
 
   void Rate::sleep()
   {
@@ -117,11 +129,17 @@ namespace rcl_like_wrapper
   }
 
   MessageType::MessageType(eprosima::fastdds::dds::TopicDataType *message_type)
-      : type_support(message_type) {}
+      : type_support(message_type)
+  {
+  }
 
-  MessageType::MessageType(const MessageType &other) : type_support(other.type_support) {}
+  MessageType::MessageType(const MessageType &other) : type_support(other.type_support)
+  {
+  }
 
-  MessageType::MessageType() : type_support(nullptr) {}
+  MessageType::MessageType() : type_support(nullptr)
+  {
+  }
 
   MessageType &MessageType::operator=(const MessageType &other)
   {
@@ -132,7 +150,9 @@ namespace rcl_like_wrapper
     return *this;
   }
 
-  MessageType::~MessageType() {}
+  MessageType::~MessageType()
+  {
+  }
 
   MessageTypes message_types;
 

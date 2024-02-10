@@ -57,6 +57,7 @@ namespace rcl_like_wrapper
         uint8_t domain_number_;
         intptr_t node_ptr_;
         MessageTypes message_types_;
+        bool rclw_node_stop_flag_;
 
     public:
         RCLWNode();
@@ -64,7 +65,7 @@ namespace rcl_like_wrapper
         virtual bool init(const std::string &config_file_path) = 0;
         virtual void spin();
         virtual void stop();
-        bool rclw_node_stop_flag_;
+        intptr_t get_node_pointer();
     };
     class Executor
     {
@@ -74,13 +75,11 @@ namespace rcl_like_wrapper
 
         void add_node(intptr_t node_ptr);
         void remove_node(intptr_t node_ptr);
-        void start();
         void stop();
         void spin();
 
     private:
         std::vector<intptr_t> nodes_;
-        std::thread worker_thread_;
         std::mutex mutex_;
         bool running_;
 
