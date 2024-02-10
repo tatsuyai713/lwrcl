@@ -30,7 +30,6 @@ private:
     intptr_t publisher_ptr_;
     intptr_t timer_ptr_;
     std::function<void()> timer_callback_;
-    std::shared_ptr<CustomMessage> publish_msg_;
     MessageTypes message_types_;
     CustomMessagePubSubType custom_pubsubtype_;
     sensor_msgs::msg::ImagePubSubType image_pubsubtype_;

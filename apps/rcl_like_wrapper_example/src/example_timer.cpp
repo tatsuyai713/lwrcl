@@ -35,8 +35,8 @@ void myTimerFunction(int test, void *ptr)
     void *publisher_ptr = ptr;
 
     // Simulate sending data periodically
-    auto my_message = std::make_unique<sensor_msgs::msg::Image>();
-    my_message->header().stamp().sec() = data_value;
+    sensor_msgs::msg::Image my_message;
+    my_message.header().stamp().sec() = data_value;
     data_value++;
 
     // Publish the message
@@ -45,7 +45,7 @@ void myTimerFunction(int test, void *ptr)
         std::cerr << "Error: Invalid publisher pointer." << std::endl;
         return;
     }
-    publish(reinterpret_cast<intptr_t>(publisher_ptr), my_message.get()); // Pass the raw pointer
+    publish(reinterpret_cast<intptr_t>(publisher_ptr), &my_message); // Pass the raw pointer
 }
 
 int main()

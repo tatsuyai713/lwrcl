@@ -9,9 +9,6 @@ ROSTypeDataPublisherExecutor::ROSTypeDataPublisherExecutor(uint16_t domain_numbe
     message_types_["CustomMessage"] = MessageType(&custom_pubsubtype_);
     message_types_["sensor_msgs::msg::Image"] = MessageType(&image_pubsubtype_);
     rcl_like_wrapper_init(message_types_);
-
-    // Create shared pointer for publishing messages
-    publish_msg_ = std::make_shared<CustomMessage>();
 }
 
 ROSTypeDataPublisherExecutor::~ROSTypeDataPublisherExecutor() {
@@ -55,14 +52,15 @@ bool ROSTypeDataPublisherExecutor::init(const std::string& config_file_path) {
 
 void ROSTypeDataPublisherExecutor::callbackPublish(int test) {
     // Update and publish message
-    publish_msg_->index(publish_msg_->index() + 1);
-    std::string s = "BigData" + std::to_string(publish_msg_->index() % 10);
-    publish_msg_->message(s);
+    CustomMessage publish_msg;
+    publish_msg.index(publish_msg.index() + 1);
+    std::string s = "BigData" + std::to_string(publish_msg.index() % 10);
+    publish_msg.message(s);
 
     if (!publisher_ptr_) {
         std::cerr << "Error: Invalid publisher pointer." << std::endl;
         return;
     }
 
-    publish(reinterpret_cast<intptr_t>(publisher_ptr_), publish_msg_.get());
+    publish(reinterpret_cast<intptr_t>(publisher_ptr_), &publish_msg);
 }
