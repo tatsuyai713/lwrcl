@@ -6,8 +6,10 @@ ROSTypeDataPublisherExecutor::ROSTypeDataPublisherExecutor(uint16_t domain_numbe
     : RCLWNode(domain_number), topic_name_("default_topic"), interval_ms_(1000) {
 
     // Initialization of custom publisher subtype
-    message_types_["CustomMessage"] = MessageType(&custom_pubsubtype_);
-    message_types_["sensor_msgs::msg::Image"] = MessageType(&image_pubsubtype_);
+    std::unique_ptr<CustomMessagePubSubType> custom_pubsubtype =std::make_unique<CustomMessagePubSubType>();
+    std::unique_ptr<sensor_msgs::msg::ImagePubSubType> image_pubsubtype =std::make_unique<sensor_msgs::msg::ImagePubSubType>();
+    message_types_["CustomMessage"] = MessageType(custom_pubsubtype.release());
+    message_types_["sensor_msgs::msg::Image"] = MessageType(image_pubsubtype.release());
     rcl_like_wrapper_init(message_types_);
 }
 
@@ -52,15 +54,15 @@ bool ROSTypeDataPublisherExecutor::init(const std::string& config_file_path) {
 
 void ROSTypeDataPublisherExecutor::callbackPublish(int test) {
     // Update and publish message
-    CustomMessage publish_msg;
-    publish_msg.index(publish_msg.index() + 1);
-    std::string s = "BigData" + std::to_string(publish_msg.index() % 10);
-    publish_msg.message(s);
+    std::unique_ptr<CustomMessage> publish_msg = std::make_unique<CustomMessage>();
+    publish_msg->index(publish_msg->index() + 1);
+    std::string s = "BigData" + std::to_string(publish_msg->index() % 10);
+    publish_msg->message(s);
 
     if (!publisher_ptr_) {
         std::cerr << "Error: Invalid publisher pointer." << std::endl;
         return;
     }
 
-    publish(reinterpret_cast<intptr_t>(publisher_ptr_), &publish_msg);
+    publish(reinterpret_cast<intptr_t>(publisher_ptr_), publish_msg.release());
 }

@@ -27,10 +27,10 @@ int main()
 {
     MessageTypes messageTypes;
 
-    sensor_msgs::msg::ImagePubSubType imagePubSubType;
+    std::unique_ptr<sensor_msgs::msg::ImagePubSubType>imagePubSubType = std::make_unique<sensor_msgs::msg::ImagePubSubType>();
 
     // Directly create rcl_like_wrapper::MessageType with a raw pointer
-    messageTypes["sensor_msgs::msg::Image"] = rcl_like_wrapper::MessageType(&imagePubSubType);
+    messageTypes["sensor_msgs::msg::Image"] = rcl_like_wrapper::MessageType(imagePubSubType.release());
 
     rcl_like_wrapper_init(messageTypes);
 
@@ -77,8 +77,8 @@ int main()
         std::cout << "Number of publishers: " << publisher_count << std::endl;
 
         // Simulate sending data periodically
-        sensor_msgs::msg::Image my_message;
-        my_message.header().stamp().sec() = data_value;
+        std::unique_ptr<sensor_msgs::msg::Image> my_message = std::make_unique<sensor_msgs::msg::Image>();
+        my_message->header().stamp().sec() = data_value;
         data_value++;
 
         clock_gettime(CLOCK_REALTIME, &curTime);
@@ -92,7 +92,7 @@ int main()
         }
         lastTime = curTime;
 
-        publish(publisher_ptr, &my_message); // Pass the raw pointer
+        publish(publisher_ptr, my_message.release()); // Pass the raw pointer
 
         // Spin the node to handle incoming messages
         spin_once(node_ptr);

@@ -35,8 +35,8 @@ void myTimerFunction(int test, void *ptr)
     void *publisher_ptr = ptr;
 
     // Simulate sending data periodically
-    sensor_msgs::msg::Image my_message;
-    my_message.header().stamp().sec() = data_value;
+    std::unique_ptr<sensor_msgs::msg::Image> my_message = std::make_unique<sensor_msgs::msg::Image>();
+    my_message->header().stamp().sec() = data_value;
     data_value++;
 
     // Publish the message
@@ -45,17 +45,17 @@ void myTimerFunction(int test, void *ptr)
         std::cerr << "Error: Invalid publisher pointer." << std::endl;
         return;
     }
-    publish(reinterpret_cast<intptr_t>(publisher_ptr), &my_message); // Pass the raw pointer
+    publish(reinterpret_cast<intptr_t>(publisher_ptr), my_message.release()); // Pass the raw pointer
 }
 
 int main()
 {
     MessageTypes messageTypes;
 
-    sensor_msgs::msg::ImagePubSubType imagePubSubType;
+    std::unique_ptr<sensor_msgs::msg::ImagePubSubType>imagePubSubType = std::make_unique<sensor_msgs::msg::ImagePubSubType>();
 
     // Directly create rcl_like_wrapper::MessageType with a raw pointer
-    messageTypes["sensor_msgs::msg::Image"] = rcl_like_wrapper::MessageType(&imagePubSubType);
+    messageTypes["sensor_msgs::msg::Image"] = rcl_like_wrapper::MessageType(imagePubSubType.release());
 
     rcl_like_wrapper_init(messageTypes);
 
