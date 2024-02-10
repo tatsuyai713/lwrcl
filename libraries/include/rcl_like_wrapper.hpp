@@ -54,28 +54,26 @@ namespace rcl_like_wrapper
     intptr_t create_publisher(intptr_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos &qos);
     void publish(intptr_t publisher_ptr, void *message);
     int32_t get_subscriber_count(intptr_t publisher_ptr);
-    void destroy_publisher(intptr_t publisher_ptr);
     intptr_t create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos &qos, std::function<void(void *)> callback);
     int32_t get_publisher_count(intptr_t subscriber_ptr);
-    void destroy_subscription(intptr_t subscriber_ptr);
     intptr_t create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback);
-    void destroy_timer(intptr_t timer_ptr);
+    void stop_timer();
     void rcl_like_wrapper_init(const MessageTypes &types);
 
     // Represents a node in the communication graph, managing lifecycle and communication capabilities
     class RCLWNode
     {
     protected:
-        uint8_t domain_number_;                       // DDS domain number for network segmentation
         intptr_t node_ptr_;                           // Pointer to the underlying implementation-specific node object
         MessageTypes message_types_;                  // Supported message types for this node
         bool rclw_node_stop_flag_;                    // Flag to indicate the node should stop processing
         std::mutex mutex_;                            // Mutex to protect access to the nodes list
+        void safelyDestroyNode();
 
     public:
-        RCLWNode();
-        ~RCLWNode();
-        virtual bool init(const std::string &config_file_path) = 0; // Initialize the node with configuration
+        RCLWNode(uint16_t domain_number);
+        virtual ~RCLWNode();
+        virtual bool init(const std::string& config_file_path) = 0;                                    // Initialize the node with configuration
         virtual void spin();                                        // Process messages continuously
         virtual void stop();                                        // Stop processing messages
         intptr_t get_node_pointer();                                // Get the underlying node pointer

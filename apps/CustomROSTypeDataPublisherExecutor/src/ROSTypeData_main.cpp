@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
     Executor executor;
 
     // Initialize and run the ROS-like node
-    ROSTypeDataPublisherExecutor rosLikeNode1;
+    ROSTypeDataPublisherExecutor rosLikeNode1(0);
     configPath1 = configPath + "config/config1.yaml"; // Append the relative path of the config file
     std::cout << "Using config file at: " << configPath1 << std::endl;
     
@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
         std::cerr << "Failed to initialize the ROSTypeDataPublisherExecutor." << std::endl;
         return 1;
     }
-    ROSTypeDataPublisherExecutor rosLikeNode2;
+    ROSTypeDataPublisherExecutor rosLikeNode2(0);
     configPath2 = configPath + "config/config2.yaml"; // Append the relative path of the config file
     std::cout << "Using config file at: " << configPath2 << std::endl;
     

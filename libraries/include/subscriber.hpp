@@ -89,11 +89,6 @@ namespace rcl_like_wrapper
       reader_ = subscriber_->create_datareader(topic_, reader_qos, &listener_);
     }
 
-    void destroy()
-    {
-      delete this;
-    }
-
     int32_t get_publisher_count()
     {
       return listener_.count;

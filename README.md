@@ -79,13 +79,6 @@ Get subscriber number of the publisher.
 int32_t get_subscriber_count(intptr_t publisher_ptr);
 ```
 
-#### destroy_publisher
-
-Derstroy publisher.
-
-```
-void destroy_publisher(intptr_t publisher_ptr);
-```
 ### Subscriber
 
 #### create_subscription
@@ -104,14 +97,6 @@ Get publisher number of subscription.
 int32_t get_publisher_count(intptr_t subscriber_ptr);
 ```
 
-#### destroy_subscription 
-
-Destroy subscription.
-
-```
-void destroy_subscription(intptr_t subscriber_ptr);
-```
-
 ### Timer
 
 #### create_timer
@@ -123,12 +108,12 @@ Create timer for cyclic calling the function.
 intptr_t create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback);
 ```
 
-#### destroy_timer
+#### stop_timer
 
-Destroy timer.
+Stop timer.
 
 ```
-void destroy_timer(intptr_t timer_ptr);
+void stop_timer();
 ```
 
 ### Rate

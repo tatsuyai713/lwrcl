@@ -17,22 +17,28 @@ namespace rcl_like_wrapper
     Timer(std::chrono::milliseconds period, CallbackFunction callback_function)
         : period_(period), stop_flag_(false), callback_function_(callback_function)
     {
-      thread_ = std::thread(&Timer::runThread, this);
+      thread_ = std::thread(&Timer::run, this);
     }
 
     ~Timer()
     {
       stop_flag_ = true;
-      thread_.join();
+      if (thread_.joinable())
+      {
+        thread_.join();
+      }
     }
 
-    void destroy()
+    void stop_timer()
     {
       stop_flag_ = true;
-      thread_.join();
+      if (thread_.joinable())
+      {
+        thread_.join();
+      }
     }
 
-    void runThread()
+    void run()
     {
       // struct timespec curTime, lastTime;
       // clock_gettime(CLOCK_REALTIME, &lastTime);

@@ -30,17 +30,17 @@ namespace rcl_like_wrapper
     {
       for (auto *publisher : publisher_list_)
       {
-        publisher->destroy();
+        delete publisher;
       }
       for (auto *subscription : subscription_list_)
       {
-        subscription->destroy();
+        delete subscription;
       }
       for (auto *timer : timer_list_)
       {
-        timer->destroy();
+        timer->stop_timer();
+        delete timer;
       }
-      delete this;
     }
 
     void spin()

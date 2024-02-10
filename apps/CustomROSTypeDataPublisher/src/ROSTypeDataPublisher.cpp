@@ -2,8 +2,8 @@
 #include <iostream>
 #include <chrono>
 
-ROSTypeDataPublisher::ROSTypeDataPublisher()
-    : RCLWNode(), topic_name_("default_topic"), interval_ms_(1000) {
+ROSTypeDataPublisher::ROSTypeDataPublisher(uint16_t domain_number)
+    : RCLWNode(domain_number), topic_name_("default_topic"), interval_ms_(1000) {
 
     // Initialization of custom publisher subtype
     custom_pubsubtype_ = std::make_unique<CustomMessagePubSubType>();
@@ -25,9 +25,6 @@ bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
     YAML::Node node = YAML::LoadFile(config_file_path);
     YAML::Node config = node["config"];
 
-    domain_number_ = config["domain_number"].as<uint8_t>(0);
-    std::cout << "Domain number: " << static_cast<int>(domain_number_) << std::endl;
-
     for (const auto& topic_node : config["topics"]) {
         topic_name_ = topic_node["name"].as<std::string>("default_topic");
         interval_ms_ = topic_node["interval_ms"].as<uint16_t>(1000);
@@ -36,13 +33,6 @@ bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
 
     if (interval_ms_ == 0) {
         std::cerr << "Interval Time Error!" << std::endl;
-        return false;
-    }
-
-    // Create a node, publisher, and timer
-    node_ptr_ = create_node(domain_number_);
-    if (!node_ptr_) {
-        std::cerr << "Error: Failed to create a node." << std::endl;
         return false;
     }
 
@@ -59,7 +49,6 @@ bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
     timer_ptr_ = create_timer(node_ptr_, std::chrono::milliseconds(interval_ms_), timer_callback_);
     if (!timer_ptr_) {
         std::cerr << "Error: Failed to create a timer." << std::endl;
-        destroy_publisher(publisher_ptr_);
         destroy_node(node_ptr_);
         return false;
     }

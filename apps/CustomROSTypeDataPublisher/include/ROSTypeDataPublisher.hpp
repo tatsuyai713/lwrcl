@@ -14,7 +14,7 @@
 using namespace rcl_like_wrapper;
 class ROSTypeDataPublisher : public RCLWNode {
 public:
-    ROSTypeDataPublisher();
+    ROSTypeDataPublisher(uint16_t domain_number);
     virtual ~ROSTypeDataPublisher();
 
     // Override init and run methods from RCLWNode

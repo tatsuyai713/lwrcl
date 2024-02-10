@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
     }
 
     // Initialize and run the ROS-like node
-    ROSTypeDataPublisher rosLikeNode;
+    ROSTypeDataPublisher rosLikeNode(0);
     configPath += "config/config.yaml"; // Append the relative path of the config file
     std::cout << "Using config file at: " << configPath << std::endl;
     

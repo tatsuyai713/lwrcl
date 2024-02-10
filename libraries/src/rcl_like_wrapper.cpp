@@ -6,7 +6,7 @@
 #include <mutex>
 #include <algorithm>
 #include <functional>
-#include "node.hpp" 
+#include "node.hpp"
 #include "rcl_like_wrapper.hpp" // The main header file for the rcl_like_wrapper namespace
 
 namespace rcl_like_wrapper
@@ -30,25 +30,35 @@ namespace rcl_like_wrapper
   // Registers the signal handler for SIGINT
   void register_signal_handler()
   {
-    std::signal(SIGINT, signal_handler); // Register the handler for SIGINT
+    std::signal(SIGINT, signal_handler);  // Register the handler for SIGINT
     std::signal(SIGTERM, signal_handler); // Register the handler for SIGTERM
   }
 
   // Constructor for RCLWNode initializes the node and registers the signal handler
-  RCLWNode::RCLWNode() : domain_number_(0), node_ptr_(0), rclw_node_stop_flag_(false)
+  RCLWNode::RCLWNode(uint16_t domain_number) : node_ptr_(0), rclw_node_stop_flag_(false)
   {
     register_signal_handler(); // Ensure we handle SIGINT for graceful shutdown
+
+    // Create a node, publisher, and timer
+    node_ptr_ = create_node(domain_number);
+    if (!node_ptr_) {
+        std::cerr << "Error: Failed to create a node." << std::endl;
+        return;
+    }
   }
 
   RCLWNode::~RCLWNode()
   {
-    rclw_node_stop_flag_ = true;
+    safelyDestroyNode();
+  }
+
+  void RCLWNode::safelyDestroyNode()
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (node_ptr_ != 0)
     {
-      std::lock_guard<std::mutex> lock(mutex_);
-      auto node = reinterpret_cast<Node *>(node_ptr_);
-      node->destroy();
-      node_ptr_ = 0; // Reset pointer after destruction
+      destroy_node(node_ptr_);
+      node_ptr_ = 0;
     }
   }
 
@@ -63,7 +73,7 @@ namespace rcl_like_wrapper
       // Loop until a stop is requested via stop flag or global stop flag
       while (!rclw_node_stop_flag_ && !global_stop_flag.load())
       {
-        std::this_thread::sleep_for(std::chrono::seconds(3)); // Prevent busy waiting
+        std::this_thread::sleep_for(std::chrono::microseconds(10)); // Prevent busy waiting
       }
 
       // If stop is requested, ensure the node's spinning is stopped
@@ -73,14 +83,8 @@ namespace rcl_like_wrapper
       }
       spin_thread.join(); // Wait for the spin thread to finish
 
-      // Clean up the node
-      if (node_ptr_ != 0)
-      {
-        std::lock_guard<std::mutex> lock(mutex_);
-        auto node = reinterpret_cast<Node *>(node_ptr_);
-        node->destroy();
-        node_ptr_ = 0; // Reset pointer after destruction
-      }
+      // Clean up the node using the safelyDestroyNode method
+      safelyDestroyNode();
     }
   }
 
@@ -287,17 +291,6 @@ namespace rcl_like_wrapper
     return publisher->get_subscriber_count();
   }
 
-  // Destroys a previously created publisher
-  void destroy_publisher(intptr_t publisher_ptr)
-  {
-    // Casts the integer pointer back to a Publisher pointer and destroys it
-    auto publisher = reinterpret_cast<Publisher *>(publisher_ptr);
-    if (publisher)
-    {
-      publisher->destroy();
-    }
-  }
-
   // Creates a subscription for a node
   intptr_t create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos &qos, std::function<void(void *)> callback)
   {
@@ -329,17 +322,6 @@ namespace rcl_like_wrapper
     return subscriber->get_publisher_count();
   }
 
-  // Destroys a previously created subscription
-  void destroy_subscription(intptr_t subscriber_ptr)
-  {
-    // Casts the integer pointer back to a Subscriber pointer and destroys it
-    auto subscriber = reinterpret_cast<Subscriber *>(subscriber_ptr);
-    if (subscriber)
-    {
-      subscriber->destroy();
-    }
-  }
-
   // Creates a timer for a node
   intptr_t create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback)
   {
@@ -354,17 +336,6 @@ namespace rcl_like_wrapper
     }
 
     return reinterpret_cast<intptr_t>(timer);
-  }
-
-  // Destroys a previously created timer
-  void destroy_timer(intptr_t timer_ptr)
-  {
-    // Casts the integer pointer back to a Timer pointer and destroys it
-    auto timer = reinterpret_cast<Timer *>(timer_ptr);
-    if (timer)
-    {
-      timer->destroy();
-    }
   }
 
   // Initializes the wrapper with a set of message types
