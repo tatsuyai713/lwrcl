@@ -6,6 +6,7 @@
 #include <mutex>
 #include <algorithm>
 #include <functional>
+#include "node.hpp" 
 #include "rcl_like_wrapper.hpp" // The main header file for the rcl_like_wrapper namespace
 
 namespace rcl_like_wrapper
@@ -34,7 +35,7 @@ namespace rcl_like_wrapper
   }
 
   // Constructor for RCLWNode initializes the node and registers the signal handler
-  RCLWNode::RCLWNode() : domain_number_(0), node_ptr_(nullptr), rclw_node_stop_flag_(false)
+  RCLWNode::RCLWNode() : domain_number_(0), node_ptr_(0), rclw_node_stop_flag_(false)
   {
     register_signal_handler(); // Ensure we handle SIGINT for graceful shutdown
   }
@@ -42,30 +43,30 @@ namespace rcl_like_wrapper
   // Main spin function for the node
   void RCLWNode::spin()
   {
-    if (node_ptr_ != nullptr)
+    if (node_ptr_ != 0)
     {
       std::thread spin_thread([this]()
                               { rcl_like_wrapper::spin(node_ptr_); });
 
       // Loop until a stop is requested via stop flag or global stop flag
-      while (!rclw_node_stop_flag_ && !global_stop_flag.load())
+      //while (!rclw_node_stop_flag_ && !global_stop_flag.load())
       {
-        std::this_thread::sleep_for(std::chrono::microseconds(100)); // Prevent busy waiting
+        std::this_thread::sleep_for(std::chrono::seconds(3)); // Prevent busy waiting
       }
 
       // If stop is requested, ensure the node's spinning is stopped
-      if (node_ptr_ != nullptr)
+      if (node_ptr_ != 0)
       {
         stop_spin(node_ptr_);
       }
       spin_thread.join(); // Wait for the spin thread to finish
 
       // Clean up the node
-      if (node_ptr_ != nullptr)
+      if (node_ptr_ != 0)
       {
         auto node = reinterpret_cast<Node *>(node_ptr_);
         node->destroy();
-        node_ptr_ = nullptr; // Reset pointer after destruction
+        node_ptr_ = 0; // Reset pointer after destruction
       }
     }
   }
