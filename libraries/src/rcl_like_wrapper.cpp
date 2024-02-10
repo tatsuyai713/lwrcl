@@ -75,6 +75,7 @@ namespace rcl_like_wrapper
 
   Executor::Executor() : running_(true)
   {
+    register_signal_handler();
   }
 
   Executor::~Executor()
@@ -96,23 +97,29 @@ namespace rcl_like_wrapper
 
   void Executor::stop()
   {
-    running_ = false;
+    running_ = true;
   }
 
   void Executor::spin()
   {
-    while (running_)
+    while (running_ && !global_stop_flag.load())
     {
-      std::vector<intptr_t> nodes_copy;
       {
         std::lock_guard<std::mutex> lock(mutex_);
-        nodes_copy = nodes_;
-      }
-      for (auto node_ptr : nodes_copy)
-      {
-        spin_some(node_ptr);
+        for (auto node_ptr : nodes_)
+        {
+          spin_some(node_ptr);
+        }
       }
       std::this_thread::sleep_for(std::chrono::microseconds(1));
+    }
+    running_ = false;
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto node_ptr : nodes_)
+    {
+      auto node = reinterpret_cast<Node *>(node_ptr);
+      node->destroy();
     }
   }
 
