@@ -334,7 +334,9 @@ namespace rcl_like_wrapper
   void rcl_like_wrapper_init(const MessageTypes &types)
   {
     // Initializes the global message types with the provided set
-    message_types = types;
+    for (const auto &type : types) {
+        message_types[type.first] = type.second;
+    }
   }
 
 } // namespace rcl_like_wrapper
