@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.16.3)
 project(rcl_like_wrapper)
 
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # Find requirements
 if(NOT fastcdr_FOUND)
     find_package(fastcdr REQUIRED)

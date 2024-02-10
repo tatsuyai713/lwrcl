@@ -6,10 +6,8 @@ ROSTypeDataPublisher::ROSTypeDataPublisher(uint16_t domain_number)
     : RCLWNode(domain_number), topic_name_("default_topic"), interval_ms_(1000) {
 
     // Initialization of custom publisher subtype
-    custom_pubsubtype_ = std::make_unique<CustomMessagePubSubType>();
-    message_types_["CustomMessage"] = MessageType(custom_pubsubtype_.get());
-    image_pubsubtype_ = std::make_unique<sensor_msgs::msg::ImagePubSubType>();
-    message_types_["sensor_msgs::msg::Image"] = MessageType(image_pubsubtype_.get());
+    message_types_["CustomMessage"] = MessageType(&custom_pubsubtype_);
+    message_types_["sensor_msgs::msg::Image"] = MessageType(&image_pubsubtype_);
     rcl_like_wrapper_init(message_types_);
 
     // Create shared pointer for publishing messages
@@ -36,7 +34,7 @@ bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
     }
 
     dds::TopicQos topic_qos = dds::TOPIC_QOS_DEFAULT;
-    publisher_ptr_ = create_publisher(get_node_pointer(), "jCustomMessage", topic_name_, topic_qos);
+    publisher_ptr_ = create_publisher(get_node_pointer(), "CustomMessage", topic_name_, topic_qos);
     if (!publisher_ptr_) {
         std::cerr << "Error: Failed to create a publisher." << std::endl;
         return false;

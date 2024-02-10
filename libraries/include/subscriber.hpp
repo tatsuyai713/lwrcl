@@ -51,7 +51,6 @@ namespace rcl_like_wrapper
 
     void on_data_available(dds::DataReader *reader) override
     {
-      // メッセージをstd::shared_ptr<void>として作成
       std::shared_ptr<void> message(message_type_.type_support.create_data(),
                                     [this](void *data)
                                     { this->message_type_.type_support.delete_data(data); });

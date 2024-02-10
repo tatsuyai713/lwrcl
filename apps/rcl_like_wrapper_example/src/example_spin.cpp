@@ -27,11 +27,10 @@ int main()
 {
     MessageTypes messageTypes;
 
-    // Directly create a unique pointer
-    std::unique_ptr<sensor_msgs::msg::ImagePubSubType> imagePubSubType = std::make_unique<sensor_msgs::msg::ImagePubSubType>();
+    sensor_msgs::msg::ImagePubSubType imagePubSubType;
 
     // Directly create rcl_like_wrapper::MessageType with a raw pointer
-    messageTypes["sensor_msgs::msg::Image"] = rcl_like_wrapper::MessageType(imagePubSubType.get());
+    messageTypes["sensor_msgs::msg::Image"] = rcl_like_wrapper::MessageType(&imagePubSubType);
 
     rcl_like_wrapper_init(messageTypes);
 

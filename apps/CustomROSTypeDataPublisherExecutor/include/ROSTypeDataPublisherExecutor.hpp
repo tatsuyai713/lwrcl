@@ -31,8 +31,9 @@ private:
     intptr_t timer_ptr_;
     std::function<void()> timer_callback_;
     std::shared_ptr<CustomMessage> publish_msg_;
-    std::unique_ptr<CustomMessagePubSubType> custom_pubsubtype_;
-    std::unique_ptr<sensor_msgs::msg::ImagePubSubType> image_pubsubtype_;
+    MessageTypes message_types_;
+    CustomMessagePubSubType custom_pubsubtype_;
+    sensor_msgs::msg::ImagePubSubType image_pubsubtype_;
 };
 
 #endif /* ROSTYPEDATAPUBLISHER_H_ */

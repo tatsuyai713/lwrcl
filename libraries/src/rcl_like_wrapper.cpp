@@ -335,7 +335,12 @@ namespace rcl_like_wrapper
   {
     // Initializes the global message types with the provided set
     for (const auto &type : types) {
-        message_types[type.first] = type.second;
+        // Check if the type is already registered
+        if (message_types.find(type.first) == message_types.end()) {
+            // If not registered, add the new type
+            message_types[type.first] = type.second;
+        }
+        // If the type is already registered, do nothing
     }
   }
 

@@ -25,12 +25,12 @@ int main(int argc, char **argv) {
     }
 
     // Initialize and run the ROS-like node
-    ROSTypeDataPublisher rosLikeNode(0);
+    ROSTypeDataPublisher rcl_like_node(0);
     configPath += "config/config.yaml"; // Append the relative path of the config file
     std::cout << "Using config file at: " << configPath << std::endl;
     
-    if (rosLikeNode.init(configPath)) {
-        rosLikeNode.spin();
+    if (rcl_like_node.init(configPath)) {
+        rcl_like_node.spin();
     } else {
         std::cerr << "Failed to initialize the ROSTypeDataPublisher." << std::endl;
         return 1;

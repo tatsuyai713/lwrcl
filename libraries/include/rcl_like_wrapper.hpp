@@ -65,14 +65,13 @@ namespace rcl_like_wrapper
     {
     protected:
         intptr_t node_ptr_;                           // Pointer to the underlying implementation-specific node object
-        MessageTypes message_types_;                  // Supported message types for this node
         bool rclw_node_stop_flag_;                    // Flag to indicate the node should stop processing
         std::mutex mutex_;                            // Mutex to protect access to the nodes list
 
     public:
         RCLWNode(uint16_t domain_number);
         virtual ~RCLWNode();
-        virtual bool init(const std::string& config_file_path) = 0;                                    // Initialize the node with configuration
+        virtual bool init(const std::string &config_file_path) = 0; // Initialize the node with configuration
         virtual void spin();                                        // Process messages continuously
         virtual void stop();                                        // Stop processing messages
         intptr_t get_node_pointer();                                // Get the underlying node pointer
