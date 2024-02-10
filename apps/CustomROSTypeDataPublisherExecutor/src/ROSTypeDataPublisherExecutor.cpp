@@ -8,6 +8,8 @@ ROSTypeDataPublisherExecutor::ROSTypeDataPublisherExecutor()
     // Initialization of custom publisher subtype
     custom_pubsubtype_ = std::make_unique<CustomMessagePubSubType>();
     message_types_["CustomMessage"] = MessageType(custom_pubsubtype_.get());
+    image_pubsubtype_ = std::make_unique<sensor_msgs::msg::ImagePubSubType>();
+    message_types_["sensor_msgs::msg::Image"] = MessageType(image_pubsubtype_.get());
     rcl_like_wrapper_init(message_types_);
 
     // Create shared pointer for publishing messages
@@ -15,7 +17,7 @@ ROSTypeDataPublisherExecutor::ROSTypeDataPublisherExecutor()
 }
 
 ROSTypeDataPublisherExecutor::~ROSTypeDataPublisherExecutor() {
-    // Cleanup resources if necessary
+    RCLWNode::~RCLWNode();
 }
 
 bool ROSTypeDataPublisherExecutor::init(const std::string& config_file_path) {

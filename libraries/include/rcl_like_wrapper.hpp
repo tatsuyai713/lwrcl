@@ -66,14 +66,15 @@ namespace rcl_like_wrapper
     class RCLWNode
     {
     protected:
-        uint8_t domain_number_;      // DDS domain number for network segmentation
-        intptr_t node_ptr_;          // Pointer to the underlying implementation-specific node object
-        MessageTypes message_types_; // Supported message types for this node
-        bool rclw_node_stop_flag_;   // Flag to indicate the node should stop processing
+        uint8_t domain_number_;                       // DDS domain number for network segmentation
+        intptr_t node_ptr_;                           // Pointer to the underlying implementation-specific node object
+        MessageTypes message_types_;                  // Supported message types for this node
+        bool rclw_node_stop_flag_;                    // Flag to indicate the node should stop processing
+        std::mutex mutex_;                            // Mutex to protect access to the nodes list
 
     public:
         RCLWNode();
-        virtual ~RCLWNode() = default;
+        ~RCLWNode();
         virtual bool init(const std::string &config_file_path) = 0; // Initialize the node with configuration
         virtual void spin();                                        // Process messages continuously
         virtual void stop();                                        // Stop processing messages

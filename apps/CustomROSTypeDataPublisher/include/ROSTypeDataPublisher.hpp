@@ -4,6 +4,8 @@
 #include "rcl_like_wrapper.hpp"
 #include "CustomMessagePubSubTypes.h"
 #include "CustomMessage.h"
+#include "sensor_msgs/msg/Image.h"
+#include "sensor_msgs/msg/ImagePubSubTypes.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -30,6 +32,7 @@ private:
     std::function<void()> timer_callback_;
     std::shared_ptr<CustomMessage> publish_msg_;
     std::unique_ptr<CustomMessagePubSubType> custom_pubsubtype_;
+    std::unique_ptr<sensor_msgs::msg::ImagePubSubType> image_pubsubtype_;
 };
 
 #endif /* ROSTYPEDATAPUBLISHER_H_ */
