@@ -18,25 +18,33 @@
 #include <fastdds/dds/subscriber/qos/SubscriberQos.hpp>
 #include <fastdds/dds/subscriber/qos/DataReaderQos.hpp>
 
-#include "eprosima_namespace.hpp"
+#include "eprosima_namespace.hpp" // Placeholder for actual eProsima namespace definitions
 
 namespace rcl_like_wrapper
 {
-
+    // Represents a message type, wrapping Fast DDS TypeSupport for serialization/deserialization
     class MessageType
     {
     public:
+        // Constructor from a Fast DDS TopicDataType
         MessageType(eprosima::fastdds::dds::TopicDataType *message_type);
+        // Copy constructor
         MessageType(const MessageType &other);
+        // Assignment operator
         MessageType &operator=(const MessageType &other);
+        // Default constructor
         MessageType();
+        // Destructor
         ~MessageType();
 
+        // Fast DDS TypeSupport for this message type
         eprosima::fastdds::dds::TypeSupport type_support;
     };
 
+    // Maps message type names to MessageType objects
     using MessageTypes = std::unordered_map<std::string, MessageType>;
 
+    // Functions to manage nodes, publishers, subscriptions, and timers
     intptr_t create_node(uint16_t domain_id);
     void destroy_node(intptr_t node_ptr);
     void spin(intptr_t node_ptr);
@@ -54,50 +62,54 @@ namespace rcl_like_wrapper
     void destroy_timer(intptr_t timer_ptr);
     void rcl_like_wrapper_init(const MessageTypes &types);
 
+    // Represents a node in the communication graph, managing lifecycle and communication capabilities
     class RCLWNode
     {
     protected:
-        uint8_t domain_number_;
-        intptr_t node_ptr_;
-        MessageTypes message_types_;
-        bool rclw_node_stop_flag_;
+        uint8_t domain_number_;      // DDS domain number for network segmentation
+        intptr_t node_ptr_;          // Pointer to the underlying implementation-specific node object
+        MessageTypes message_types_; // Supported message types for this node
+        bool rclw_node_stop_flag_;   // Flag to indicate the node should stop processing
 
     public:
         RCLWNode();
         virtual ~RCLWNode() = default;
-        virtual bool init(const std::string &config_file_path) = 0;
-        virtual void spin();
-        virtual void stop();
-        intptr_t get_node_pointer();
+        virtual bool init(const std::string &config_file_path) = 0; // Initialize the node with configuration
+        virtual void spin();                                        // Process messages continuously
+        virtual void stop();                                        // Stop processing messages
+        intptr_t get_node_pointer();                                // Get the underlying node pointer
     };
+
+    // Manages a collection of nodes, coordinating their execution
     class Executor
     {
     public:
         Executor();
         ~Executor();
 
-        void add_node(intptr_t node_ptr);
-        void remove_node(intptr_t node_ptr);
-        void stop();
-        void spin();
+        void add_node(intptr_t node_ptr);    // Add a node to the executor
+        void remove_node(intptr_t node_ptr); // Remove a node from the executor
+        void stop();                         // Stop all nodes in the executor
+        void spin();                         // Start processing messages for all nodes
 
     private:
-        std::vector<intptr_t> nodes_;
-        std::mutex mutex_;
-        bool running_;
+        std::vector<intptr_t> nodes_; // List of nodes managed by the executor
+        std::mutex mutex_;            // Mutex to protect access to the nodes list
+        bool running_;                // Flag indicating if the executor is running
     };
 
+    // Utility class to control the rate of execution in a loop
     class Rate
     {
     public:
-        Rate(std::chrono::milliseconds period);
+        Rate(std::chrono::milliseconds period); // Constructor with specified period
         ~Rate();
 
-        void sleep();
+        void sleep(); // Sleep until the next period
 
     private:
-        std::chrono::milliseconds period_;
-        std::chrono::time_point<std::chrono::steady_clock> start_time_;
+        std::chrono::milliseconds period_;                              // Duration of the period
+        std::chrono::time_point<std::chrono::steady_clock> start_time_; // Time point when the period started
     };
 
 } // namespace rcl_like_wrapper
