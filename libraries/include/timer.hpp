@@ -26,6 +26,12 @@ namespace rcl_like_wrapper
       thread_.join();
     }
 
+    void destroy()
+    {
+      stop_flag_ = true;
+      thread_.join();
+    }
+
     void runThread()
     {
       // struct timespec curTime, lastTime;

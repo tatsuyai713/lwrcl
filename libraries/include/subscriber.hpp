@@ -21,24 +21,21 @@ namespace rcl_like_wrapper
   class SubscriptionCallback
   {
   public:
-    SubscriptionCallback(MessageType &message_type, std::function<void(void *)> callback_function, void *message)
+    SubscriptionCallback(MessageType &message_type, std::function<void(void *)> callback_function, std::shared_ptr<void> message)
         : message_type_(message_type), callback_function_(callback_function),
           message_(message) {}
 
-    ~SubscriptionCallback()
-    {
-      message_type_.type_support.delete_data(message_);
-    }
+    ~SubscriptionCallback() = default;
 
     void invoke()
     {
-      callback_function_(message_);
+      callback_function_(message_.get());
     }
 
   private:
     MessageType &message_type_;
     std::function<void(void *)> callback_function_;
-    void *message_;
+    std::shared_ptr<void> message_; 
   };
 
   class SubscriberListener : public dds::DataReaderListener
@@ -54,8 +51,11 @@ namespace rcl_like_wrapper
 
     void on_data_available(dds::DataReader *reader) override
     {
-      void *message = message_type_.type_support.create_data();
-      if (reader->take_next_sample(message, &sample_info_) == ReturnCode_t::RETCODE_OK && sample_info_.valid_data)
+      // メッセージをstd::shared_ptr<void>として作成
+      std::shared_ptr<void> message(message_type_.type_support.create_data(),
+                                    [this](void *data)
+                                    { this->message_type_.type_support.delete_data(data); });
+      if (reader->take_next_sample(message.get(), &sample_info_) == ReturnCode_t::RETCODE_OK && sample_info_.valid_data)
       {
         channel_.produce(new SubscriptionCallback(message_type_, callback_function_, message));
       }

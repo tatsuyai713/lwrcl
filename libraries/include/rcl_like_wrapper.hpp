@@ -7,6 +7,10 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include <csignal>
+#include <cstring>
+#include <iostream>
+#include <atomic>
 
 #include <fastdds/dds/topic/TypeSupport.hpp>
 #include <fastdds/dds/publisher/qos/PublisherQos.hpp>
@@ -39,18 +43,17 @@ namespace rcl_like_wrapper
     void spin_once(intptr_t node_ptr);
     void spin_some(intptr_t node_ptr);
     void stop_spin(intptr_t node_ptr);
-    intptr_t create_publisher(intptr_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos& qos);
-    void publish(intptr_t publisher_ptr, void* message);
+    intptr_t create_publisher(intptr_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos &qos);
+    void publish(intptr_t publisher_ptr, void *message);
     int32_t get_subscriber_count(intptr_t publisher_ptr);
     void destroy_publisher(intptr_t publisher_ptr);
-    intptr_t create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos& qos, std::function<void(void*)> callback);
+    intptr_t create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos &qos, std::function<void(void *)> callback);
     int32_t get_publisher_count(intptr_t subscriber_ptr);
     void destroy_subscription(intptr_t subscriber_ptr);
     intptr_t create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback);
     void destroy_timer(intptr_t timer_ptr);
-    void rcl_like_wrapper_init(const MessageTypes& types);
+    void rcl_like_wrapper_init(const MessageTypes &types);
 
-    
     class RCLWNode
     {
     protected:
@@ -82,7 +85,6 @@ namespace rcl_like_wrapper
         std::vector<intptr_t> nodes_;
         std::mutex mutex_;
         bool running_;
-
     };
 
     class Rate
@@ -97,6 +99,5 @@ namespace rcl_like_wrapper
         std::chrono::milliseconds period_;
         std::chrono::time_point<std::chrono::steady_clock> start_time_;
     };
-
 
 } // namespace rcl_like_wrapper

@@ -12,38 +12,49 @@
 
 namespace rcl_like_wrapper
 {
+  std::atomic_bool global_stop_flag{false}; // グローバル停止フラグ
+
+  void signal_handler(int signal)
+  {
+    if (signal == SIGINT)
+    {
+      global_stop_flag = true; // Ctrl+Cが押されたらフラグをセット
+    }
+  }
+
+  void register_signal_handler()
+  {
+    std::signal(SIGINT, signal_handler); // シグナルハンドラを登録
+  }
 
   RCLWNode::RCLWNode() : domain_number_(0), node_ptr_(0), rclw_node_stop_flag_(0)
   {
+    register_signal_handler();
   }
 
   void RCLWNode::spin()
   {
     if (node_ptr_ != 0)
     {
-      // Start spinning in a separate thread to allow periodic check of the stop flag
       std::thread spin_thread([this]()
                               { rcl_like_wrapper::spin(node_ptr_); });
 
-      // Continuously check if the stop flag has been set
-      while (!rclw_node_stop_flag_)
+      while (!rclw_node_stop_flag_ && !global_stop_flag.load())
       {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Sleep to reduce CPU usage
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
       }
 
-      // Once the flag is set, stop spinning and join the thread
       if (node_ptr_ != 0)
       {
         stop_spin(node_ptr_);
       }
-      spin_thread.join(); // Ensure the spinning stops before exiting
+      spin_thread.join();
 
-      // Safely destroy the node
       if (node_ptr_ != 0)
       {
         auto node = reinterpret_cast<Node *>(node_ptr_);
         node->destroy();
-        node_ptr_ = 0; // Ensure the pointer is cleared after destruction
+        node_ptr_ = 0;
       }
     }
   }
@@ -51,10 +62,6 @@ namespace rcl_like_wrapper
   void RCLWNode::stop()
   {
     rclw_node_stop_flag_ = false;
-    if (node_ptr_ != 0)
-    {
-      stop_spin(node_ptr_);
-    }
   }
 
   intptr_t RCLWNode::get_node_pointer()
@@ -227,7 +234,7 @@ namespace rcl_like_wrapper
     auto publisher = reinterpret_cast<Publisher *>(publisher_ptr);
     if (publisher)
     {
-      delete publisher;
+      publisher->destroy();
     }
   }
 
@@ -264,7 +271,7 @@ namespace rcl_like_wrapper
     auto subscriber = reinterpret_cast<Subscriber *>(subscriber_ptr);
     if (subscriber)
     {
-      delete subscriber;
+      subscriber->destroy();
     }
   }
 
@@ -287,7 +294,7 @@ namespace rcl_like_wrapper
     auto timer = reinterpret_cast<Timer *>(timer_ptr);
     if (timer)
     {
-      delete timer;
+      timer->destroy();
     }
   }
 

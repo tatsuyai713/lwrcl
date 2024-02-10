@@ -36,6 +36,10 @@ namespace rcl_like_wrapper
       {
         subscription->destroy();
       }
+      for (auto *timer : timer_list_)
+      {
+        timer->destroy();
+      }
       delete this;
     }
 
