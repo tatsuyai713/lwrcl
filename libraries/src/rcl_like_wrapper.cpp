@@ -30,7 +30,7 @@ namespace rcl_like_wrapper
   void register_signal_handler()
   {
     std::signal(SIGINT, signal_handler); // Register the handler for SIGINT
-    std::signal(SIGTERM, signal_handler); // Register the handler for SIGINT
+    std::signal(SIGTERM, signal_handler); // Register the handler for SIGTERM
   }
 
   // Constructor for RCLWNode initializes the node and registers the signal handler
