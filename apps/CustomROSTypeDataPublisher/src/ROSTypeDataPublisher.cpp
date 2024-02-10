@@ -36,7 +36,7 @@ bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
     }
 
     dds::TopicQos topic_qos = dds::TOPIC_QOS_DEFAULT;
-    publisher_ptr_ = create_publisher(node_ptr_, "CustomMessage", topic_name_, topic_qos);
+    publisher_ptr_ = create_publisher(get_node_pointer(), "jCustomMessage", topic_name_, topic_qos);
     if (!publisher_ptr_) {
         std::cerr << "Error: Failed to create a publisher." << std::endl;
         return false;
@@ -44,7 +44,7 @@ bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
 
     // Setup timer for periodic callback
     timer_callback_ = [this]() { this->callbackPublish(interval_ms_); };
-    timer_ptr_ = create_timer(node_ptr_, std::chrono::milliseconds(interval_ms_), timer_callback_);
+    timer_ptr_ = create_timer(get_node_pointer(), std::chrono::milliseconds(interval_ms_), timer_callback_);
     if (!timer_ptr_) {
         std::cerr << "Error: Failed to create a timer." << std::endl;
         return false;
