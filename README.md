@@ -1,128 +1,58 @@
-# RCL like Wrapper for Fast DDS
+# RCL-like Wrapper for Fast DDS
 
-This software provides the wrapper API like rclcpp for Fast DDS.
+This library provides a simplified API similar to ROS 2's rclcpp for working with Fast DDS, enabling easier integration and management of nodes, publishers, subscribers, and timers within the Fast DDS ecosystem.
 
-## API List
+## Features
 
-### Node
+- Simplified node creation and management within a Fast DDS domain.
+- Efficient message publishing and subscription handling with callback support.
+- Periodic task execution using timers.
+- Signal handling for graceful shutdown and resource cleanup.
+- Supports custom message types for flexible communication needs.
+- Executor for managing and spinning multiple nodes concurrently.
 
-#### create_node
+## API Overview
 
-Create a Fast DDS node
+### Node Management
 
-```
-intptr_t create_node(uint16_t domain_id);
-```
+- **create_node**: Initializes a new Fast DDS node within the specified domain.
+- **spin**: Continuously processes incoming messages and executes callbacks.
+- **spin_once**: Processes a single message, if available.
+- **spin_some**: Processes available messages without blocking.
+- **stop_spin**: Stops the continuous message processing loop.
 
-#### spin
-
-Infinite loop function. During infinite loop, execute callback functions.
-
-```
-void spin(intptr_t node_ptr);
-```
-
-#### spin_once
-
-Execute only one callback function.
-
-```
-void spin_once(intptr_t node_ptr);
-```
-
-#### spin_some
-
-Execute some queued callback function.
-
-```
-void spin_some(intptr_t node_ptr);
-```
-
-#### stop_spin
-
-Stop the infinite loop of spin function.
-
-```
-void stop_spin(intptr_t node_ptr);
-```
 ### Publisher
 
-#### create_publisher
-
-Create publisher.
-
-```
-intptr_t create_publisher(intptr_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos &qos);
-```
-
-#### publish
-
-Publish the topic of publisher.
-
-```
-void publish(intptr_t publisher_ptr, void *message);
-```
-
-#### get_subscriber_count
-
-Get subscriber number of the publisher.
-
-```
-int32_t get_subscriber_count(intptr_t publisher_ptr);
-```
+- **create_publisher**: Establishes a new message publisher on a specified topic.
+- **publish**: Sends messages to the associated topic.
+- **get_subscriber_count**: Retrieves the number of subscribers currently connected to the publisher.
 
 ### Subscriber
 
-#### create_subscription
-
-Create subscription of the subscriber.
-
-```
-intptr_t create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos &qos, std::function<void(void *)> callback);
-```
-
-#### get_publisher_count
-
-Get publisher number of subscription.
-
-```
-int32_t get_publisher_count(intptr_t subscriber_ptr);
-```
+- **create_subscription**: Creates a subscription for receiving messages on a specified topic with a callback function.
+- **get_publisher_count**: Counts the number of publishers to which the subscriber is connected.
 
 ### Timer
 
-#### create_timer
-
-Create timer for cyclic calling the function.
-
-
-```
-intptr_t create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback);
-```
-
-#### stop_timer
-
-Stop timer.
-
-```
-void stop_timer();
-```
+- **create_timer**: Sets up a timer to call a function at a specified interval.
+- **stop_timer**: Halts the timer.
 
 ### Rate
 
-#### Rate::sleep
+- **Rate::sleep**: Delays execution to maintain a steady loop rate.
 
-Sleep until next execute during loop.
+### Executor
 
-```
-void Rate::sleep(void);
-```
+- **Executor**: Manages and spins multiple nodes to facilitate concurrent message processing across different topics and services.
+- **add_node**: Adds a node to the executor for management and spinning.
+- **remove_node**: Removes a node from the executor.
+- **spin**: Starts spinning all nodes managed by the executor, enabling concurrent message processing.
+- **stop**: Stops spinning all nodes managed by the executor.
 
+### Initialization
 
-### rcl_like_wrapper_init
+- **rcl_like_wrapper_init**: Initializes the wrapper with a set of predefined message types for communication.
 
-RCL like wrapper initialization and registering a message type.
+## License
 
-```
-void rcl_like_wrapper_init(const MessageTypes &types);
-```
+This project is a fork and has been modified under the terms of the Apache 2.0 license. The original work is also licensed under Apache 2.0. See the LICENSE file for more details.
