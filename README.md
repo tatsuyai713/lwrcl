@@ -6,6 +6,8 @@ This library provides a simplified API similar to ROS 2's rclcpp for working wit
 
 - Simplified node creation and management within a Fast DDS domain.
 - Efficient message publishing and subscription handling with callback support.
+- Seamless communication with ROS 2 topics without needing special modifications.
+- Compatible with lightweight SBCs such as Raspberry Pi for easy integration with ROS 2 ecosystems.
 - Periodic task execution using timers.
 - Signal handling for graceful shutdown and resource cleanup.
 - Supports custom message types for flexible communication needs.
