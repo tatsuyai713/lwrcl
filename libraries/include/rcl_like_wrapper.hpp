@@ -64,9 +64,9 @@ namespace rcl_like_wrapper
     class RCLWNode
     {
     protected:
-        intptr_t node_ptr_;                           // Pointer to the underlying implementation-specific node object
-        bool rclw_node_stop_flag_;                    // Flag to indicate the node should stop processing
-        std::mutex mutex_;                            // Mutex to protect access to the nodes list
+        intptr_t node_ptr_;        // Pointer to the underlying implementation-specific node object
+        bool rclw_node_stop_flag_; // Flag to indicate the node should stop processing
+        std::mutex mutex_;         // Mutex to protect access to the nodes list
 
     public:
         RCLWNode(uint16_t domain_number);
@@ -99,14 +99,13 @@ namespace rcl_like_wrapper
     class Rate
     {
     public:
-        Rate(std::chrono::milliseconds period); // Constructor with specified period
-        ~Rate();
+        explicit Rate(std::chrono::milliseconds period); // Constructor with specified period
 
         void sleep(); // Sleep until the next period
 
     private:
         std::chrono::milliseconds period_;                              // Duration of the period
-        std::chrono::time_point<std::chrono::steady_clock> start_time_; // Time point when the period started
+        std::chrono::steady_clock::time_point next_time_;               // Time point when the next period start
     };
 
 } // namespace rcl_like_wrapper

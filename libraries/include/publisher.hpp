@@ -30,26 +30,49 @@ namespace rcl_like_wrapper
   public:
     Publisher(dds::DomainParticipant *participant, MessageType &message_type, const std::string &topic,
               const dds::TopicQos &qos)
-        : participant_(participant), message_type_(message_type)
+        : participant_(participant), message_type_(message_type), topic_(nullptr), publisher_(nullptr), writer_(nullptr)
     {
-      message_type_.type_support.register_type(participant_);
+      if (message_type_.type_support.register_type(participant_) != ReturnCode_t::RETCODE_OK)
+      {
+        throw std::runtime_error("Failed to register message type");
+      }
       topic_ = participant_->create_topic(topic, message_type_.type_support.get_type_name(), qos);
+      if (!topic_)
+      {
+        throw std::runtime_error("Failed to create topic");
+      }
       publisher_ = participant_->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
-
+      if (!publisher_)
+      {
+        participant_->delete_topic(topic_); // Cleanup on failure
+        throw std::runtime_error("Failed to create publisher");
+      }
       dds::DataWriterQos writer_qos = dds::DATAWRITER_QOS_DEFAULT;
-      writer_qos.endpoint().history_memory_policy = rtps::PREALLOCATED_WITH_REALLOC_MEMORY_MODE;
-      writer_qos.publish_mode().kind = dds::ASYNCHRONOUS_PUBLISH_MODE;
-      writer_qos.data_sharing().off();
       writer_ = publisher_->create_datawriter(topic_, writer_qos, &listener_);
+      if (!writer_)
+      {
+        participant_->delete_publisher(publisher_); // Cleanup on failure
+        participant_->delete_topic(topic_);         // Cleanup on failure
+        throw std::runtime_error("Failed to create datawriter");
+      }
     }
 
     ~Publisher()
     {
-      publisher_->delete_datawriter(writer_);
-      participant_->delete_publisher(publisher_);
-      participant_->delete_topic(topic_);
+      if (writer_)
+      {
+        publisher_->delete_datawriter(writer_);
+      }
+      if (publisher_)
+      {
+        participant_->delete_publisher(publisher_);
+      }
+      if (topic_)
+      {
+        participant_->delete_topic(topic_);
+      }
     }
-    
+
     void publish(void *message) const
     {
       writer_->write(message);

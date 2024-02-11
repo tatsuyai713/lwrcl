@@ -1,9 +1,8 @@
+#pragma once
+
 #include <functional>
 #include <iostream>
 #include <thread>
-#include <chrono>
-#include <signal.h>
-#include <time.h>
 #include <chrono>
 
 namespace rcl_like_wrapper
@@ -22,56 +21,38 @@ namespace rcl_like_wrapper
 
     ~Timer()
     {
-      stop_flag_ = true;
-      if (thread_.joinable())
-      {
-        thread_.join();
-      }
+      stop_timer();
     }
 
     void stop_timer()
     {
-      stop_flag_ = true;
-      if (thread_.joinable())
+      if (!stop_flag_.exchange(true) && thread_.joinable())
       {
         thread_.join();
       }
     }
 
+  private:
     void run()
     {
-      // struct timespec curTime, lastTime;
-      // clock_gettime(CLOCK_REALTIME, &lastTime);
-
-      auto start_time = std::chrono::steady_clock::now();
-
+      auto next_time = std::chrono::steady_clock::now() + period_;
       while (!stop_flag_)
       {
-        // clock_gettime(CLOCK_REALTIME, &curTime);
-        // if (curTime.tv_nsec < lastTime.tv_nsec)
-        // {
-        //   printf("Interval = %10ld.%09ld\n", curTime.tv_sec - lastTime.tv_sec - 1, curTime.tv_nsec + 1000000000 - lastTime.tv_nsec);
-        // }
-        // else
-        // {
-        //   printf("Interval = %10ld.%09ld\n", curTime.tv_sec - lastTime.tv_sec, curTime.tv_nsec - lastTime.tv_nsec);
-        // }
-        // lastTime = curTime;
-
         callback_function_();
 
-        // Calculate next publication time
-        start_time += period_;
+        next_time += period_;
+        auto sleep_time = next_time - std::chrono::steady_clock::now();
 
-        // Sleep until the next publication time
-        std::this_thread::sleep_until(start_time);
+        if (sleep_time > std::chrono::milliseconds(0))
+        {
+          std::this_thread::sleep_for(sleep_time);
+        }
       }
     }
 
-  private:
     CallbackFunction callback_function_;
     std::thread thread_;
-    bool stop_flag_;
+    std::atomic<bool> stop_flag_;
     std::chrono::milliseconds period_;
   };
 

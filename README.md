@@ -14,14 +14,6 @@ Create a Fast DDS node
 intptr_t create_node(uint16_t domain_id);
 ```
 
-#### destroy_node
-
-Destroy a Fast DDS node
-
-```
-void destroy_node(intptr_t node_ptr);
-```
-
 #### spin
 
 Infinite loop function. During infinite loop, execute callback functions.

@@ -48,7 +48,6 @@ int main()
     if (publisher_ptr == 0)
     {
         std::cerr << "Error: Failed to create a publisher." << std::endl;
-        destroy_node(node_ptr);
         return 1;
     }
 
@@ -58,7 +57,6 @@ int main()
     if (subscriber_ptr == 0)
     {
         std::cerr << "Error: Failed to create a subscription." << std::endl;
-        destroy_node(node_ptr);
         return 1;
     }
 
@@ -102,7 +100,6 @@ int main()
 
     // Clean up
     stop_spin(node_ptr);
-    destroy_node(node_ptr);
 
     return 0;
 }

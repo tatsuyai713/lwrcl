@@ -29,13 +29,24 @@ namespace rcl_like_wrapper
 
     void invoke()
     {
-      callback_function_(message_.get());
+      try
+      {
+        callback_function_(message_.get());
+      }
+      catch (const std::exception &e)
+      {
+        std::cerr << "Exception during callback invocation: " << e.what() << std::endl;
+      }
+      catch (...)
+      {
+        std::cerr << "Unknown exception during callback invocation." << std::endl;
+      }
     }
 
   private:
     MessageType &message_type_;
     std::function<void(void *)> callback_function_;
-    std::shared_ptr<void> message_; 
+    std::shared_ptr<void> message_;
   };
 
   class SubscriberListener : public dds::DataReaderListener
@@ -78,26 +89,52 @@ namespace rcl_like_wrapper
         : participant_(participant),
           listener_(message_type, callback_function, channel)
     {
-      message_type.type_support.register_type(participant_);
+      if (message_type.type_support.register_type(participant_) != ReturnCode_t::RETCODE_OK)
+      {
+        throw std::runtime_error("Failed to register message type");
+      }
       topic_ = participant_->create_topic(topic, message_type.type_support.get_type_name(), qos);
+      if (!topic_)
+      {
+        throw std::runtime_error("Failed to create topic");
+      }
       subscriber_ = participant_->create_subscriber(dds::SUBSCRIBER_QOS_DEFAULT);
-
+      if (!subscriber_)
+      {
+        participant_->delete_topic(topic_);
+        throw std::runtime_error("Failed to create subscriber");
+      }
       dds::DataReaderQos reader_qos = dds::DATAREADER_QOS_DEFAULT;
       reader_qos.endpoint().history_memory_policy = rtps::PREALLOCATED_WITH_REALLOC_MEMORY_MODE;
       reader_qos.data_sharing().off();
       reader_ = subscriber_->create_datareader(topic_, reader_qos, &listener_);
-    }
-
-    int32_t get_publisher_count()
-    {
-      return listener_.count;
+      if (!reader_)
+      {
+        participant_->delete_subscriber(subscriber_);
+        participant_->delete_topic(topic_);
+        throw std::runtime_error("Failed to create datareader");
+      }
     }
 
     ~Subscriber()
     {
-      subscriber_->delete_datareader(reader_);
-      participant_->delete_subscriber(subscriber_);
-      participant_->delete_topic(topic_);
+      if (reader_)
+      {
+        subscriber_->delete_datareader(reader_);
+      }
+      if (subscriber_)
+      {
+        participant_->delete_subscriber(subscriber_);
+      }
+      if (topic_)
+      {
+        participant_->delete_topic(topic_);
+      }
+    }
+
+    int32_t get_publisher_count()
+    {
+      return listener_.count.load();
     }
 
   private:

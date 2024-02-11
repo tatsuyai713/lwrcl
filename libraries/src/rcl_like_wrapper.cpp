@@ -20,18 +20,20 @@ namespace rcl_like_wrapper
   // Handles SIGINT signals to gracefully stop the application
   void signal_handler(int signal)
   {
-    if (signal == SIGINT)
+    if (signal == SIGINT || signal == SIGTERM)
     {
       std::lock_guard<std::mutex> lock(global_mutex);
-      global_stop_flag = true; // Set the global flag to true on Ctrl+C
+      global_stop_flag = true;
     }
   }
 
-  // Registers the signal handler for SIGINT
   void register_signal_handler()
   {
-    std::signal(SIGINT, signal_handler);  // Register the handler for SIGINT
-    std::signal(SIGTERM, signal_handler); // Register the handler for SIGTERM
+    if (std::signal(SIGINT, signal_handler) == SIG_ERR ||
+        std::signal(SIGTERM, signal_handler) == SIG_ERR)
+    {
+      throw std::runtime_error("Failed to set signal handler.");
+    }
   }
 
   // Constructor for RCLWNode initializes the node and registers the signal handler
@@ -41,14 +43,15 @@ namespace rcl_like_wrapper
 
     // Create a node, publisher, and timer
     node_ptr_ = create_node(domain_number);
-    if (!node_ptr_) {
-        std::cerr << "Error: Failed to create a node." << std::endl;
-        return;
+    if (!node_ptr_)
+    {
+      std::cerr << "Error: Failed to create a node." << std::endl;
+      return;
     }
   }
 
   RCLWNode::~RCLWNode()
-  {    
+  {
     std::lock_guard<std::mutex> lock(mutex_);
     if (node_ptr_ != 0)
     {
@@ -128,7 +131,21 @@ namespace rcl_like_wrapper
   void Executor::stop()
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    running_ = false; // Set the running flag to false
+    if (running_)
+    {
+      running_ = false; // Set the running flag to false
+      for (auto &node_ptr : nodes_)
+      {
+        if (!node_ptr)
+        {
+          std::cerr << "node pointer is invalid!" << std::endl;
+        }
+        else
+        {
+          stop_spin(node_ptr);
+        }
+      }
+    }
   }
 
   // Start spinning all nodes managed by the executor
@@ -141,7 +158,14 @@ namespace rcl_like_wrapper
         std::lock_guard<std::mutex> lock(mutex_);
         for (auto node_ptr : nodes_) // Spin each node
         {
-          spin_some(node_ptr);
+          if (!node_ptr)
+          {
+            std::cerr << "node pointer is invalid!" << std::endl;
+          }
+          else
+          {
+            spin_some(node_ptr);
+          }
         }
       }
       std::this_thread::sleep_for(std::chrono::microseconds(1)); // Prevent busy waiting
@@ -149,24 +173,25 @@ namespace rcl_like_wrapper
   }
 
   // Rate control mechanism
-  Rate::Rate(std::chrono::milliseconds period) : period_(period)
-  {
-    start_time_ = std::chrono::steady_clock::now(); // Initialize the start time
-  }
-
-  Rate::~Rate()
-  {
-  }
+  Rate::Rate(std::chrono::milliseconds period)
+      : period_(period), next_time_(std::chrono::steady_clock::now() + period) {}
 
   // Sleeps for the remainder of the rate period
   void Rate::sleep()
   {
     auto now = std::chrono::steady_clock::now();
-    if (start_time_ + period_ > now)
+    if (now < next_time_)
     {
-      std::this_thread::sleep_until(start_time_ + period_); // Sleep until the next period
+      std::this_thread::sleep_until(next_time_);
     }
-    start_time_ += period_; // Update the start time for the next period
+    else
+    {
+      while (now >= next_time_)
+      {
+        next_time_ += period_;
+      }
+      std::this_thread::sleep_until(next_time_);
+    }
   }
 
   // Constructor for managing message type support
@@ -203,7 +228,12 @@ namespace rcl_like_wrapper
   intptr_t create_node(uint16_t domain_id)
   {
     // Dynamically allocates a new Node object with the given domain ID and returns its pointer as an integer
-    return reinterpret_cast<intptr_t>(new Node(domain_id));
+    auto node = new Node(domain_id);
+    if (!node)
+    {
+      return 0;
+    }
+    return reinterpret_cast<intptr_t>(node);
   }
 
   // Destroys a previously created node
@@ -217,6 +247,11 @@ namespace rcl_like_wrapper
   // Initiates the spin cycle of a node, making it process messages
   void spin(intptr_t node_ptr)
   {
+    if (!node_ptr)
+    {
+      std::cerr << "node pointer is invalid!" << std::endl;
+      return;
+    }
     // Casts the integer pointer back to a Node pointer and spins it to process messages
     auto node = reinterpret_cast<Node *>(node_ptr);
     node->spin();
@@ -225,6 +260,11 @@ namespace rcl_like_wrapper
   // Spins a node once, processing at least one message if available
   void spin_once(intptr_t node_ptr)
   {
+    if (!node_ptr)
+    {
+      std::cerr << "node pointer is invalid!" << std::endl;
+      return;
+    }
     // Similar to spin, but only processes messages once
     auto node = reinterpret_cast<Node *>(node_ptr);
     node->spin_once();
@@ -233,6 +273,11 @@ namespace rcl_like_wrapper
   // Processes some available messages without blocking
   void spin_some(intptr_t node_ptr)
   {
+    if (!node_ptr)
+    {
+      std::cerr << "node pointer is invalid!" << std::endl;
+      return;
+    }
     // Processes available messages without blocking the node
     auto node = reinterpret_cast<Node *>(node_ptr);
     node->spin_some();
@@ -241,6 +286,11 @@ namespace rcl_like_wrapper
   // Stops the spinning of a node
   void stop_spin(intptr_t node_ptr)
   {
+    if (!node_ptr)
+    {
+      std::cerr << "node pointer is invalid!" << std::endl;
+      return;
+    }
     // Instructs a node to stop its processing cycle
     auto node = reinterpret_cast<Node *>(node_ptr);
     node->stop_spin();
@@ -249,6 +299,11 @@ namespace rcl_like_wrapper
   // Creates a publisher for a node
   intptr_t create_publisher(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos &qos)
   {
+    if (!node_ptr)
+    {
+      std::cerr << "node pointer is invalid!" << std::endl;
+      return 0;
+    }
     // Attempts to create a publisher for a specific message type and topic
     auto node = reinterpret_cast<Node *>(node_ptr);
 
@@ -270,6 +325,11 @@ namespace rcl_like_wrapper
   // Publishes a message through a specific publisher
   void publish(intptr_t publisher_ptr, void *message)
   {
+    if (!publisher_ptr)
+    {
+      std::cerr << "publisher pointer is invalid!" << std::endl;
+      return;
+    }
     // Casts the integer pointer back to a Publisher pointer and publishes the message
     auto publisher = reinterpret_cast<Publisher *>(publisher_ptr);
     publisher->publish(message);
@@ -278,6 +338,11 @@ namespace rcl_like_wrapper
   // Retrieves the count of subscribers for a given publisher
   int32_t get_subscriber_count(intptr_t publisher_ptr)
   {
+    if (!publisher_ptr)
+    {
+      std::cerr << "publisher pointer is invalid!" << std::endl;
+      return 0;
+    }
     // Returns the number of subscribers connected to the publisher
     auto publisher = reinterpret_cast<Publisher *>(publisher_ptr);
     return publisher->get_subscriber_count();
@@ -286,6 +351,11 @@ namespace rcl_like_wrapper
   // Creates a subscription for a node
   intptr_t create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, dds::TopicQos &qos, std::function<void(void *)> callback)
   {
+    if (!node_ptr)
+    {
+      std::cerr << "node pointer is invalid!" << std::endl;
+      return 0;
+    }
     // Attempts to create a subscription for a specific message type and topic with a callback
     auto node = reinterpret_cast<Node *>(node_ptr);
 
@@ -309,6 +379,11 @@ namespace rcl_like_wrapper
   // Retrieves the count of publishers for a given subscriber
   int32_t get_publisher_count(intptr_t subscriber_ptr)
   {
+    if (!subscriber_ptr)
+    {
+      std::cerr << "subscriber pointer is invalid!" << std::endl;
+      return 0;
+    }
     // Returns the number of publishers to which the subscriber is connected
     auto subscriber = reinterpret_cast<Subscriber *>(subscriber_ptr);
     return subscriber->get_publisher_count();
@@ -317,6 +392,12 @@ namespace rcl_like_wrapper
   // Creates a timer for a node
   intptr_t create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback)
   {
+    if (!node_ptr)
+    {
+      std::cerr << "node pointer is invalid!" << std::endl;
+      return 0;
+    }
+
     // Attempts to create a timer with a specific period and callback function
     auto node = reinterpret_cast<Node *>(node_ptr);
 
@@ -334,13 +415,15 @@ namespace rcl_like_wrapper
   void rcl_like_wrapper_init(const MessageTypes &types)
   {
     // Initializes the global message types with the provided set
-    for (const auto &type : types) {
-        // Check if the type is already registered
-        if (message_types.find(type.first) == message_types.end()) {
-            // If not registered, add the new type
-            message_types[type.first] = type.second;
-        }
-        // If the type is already registered, do nothing
+    for (const auto &type : types)
+    {
+      // Check if the type is already registered
+      if (message_types.find(type.first) == message_types.end())
+      {
+        // If not registered, add the new type
+        message_types[type.first] = type.second;
+      }
+      // If the type is already registered, do nothing
     }
   }
 
