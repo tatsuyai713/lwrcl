@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.16.3)
 
-project(ROSTypeImagePubSubExecutor VERSION 1 LANGUAGES CXX)
+project(ROSTypeImagePubSubEdge VERSION 1 LANGUAGES CXX)
 
 find_package(OpenCV REQUIRED)
 
@@ -47,13 +47,12 @@ file(GLOB_RECURSE in1_files
   "${CMAKE_CURRENT_BINARY_DIR}/*.h"
 )
 
-message(STATUS "Configuring ROSTypeImagePubSubExecutor...")
+message(STATUS "Configuring ROSTypeImagePubSubEdge...")
 file(GLOB ROS_TYPE_DATA_PUBLISHER_SOURCES_CXX "src/*.cxx")
 file(GLOB ROS_TYPE_DATA_PUBLISHER_SOURCES_CPP "src/*.cpp")
 
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config/config1.yaml ${CMAKE_CURRENT_BINARY_DIR}/config/config1.yaml  COPYONLY)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config/config2.yaml ${CMAKE_CURRENT_BINARY_DIR}/config/config2.yaml  COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config/config.yaml ${CMAKE_CURRENT_BINARY_DIR}/config/config.yaml  COPYONLY)
 
 
 include_directories(
@@ -62,9 +61,9 @@ include_directories(
     ${OpenCV_INCLUDE_DIRS}
     /opt/fast-dds-libs/include)
 link_directories(/opt/fast-dds-libs/lib)
-add_executable(ROSTypeImagePubSubExecutor ${ROS_TYPE_DATA_PUBLISHER_SOURCES_CXX} ${ROS_TYPE_DATA_PUBLISHER_SOURCES_CPP} ${in1_files})
+add_executable(ROSTypeImagePubSubEdge ${ROS_TYPE_DATA_PUBLISHER_SOURCES_CXX} ${ROS_TYPE_DATA_PUBLISHER_SOURCES_CPP} ${in1_files})
 
-target_link_libraries(ROSTypeImagePubSubExecutor fastrtps fastcdr rcl_like_wrapper geometry_msgs sensor_msgs yaml-cpp ${OpenCV_LIBRARIES})
-install(TARGETS ROSTypeImagePubSubExecutor
-    RUNTIME DESTINATION bin/ROSTypeImagePubSubExecutor/${BIN_INSTALL_DIR})
-install(FILES config/config.yaml DESTINATION bin/ROSTypeImagePubSubExecutor/${BIN_INSTALL_DIR}/config PERMISSIONS OWNER_READ GROUP_READ WORLD_READ)
+target_link_libraries(ROSTypeImagePubSubEdge fastrtps fastcdr rcl_like_wrapper geometry_msgs sensor_msgs yaml-cpp ${OpenCV_LIBRARIES})
+install(TARGETS ROSTypeImagePubSubEdge
+    RUNTIME DESTINATION bin/ROSTypeImagePubSubEdge/${BIN_INSTALL_DIR})
+install(FILES config/config.yaml DESTINATION bin/ROSTypeImagePubSubEdge/${BIN_INSTALL_DIR}/config PERMISSIONS OWNER_READ GROUP_READ WORLD_READ)

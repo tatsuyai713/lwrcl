@@ -1,17 +1,15 @@
 #include "ROSTypeImagePubSubMono.hpp"
-#include "ROSTypeImagePubSubEdge.hpp"
 #include <iostream>
 #include <unistd.h>
 #include <limits.h>
 #include <string>
 
 int main(int argc, char **argv) {
-    std::cout << "Starting ROSTypeImagePubSubExecutor" << std::endl;
+    std::cout << "Starting ROSTypeImagePubSubMono" << std::endl;
 
     // Buffer to hold the path to the current executable
     char buf[PATH_MAX] = {0};
     std::string exePath, configPath;
-    std::string configPath1, configPath2;
 
     // Attempt to read the symbolic link '/proc/self/exe' to find the path of the current executable
     ssize_t count = readlink("/proc/self/exe", buf, sizeof(buf));
@@ -26,33 +24,17 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    // Initialize Executor
-    Executor executor;
-
     // Initialize and run the ROS-like node
-    ROSTypeImagePubSubMono rcl_like_node1(0);
-    configPath1 = configPath + "config/config1.yaml"; // Append the relative path of the config file
-    std::cout << "Using config file at: " << configPath1 << std::endl;
+    ROSTypeImagePubSubMono rcl_like_node(0);
+    configPath += "config/config.yaml"; // Append the relative path of the config file
+    std::cout << "Using config file at: " << configPath << std::endl;
     
-    if (rcl_like_node1.init(configPath1)) {
-        executor.add_node(rcl_like_node1.get_node_pointer());
+    if (rcl_like_node.init(configPath)) {
+        rcl_like_node.spin();
     } else {
         std::cerr << "Failed to initialize the ROSTypeImagePubSubMono." << std::endl;
         return 1;
     }
-    ROSTypeImagePubSubEdge rcl_like_node2(0);
-    configPath2 = configPath + "config/config2.yaml"; // Append the relative path of the config file
-    std::cout << "Using config file at: " << configPath2 << std::endl;
-    
-    if (rcl_like_node2.init(configPath2)) {
-        executor.add_node(rcl_like_node2.get_node_pointer());
-    } else {
-        std::cerr << "Failed to initialize the ROSTypeImagePubSubEdge." << std::endl;
-        return 1;
-    }
-
-    // Wait for the ROS-like node to finish
-    executor.spin();
 
     return 0;
 }
