@@ -16,15 +16,23 @@ cmake_minimum_required(VERSION 3.16.3)
 
 project(ROSTypeImagePubSubEdge VERSION 1 LANGUAGES CXX)
 
+if(NOT fastrtps_FOUND)
+    find_package(fastrtps REQUIRED)
+endif()
+
 find_package(OpenCV REQUIRED)
 
-set(FAST_DDS_PATH /opt/fast-dds/include)
-set(ROS_DATA_TYPES_PATH /opt/fast-dds-libs/include)
-
-
-link_directories(/opt/fast-dds-libs/lib /opt/fast-dds/lib)
-include_directories(include ${FAST_DDS_PATH} ${ROS_DATA_TYPES_PATH})
-
+if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
+    set(ROS_DATA_TYPES_INCLUDE_PATH /opt/qnx/fast-dds-libs/include)
+    include_directories(/opt/qnx/fast-dds-libs/include 
+                        /opt/qnx/fast-dds-libs/include/optionparser)
+    link_directories(/opt/qnx/fast-dds-libs/lib)
+else()
+    set(ROS_DATA_TYPES_INCLUDE_PATH /opt/fast-dds-libs/include)
+    include_directories(/opt/fast-dds-libs/include
+                        /opt/fast-dds-libs/include/optionparser)
+    link_directories(/opt/fast-dds-libs/lib)
+endif()
 file(GLOB_RECURSE Original_IDL_Files
   "${CMAKE_CURRENT_SOURCE_DIR}/*/*.idl"
 )
@@ -36,7 +44,7 @@ if (NOT Original_I${Original_IDL_Files}DL_Files)
         get_filename_component(idl_dir "${idl_file}" PATH)
         set(workingdir ${CMAKE_CURRENT_BINARY_DIR})
         configure_file(${idl_file} ${workingdir}/${idl}.idl COPYONLY)
-        execute_process(COMMAND fastddsgen ${idl}.idl -I ${ROS_DATA_TYPES_PATH} -I ${idl_dir} -typeros2 -replace -cs
+        execute_process(COMMAND fastddsgen ${idl}.idl -I ${ROS_DATA_TYPES_INCLUDE_PATH} -I ${idl_dir} -typeros2 -replace -cs
         WORKING_DIRECTORY ${workingdir}
         INPUT_FILE ${idl}.idl)
     endforeach(idl_file)
@@ -58,9 +66,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config/config.yaml ${CMAKE_CURRENT_BI
 include_directories(
     include
     ${CMAKE_CURRENT_BINARY_DIR}
-    ${OpenCV_INCLUDE_DIRS}
-    /opt/fast-dds-libs/include)
-link_directories(/opt/fast-dds-libs/lib)
+    ${ROS_DATA_TYPES_INCLUDE_PATH})
 add_executable(ROSTypeImagePubSubEdge ${ROS_TYPE_DATA_PUBLISHER_SOURCES_CXX} ${ROS_TYPE_DATA_PUBLISHER_SOURCES_CPP} ${in1_files})
 
 target_link_libraries(ROSTypeImagePubSubEdge fastrtps fastcdr rcl_like_wrapper geometry_msgs sensor_msgs yaml-cpp ${OpenCV_LIBRARIES})

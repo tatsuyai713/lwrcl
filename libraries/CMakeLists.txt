@@ -14,14 +14,22 @@ if(NOT fastrtps_FOUND)
     find_package(fastrtps REQUIRED)
 endif()
 
-set(FAST_DDS_PATH /opt/fast-dds/include)
-set(ROS_DATA_TYPES_PATH /opt/fast-dds-libs/include)
-
+if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
+    set(ROS_DATA_TYPES_INCLUDE_PATH /opt/qnx/fast-dds-libs/include)
+    include_directories(/opt/qnx/fast-dds-libs/include 
+                        /opt/qnx/fast-dds-libs/include/optionparser)
+    link_directories(/opt/qnx/fast-dds-libs/lib)
+else()
+    set(ROS_DATA_TYPES_INCLUDE_PATH /opt/fast-dds-libs/include)
+    include_directories(/opt/fast-dds-libs/include
+                        /opt/fast-dds-libs/include/optionparser)
+    link_directories(/opt/fast-dds-libs/lib)
+endif()
 
 add_library(${PROJECT_NAME} SHARED src/${PROJECT_NAME}.cpp)
-target_include_directories(${PROJECT_NAME} PUBLIC include ${FAST_DDS_PATH} ${ROS_DATA_TYPES_PATH})
+target_include_directories(${PROJECT_NAME} PUBLIC include ${ROS_DATA_TYPES_INCLUDE_PATH})
 
-link_directories(/opt/fast-dds-libs/lib)
+target_link_libraries(${PROJECT_NAME} fastrtps)
 
 # Install targets
 install(TARGETS ${PROJECT_NAME}

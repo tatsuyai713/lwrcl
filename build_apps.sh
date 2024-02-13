@@ -13,16 +13,19 @@ if [ ! $OPT_NUM -ne 1 ]; then
 fi
 
 cd apps
+CURRENT=`pwd`
 mkdir build
 cd build
+INSTALL_PATH=/opt/fast-dds-libs
 
-INSTALL_PATH=/opt/fast-dds
-sudo mkdir -p /opt/fast-dds-libs
+mkdir -p ${CURRENT}/install
 
 cmake ..  -DCMAKE_BUILD_TYPE=Debug \
   -DCMAKE_SYSTEM_PREFIX_PATH=$INSTALL_PATH \
   -DCMAKE_PREFIX_PATH=$INSTALL_PATH \
-  -DCMAKE_INSTALL_PREFIX=/opt/fast-dds-libs
+  -Dfastrtps_DIR=$INSTALL_PATH/share/fastrtps/cmake/ \
+  -Dyaml-cpp_DIR=$INSTALL_PATH/lib/cmake/yaml-cpp/ \
+  -DCMAKE_INSTALL_PREFIX=${CURRENT}/install
 make -j4
 
 
@@ -30,5 +33,4 @@ if [ ! $OPT_NUM -ne 1 ]; then
 	if [ "install" = $OPT ]; then
                 sudo make install
 	fi
-
 fi
