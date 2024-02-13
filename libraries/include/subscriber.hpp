@@ -53,13 +53,7 @@ namespace rcl_like_wrapper
   {
   public:
     SubscriberListener(MessageType &message_type, std::function<void(void *)> callback_function, Channel<SubscriptionCallback *> &channel)
-        : message_type_(message_type), callback_function_(callback_function), channel_(channel)
-    {
-      // Initialize the SubscriptionCallback instance with a message for now
-      message_ptr_ = std::shared_ptr<void>(message_type_.type_support.create_data(), [this](void *data)
-                                                { this->message_type_.type_support.delete_data(data); });
-      subscription_callback_ = std::make_unique<SubscriptionCallback>(message_type_, callback_function_, message_ptr_);
-    }
+        : message_type_(message_type), callback_function_(callback_function), channel_(channel) {}
 
     void on_subscription_matched(dds::DataReader *, const dds::SubscriptionMatchedStatus &status) override
     {
@@ -68,17 +62,18 @@ namespace rcl_like_wrapper
 
     void on_data_available(dds::DataReader *reader) override
     {
-      if (reader->take_next_sample(message_ptr_.get(), &sample_info_) == ReturnCode_t::RETCODE_OK && sample_info_.valid_data)
+      std::shared_ptr<void> message(message_type_.type_support.create_data(),
+                                    [this](void *data)
+                                    { this->message_type_.type_support.delete_data(data); });
+      if (reader->take_next_sample(message.get(), &sample_info_) == ReturnCode_t::RETCODE_OK && sample_info_.valid_data)
       {
-        channel_.produce(subscription_callback_.get());
+        channel_.produce(new SubscriptionCallback(message_type_, callback_function_, message));
       }
     }
 
     std::atomic<int32_t> count{0};
 
   private:
-    std::shared_ptr<void> message_ptr_;
-    std::unique_ptr<SubscriptionCallback> subscription_callback_;
     dds::SampleInfo sample_info_;
     MessageType &message_type_;
     Channel<SubscriptionCallback *> &channel_;
