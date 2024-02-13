@@ -81,7 +81,6 @@ namespace rcl_like_wrapper
       while (channel_.consume(callback))
       {
         callback->invoke();
-        delete callback;
       }
     }
 
@@ -91,7 +90,6 @@ namespace rcl_like_wrapper
       if (channel_.consume_nowait(callback))
       {
         callback->invoke();
-        delete callback;
       }
     }
 
@@ -101,7 +99,6 @@ namespace rcl_like_wrapper
       while (channel_.consume_nowait(callback))
       {
         callback->invoke();
-        delete callback;
       }
     }
 
