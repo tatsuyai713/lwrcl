@@ -11,6 +11,8 @@ ROSTypeImagePubSubMono::ROSTypeImagePubSubMono(uint16_t domain_number)
     rcl_like_wrapper_init(message_types_);
 
     counter_ = 0;
+    
+    gray_msg_ = std::make_shared<sensor_msgs::msg::Image>();
 }
 
 ROSTypeImagePubSubMono::~ROSTypeImagePubSubMono() {
@@ -77,12 +79,11 @@ void ROSTypeImagePubSubMono::callbackSubscribe(void *message)
     cv::Mat gray_image;
     cv::cvtColor(cv_image, gray_image, cv::COLOR_BGR2GRAY);
 
-    std::unique_ptr<sensor_msgs::msg::Image> gray_msg = std::make_unique<sensor_msgs::msg::Image>();
-    gray_msg->width(width);
-    gray_msg->height(height);
-    gray_msg->encoding("mono8");
-    gray_msg->step(gray_image.step);
-    gray_msg->data(std::vector<uint8_t>(gray_image.data, gray_image.data + gray_image.total() * gray_image.elemSize()));
+    gray_msg_->width(width);
+    gray_msg_->height(height);
+    gray_msg_->encoding("mono8");
+    gray_msg_->step(gray_image.step);
+    gray_msg_->data(std::vector<uint8_t>(gray_image.data, gray_image.data + gray_image.total() * gray_image.elemSize()));
     
-    publish(reinterpret_cast<intptr_t>(publisher_ptr_), gray_msg.release());
+    publish(reinterpret_cast<intptr_t>(publisher_ptr_), gray_msg_.get());
 }

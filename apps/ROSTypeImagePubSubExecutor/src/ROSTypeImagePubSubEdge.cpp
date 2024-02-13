@@ -10,6 +10,8 @@ ROSTypeImagePubSubEdge::ROSTypeImagePubSubEdge(uint16_t domain_number)
     rcl_like_wrapper_init(message_types_);
 
     counter_ = 0;
+
+    edge_msg_ = std::make_shared<sensor_msgs::msg::Image>();
 }
 
 ROSTypeImagePubSubEdge::~ROSTypeImagePubSubEdge() {
@@ -75,12 +77,11 @@ void ROSTypeImagePubSubEdge::callbackSubscribe(void *message)
     cv::Mat edges;
     cv::Canny(gray_image, edges, 50, 150);
 
-    std::unique_ptr<sensor_msgs::msg::Image> edge_msg = std::make_unique<sensor_msgs::msg::Image>();
-    edge_msg->width(width);
-    edge_msg->height(height);
-    edge_msg->encoding("mono8");
-    edge_msg->step(edges.step);
-    edge_msg->data(std::vector<uint8_t>(edges.data, edges.data + edges.total() * edges.elemSize()));
+    edge_msg_->width(width);
+    edge_msg_->height(height);
+    edge_msg_->encoding("mono8");
+    edge_msg_->step(edges.step);
+    edge_msg_->data(std::vector<uint8_t>(edges.data, edges.data + edges.total() * edges.elemSize()));
 
-    publish(reinterpret_cast<intptr_t>(publisher_ptr_), edge_msg.release());
+    publish(reinterpret_cast<intptr_t>(publisher_ptr_), edge_msg_.get());
 }

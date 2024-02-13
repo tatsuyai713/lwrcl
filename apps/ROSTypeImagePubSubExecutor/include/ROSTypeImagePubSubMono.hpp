@@ -34,6 +34,7 @@ private:
     intptr_t timer_ptr_;
     MessageTypes message_types_;
     int counter_;
+    std::shared_ptr<sensor_msgs::msg::Image> gray_msg_;
 };
 
 #endif /* ROSTYPEIMAGEPUBLSUBMONO_H_ */

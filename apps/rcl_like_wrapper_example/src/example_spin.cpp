@@ -65,6 +65,9 @@ int main()
 
     struct timespec curTime, lastTime;
     clock_gettime(CLOCK_REALTIME, &lastTime);
+    
+    std::shared_ptr<sensor_msgs::msg::Image> my_message = std::make_shared<sensor_msgs::msg::Image>();
+    
     // Main application loop
     while (true)
     {
@@ -75,7 +78,6 @@ int main()
         std::cout << "Number of publishers: " << publisher_count << std::endl;
 
         // Simulate sending data periodically
-        std::unique_ptr<sensor_msgs::msg::Image> my_message = std::make_unique<sensor_msgs::msg::Image>();
         my_message->header().stamp().sec() = data_value;
         data_value++;
 
@@ -90,7 +92,7 @@ int main()
         }
         lastTime = curTime;
 
-        publish(publisher_ptr, my_message.release()); // Pass the raw pointer
+        publish(publisher_ptr, my_message.get()); // Pass the raw pointer
 
         // Spin the node to handle incoming messages
         spin_once(node_ptr);

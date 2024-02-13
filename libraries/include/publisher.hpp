@@ -76,7 +76,6 @@ namespace rcl_like_wrapper
     void publish(void *message) const
     {
       writer_->write(message);
-      message_type_.type_support.delete_data(message);
     }
 
     int32_t get_subscriber_count()

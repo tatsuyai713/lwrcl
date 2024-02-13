@@ -24,6 +24,7 @@ void myCallbackFunction(void *message)
 }
 
 int data_value = 0;
+std::shared_ptr<sensor_msgs::msg::Image> my_message;
 void myTimerFunction(int test, void *ptr)
 {
 
@@ -35,7 +36,6 @@ void myTimerFunction(int test, void *ptr)
     void *publisher_ptr = ptr;
 
     // Simulate sending data periodically
-    std::unique_ptr<sensor_msgs::msg::Image> my_message = std::make_unique<sensor_msgs::msg::Image>();
     my_message->header().stamp().sec() = data_value;
     data_value++;
 
@@ -45,7 +45,7 @@ void myTimerFunction(int test, void *ptr)
         std::cerr << "Error: Invalid publisher pointer." << std::endl;
         return;
     }
-    publish(reinterpret_cast<intptr_t>(publisher_ptr), my_message.release()); // Pass the raw pointer
+    publish(reinterpret_cast<intptr_t>(publisher_ptr), my_message.get()); // Pass the raw pointer
 }
 
 int main()
@@ -58,6 +58,8 @@ int main()
     messageTypes["sensor_msgs::msg::Image"] = rcl_like_wrapper::MessageType(imagePubSubType.release());
 
     rcl_like_wrapper_init(messageTypes);
+
+    my_message = std::make_shared<sensor_msgs::msg::Image>();
 
     // Create a node with domain ID 0
     intptr_t node_ptr = create_node(0);

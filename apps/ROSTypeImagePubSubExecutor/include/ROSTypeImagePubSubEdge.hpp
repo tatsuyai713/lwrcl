@@ -34,6 +34,7 @@ private:
     intptr_t timer_ptr_;
     MessageTypes message_types_;
     int counter_;
+    std::shared_ptr<sensor_msgs::msg::Image> edge_msg_;
 };
 
 #endif /* ROSTYPEIMAGEPUBLSUBEDGE_H_ */
