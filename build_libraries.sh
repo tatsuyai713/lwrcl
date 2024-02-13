@@ -16,13 +16,14 @@ cd libraries
 mkdir build
 cd build
 
-INSTALL_PATH=/opt/fast-dds
-sudo mkdir -p /opt/fast-dds-libs
+DDS_PATH=/opt/fast-dds
+INSTALL_PATH=/opt/fast-dds-libs
+sudo mkdir -p $INSTALL_PATH
 
 cmake ..  -DCMAKE_BUILD_TYPE=Debug \
   -DCMAKE_SYSTEM_PREFIX_PATH=$INSTALL_PATH \
   -DCMAKE_PREFIX_PATH=$INSTALL_PATH \
-  -DCMAKE_INSTALL_PREFIX=/opt/fast-dds-libs
+  -DCMAKE_INSTALL_PREFIX=$DDS_PATH
 make -j4
 
 
