@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.16.3)
 project(rcl_like_wrapper_example)
 
+if(NOT fastrtps_FOUND)
+    find_package(fastrtps REQUIRED)
+endif()
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
     set(ROS_DATA_TYPES_INCLUDE_PATH /opt/qnx/fast-dds-libs/include)
