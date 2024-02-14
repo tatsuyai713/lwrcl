@@ -15,6 +15,10 @@ This library provides a simplified API similar to ROS 2's rclcpp for working wit
 
 ## API Overview
 
+### Initialization
+
+- **rcl_like_wrapper_init**: Initializes the wrapper with a set of predefined message types for communication.
+  
 ### Node Management
 
 - **create_node**: Initializes a new Fast DDS node within the specified domain.
@@ -118,11 +122,6 @@ int main() {
 ```
 
 In this example, `RCLWNode` instances are created for two different nodes within the same DDS domain. These nodes are then added to an `Executor`, which manages their lifecycle and ensures that they process messages concurrently. This approach simplifies the development of distributed systems with Fast DDS, providing a familiar interface for those accustomed to ROS 2 development patterns.
-
-
-### Initialization
-
-- **rcl_like_wrapper_init**: Initializes the wrapper with a set of predefined message types for communication.
 
 ## License
 
