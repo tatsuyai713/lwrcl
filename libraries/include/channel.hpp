@@ -58,6 +58,11 @@ namespace rcl_like_wrapper
       cv_.notify_all();
     }
 
+    bool is_closed()
+    {
+      return closed_;
+    }
+
   private:
     std::queue<T> queue_;
     bool closed_ = false;

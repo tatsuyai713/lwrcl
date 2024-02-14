@@ -77,10 +77,31 @@ namespace rcl_like_wrapper
 
     void spin()
     {
-      SubscriptionCallback *callback;
-      while (channel_.consume(callback))
+      auto last_check = std::chrono::steady_clock::now();
+      auto check_interval = std::chrono::microseconds(100);
+
+      while (!channel_.is_closed())
       {
-        callback->invoke();
+        SubscriptionCallback *callback;
+        while (channel_.consume_nowait(callback))
+        {
+          if (callback)
+          {
+            callback->invoke();
+          }
+        }
+
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_check >= check_interval)
+        {
+          for (auto &timer : timer_list_)
+          {
+            timer->check_and_call();
+          }
+          last_check = now;
+        }
+
+        std::this_thread::sleep_for(std::chrono::microseconds(10));
       }
     }
 
@@ -91,15 +112,33 @@ namespace rcl_like_wrapper
       {
         callback->invoke();
       }
+
+      for (auto &timer : timer_list_)
+      {
+        timer->check_and_call();
+      }
     }
 
     void spin_some()
     {
-      SubscriptionCallback *callback;
-      while (channel_.consume_nowait(callback))
+      bool event_processed = false;
+
+      do
       {
-        callback->invoke();
-      }
+        event_processed = false;
+
+        SubscriptionCallback *callback;
+        while (channel_.consume_nowait(callback))
+        {
+          callback->invoke();
+          event_processed = true;
+        }
+
+        for (auto &timer : timer_list_)
+        {
+          timer->check_and_call();
+        }
+      } while (event_processed);
     }
 
     void stop_spin()

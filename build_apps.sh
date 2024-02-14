@@ -32,7 +32,7 @@ make -j4
 
 
 if [ ! $OPT_NUM -ne 1 ]; then
-  if [ "install" = $OPT ]; then
+	if [ "install" = $OPT ]; then
     sudo make install
-  fi
+	fi
 fi

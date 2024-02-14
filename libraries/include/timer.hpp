@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <iostream>
 #include <thread>
@@ -14,46 +15,33 @@ namespace rcl_like_wrapper
     using CallbackFunction = std::function<void()>;
 
     Timer(std::chrono::milliseconds period, CallbackFunction callback_function)
-        : period_(period), stop_flag_(false), callback_function_(callback_function)
+        : period_(period), expired_(false), callback_function_(callback_function)
     {
-      thread_ = std::thread(&Timer::run, this);
+      last_execution_ = std::chrono::steady_clock::now();
     }
 
-    ~Timer()
+    void check_and_call()
     {
-      stop_timer();
-    }
-
-    void stop_timer()
-    {
-      if (!stop_flag_.exchange(true) && thread_.joinable())
+      auto now = std::chrono::steady_clock::now();
+      if (now - last_execution_ >= period_)
       {
-        thread_.join();
-      }
-    }
-
-  private:
-    void run()
-    {
-      auto next_time = std::chrono::steady_clock::now() + period_;
-      while (!stop_flag_)
-      {
-        callback_function_();
-
-        next_time += period_;
-        auto sleep_time = next_time - std::chrono::steady_clock::now();
-
-        if (sleep_time > std::chrono::milliseconds(0))
+        last_execution_ = now;
+        if (callback_function_)
         {
-          std::this_thread::sleep_for(sleep_time);
+          callback_function_();
         }
       }
     }
+    void reset()
+    {
+      last_execution_ = std::chrono::steady_clock::now();
+    }
 
-    CallbackFunction callback_function_;
-    std::thread thread_;
-    std::atomic<bool> stop_flag_;
+  private:
     std::chrono::milliseconds period_;
+    std::chrono::steady_clock::time_point last_execution_;
+    CallbackFunction callback_function_;
+    std::atomic<bool> expired_;
   };
 
 } // namespace rcl_like_wrapper
