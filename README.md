@@ -116,11 +116,6 @@ int main() {
   // Start concurrent processing with the executor
   executor.spin();
 
-  // Application logic here...
-
-  // Stop processing and cleanup before exiting
-  executor.stop();
-
   return 0;
 }
 ```
