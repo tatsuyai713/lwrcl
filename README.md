@@ -110,9 +110,6 @@ int main() {
   executor.add_node(node1->get_node_pointer());
   executor.add_node(node2->get_node_pointer());
 
-  // Setup publishers, subscribers, or timers on the nodes as needed
-  // For example, creating a publisher on node1 and a subscriber on node2
-
   // Start concurrent processing with the executor
   executor.spin();
 
