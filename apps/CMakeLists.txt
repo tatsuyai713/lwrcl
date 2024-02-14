@@ -17,6 +17,5 @@ add_subdirectory(ROSTypeImagePubSubEdge)
 add_subdirectory(ROSTypeImagePubSubMono)
 add_subdirectory(ROSTypeImagePubSubExecutor)
 add_subdirectory(CustomROSTypeDataPublisherExecutor)
-add_subdirectory(CustomROSTypeDataSubscriber)
 
 

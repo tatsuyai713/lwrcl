@@ -76,7 +76,7 @@ void ROSTypeImagePubSub::callbackPublish(int test) {
         return;
     }
 
-    publish(reinterpret_cast<intptr_t>(publisher_ptr_), publish_msg.release());
+    publish(reinterpret_cast<intptr_t>(publisher_ptr_), publish_msg.get());
 }
 
 void ROSTypeImagePubSub::callbackSubscribe(void *message)

@@ -62,5 +62,5 @@ void ROSTypeDataPublisher::callbackPublish(int test) {
         return;
     }
 
-    publish(reinterpret_cast<intptr_t>(publisher_ptr_), publish_msg.release());
+    publish(reinterpret_cast<intptr_t>(publisher_ptr_), publish_msg.get());
 }
