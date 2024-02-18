@@ -9,15 +9,16 @@
 #include "node.hpp"
 #include "rcl_like_wrapper.hpp" // The main header file for the rcl_like_wrapper namespace
 
+// Begin namespace for the rcl_like_wrapper functionality
 namespace rcl_like_wrapper
 {
-  // Global flag to indicate when the application should stop, e.g., on SIGINT
+  // Global flag to control the stopping of the application, e.g., in response to SIGINT
   std::atomic_bool global_stop_flag{false};
 
-  // Mutex for safe access to global variables across threads
+  // Mutex to ensure thread-safe access to global variables
   std::mutex global_mutex;
 
-  // Handles SIGINT signals to gracefully stop the application
+  // Function to handle SIGINT signals for graceful application termination
   void signal_handler(int signal)
   {
     if (signal == SIGINT || signal == SIGTERM)
@@ -27,6 +28,7 @@ namespace rcl_like_wrapper
     }
   }
 
+  // Registers the above signal_handler to respond to SIGINT and SIGTERM signals
   void register_signal_handler()
   {
     if (std::signal(SIGINT, signal_handler) == SIG_ERR ||
@@ -36,12 +38,12 @@ namespace rcl_like_wrapper
     }
   }
 
-  // Constructor for RCLWNode initializes the node and registers the signal handler
+  // Constructs an RCLWNode object, initializing it and setting up signal handling
   RCLWNode::RCLWNode(uint16_t domain_number) : node_ptr_(0), rclw_node_stop_flag_(false)
   {
-    register_signal_handler(); // Ensure we handle SIGINT for graceful shutdown
+    register_signal_handler(); // Setup signal handling for graceful shutdown
 
-    // Create a node, publisher, and timer
+    // Initializes the node and related entities like publishers and timers
     node_ptr_ = create_node(domain_number);
     if (!node_ptr_)
     {
@@ -50,69 +52,81 @@ namespace rcl_like_wrapper
     }
   }
 
+  // Destructor for RCLWNode, ensuring node resources are cleaned up
   RCLWNode::~RCLWNode()
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (node_ptr_ != 0)
     {
-      destroy_node(node_ptr_);
+      destroy_node(node_ptr_); // Clean up node resources
       node_ptr_ = 0;
     }
   }
 
-  // Main spin function for the node
+  // Main function to start node operations and handle stop requests
   void RCLWNode::spin()
   {
     if (node_ptr_ != 0)
     {
-      std::thread spin_thread([this]()
-                              { rcl_like_wrapper::spin(node_ptr_); });
-
-      // Loop until a stop is requested via stop flag or global stop flag
+      // Start spinning the node
       while (!rclw_node_stop_flag_ && !global_stop_flag.load())
       {
-        std::this_thread::sleep_for(std::chrono::microseconds(10)); // Prevent busy waiting
+        // Assuming `spin_some` is a function that spins the node for a short,
+        // manageable duration and can be repeatedly called without blocking indefinitely.
+        rcl_like_wrapper::spin_some(node_ptr_);
+
+        // Check frequently for stop flags to ensure the loop can exit promptly.
+        // This sleep is not strictly necessary but can be used to prevent
+        // the loop from consuming too much CPU. Adjust the duration as needed.
+        std::this_thread::sleep_for(std::chrono::microseconds(10));
       }
 
-      // If stop is requested, ensure the node's spinning is stopped
-      if (node_ptr_ != 0)
-      {
-        stop_spin(node_ptr_);
-      }
-      spin_thread.join(); // Wait for the spin thread to finish
+      // Once the loop exits, either because `rclw_node_stop_flag_` or `global_stop_flag` was set,
+      // ensure we call `stop_spin` to cleanly stop the node's operations.
+      stop_spin(node_ptr_);
     }
   }
 
-  // Request stop spinning the node
+  // Main function to start node operations
+  void RCLWNode::spin_some()
+  {
+    if (node_ptr_ != 0)
+    {
+      rcl_like_wrapper::spin_some(node_ptr_);
+    }
+  }
+
+  // Triggers a stop request for node operations
   void RCLWNode::stop()
   {
     rclw_node_stop_flag_ = true;
   }
 
-  // Get the raw pointer to the node
+  // Retrieves the raw pointer to the underlying node object
   intptr_t RCLWNode::get_node_pointer()
   {
     return node_ptr_ ? node_ptr_ : 0;
   }
 
-  // Executor to manage and spin multiple nodes
-  Executor::Executor() : running_(false)
+  // Constructor for SingleThreadedExecutor to manage node execution
+  SingleThreadedExecutor::SingleThreadedExecutor() : running_(false)
   {
-    register_signal_handler(); // Also handle SIGINT for the executor
+    register_signal_handler(); // Setup to handle SIGINT for graceful shutdown
   }
 
-  Executor::~Executor()
+  // Destructor to ensure all nodes are properly stopped and resources are released
+  SingleThreadedExecutor::~SingleThreadedExecutor()
   {
-    stop(); // Ensure all nodes are stopped on destruction
+    stop(); // Stops all managed nodes
   }
 
-  // Add a node to the executor for management
-  void Executor::add_node(intptr_t node_ptr)
+  // Adds a node to the executor for management and execution
+  void SingleThreadedExecutor::add_node(intptr_t node_ptr)
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (node_ptr != 0)
     {
-      nodes_.push_back(node_ptr); // Add the node if it's valid
+      nodes_.push_back(node_ptr); // Valid node pointers are added to the list
     }
     else
     {
@@ -120,55 +134,131 @@ namespace rcl_like_wrapper
     }
   }
 
-  // Remove a node from the executor
-  void Executor::remove_node(intptr_t node_ptr)
+  // Removes a node from the executor's management
+  void SingleThreadedExecutor::remove_node(intptr_t node_ptr)
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    nodes_.erase(std::remove(nodes_.begin(), nodes_.end(), node_ptr), nodes_.end()); // Remove the node
+    nodes_.erase(std::remove(nodes_.begin(), nodes_.end(), node_ptr), nodes_.end()); // Removes the specified node
   }
 
-  // Stop all nodes managed by the executor
-  void Executor::stop()
+  // Stops all nodes managed by the executor
+  void SingleThreadedExecutor::stop()
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (running_)
     {
-      running_ = false; // Set the running flag to false
+      running_ = false; // Signals all nodes to stop their operations
       for (auto &node_ptr : nodes_)
       {
-        if (!node_ptr)
+        if (node_ptr)
         {
-          std::cerr << "node pointer is invalid!" << std::endl;
+          stop_spin(node_ptr); // Stops spinning for each node
         }
         else
         {
-          stop_spin(node_ptr);
+          std::cerr << "node pointer is invalid!" << std::endl;
         }
       }
     }
   }
 
-  // Start spinning all nodes managed by the executor
-  void Executor::spin()
+  // Starts execution of all nodes managed by the executor
+  void SingleThreadedExecutor::spin()
   {
     running_ = true;
-    while (running_ && !global_stop_flag.load())
+    while (running_ && !global_stop_flag.load()) // Checks for global stop flag
     {
+      std::lock_guard<std::mutex> lock(mutex_);
+      for (auto node_ptr : nodes_) // Executes spin_some for each managed node
       {
-        std::lock_guard<std::mutex> lock(mutex_);
-        for (auto node_ptr : nodes_) // Spin each node
+        if (node_ptr)
         {
+          spin_some(node_ptr);
+        }
+        else
+        {
+          std::cerr << "node pointer is invalid!" << std::endl;
+        }
+      }
+      std::this_thread::sleep_for(std::chrono::microseconds(10)); // Reduces CPU usage
+    }
+  }
+
+  // Constructor: Initializes the executor with running state set to false and registers the signal handler.
+  MultiThreadedExecutor::MultiThreadedExecutor() : running_(false)
+  {
+    register_signal_handler(); // Register to handle SIGINT signals for graceful shutdown.
+  }
+
+  // Destructor: Ensures all managed threads are properly joined before destruction to avoid dangling threads.
+  MultiThreadedExecutor::~MultiThreadedExecutor()
+  {
+    stop(); // Stop all threads and ensure they are joined before object destruction.
+  }
+
+  // Adds a new node to the executor for management. Validates the node pointer before adding.
+  void MultiThreadedExecutor::add_node(intptr_t node_ptr)
+  {
+    std::lock_guard<std::mutex> lock(mutex_); // Lock for thread-safe access to nodes_ vector.
+    if (node_ptr != 0)
+    {
+      nodes_.push_back(node_ptr); // Valid node pointers are added to the list for execution.
+    }
+    else
+    {
+      std::cerr << "Error: Node pointer is null, cannot add to executor." << std::endl; // Error handling for null pointers.
+    }
+  }
+
+  // Removes a node from the executor's management, ensuring it no longer receives execution time.
+  void MultiThreadedExecutor::remove_node(intptr_t node_ptr)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);                                        // Lock for thread-safe modification of nodes_ vector.
+    nodes_.erase(std::remove(nodes_.begin(), nodes_.end(), node_ptr), nodes_.end()); // Erase the specified node from the vector.
+  }
+
+  // Signals all threads to stop and waits for them to finish, ensuring a clean shutdown.
+  void MultiThreadedExecutor::stop()
+  {
+    running_ = false; // Set running flag to false to signal threads to stop.
+    for (auto &thread : threads_)
+    {
+      if (thread.joinable())
+      {
+        thread.join(); // Wait for thread to finish its execution.
+      }
+    }
+    threads_.clear(); // Clear the list of threads once all have been joined.
+  }
+
+  // Starts the execution of all nodes in separate threads, allowing for parallel processing.
+  void MultiThreadedExecutor::spin()
+  {
+    running_ = true; // Set running flag to true to start threads.
+    for (auto node_ptr : nodes_)
+    {
+      threads_.emplace_back([this, node_ptr]() { // Create a new thread for each node.
+        while (this->running_ && !global_stop_flag.load())
+        { // Continue execution until stop is signaled.
           if (!node_ptr)
           {
-            std::cerr << "node pointer is invalid!" << std::endl;
+            std::cerr << "node pointer is invalid!" << std::endl; // Error handling for invalid node pointers.
           }
           else
           {
-            spin_some(node_ptr);
+            spin_some(node_ptr); // Execute node-specific spinning logic.
           }
+          std::this_thread::sleep_for(std::chrono::microseconds(1)); // Prevent busy waiting by sleeping briefly.
         }
+      });
+    }
+
+    for (auto &thread : threads_)
+    {
+      if (thread.joinable())
+      {
+        thread.join(); // Ensure all threads are finished before exiting spin method.
       }
-      std::this_thread::sleep_for(std::chrono::microseconds(1)); // Prevent busy waiting
     }
   }
 

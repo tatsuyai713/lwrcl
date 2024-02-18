@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
     }
 
     // Initialize Executor
-    Executor executor;
+    SingleThreadedExecutor executor;
 
     // Initialize and run the ROS-like node
     ROSTypeDataPublisherExecutor rcl_like_node1(0);

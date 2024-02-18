@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
     }
 
     // Initialize Executor
-    Executor executor;
+    MultiThreadedExecutor executor;
 
     // Initialize and run the ROS-like node
     ROSTypeImagePubSubMono rcl_like_node1(0);

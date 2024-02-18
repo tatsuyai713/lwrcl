@@ -18,33 +18,33 @@
 #include <fastdds/dds/subscriber/qos/SubscriberQos.hpp>
 #include <fastdds/dds/subscriber/qos/DataReaderQos.hpp>
 
-#include "eprosima_namespace.hpp" // Placeholder for actual eProsima namespace definitions
+#include "eprosima_namespace.hpp" // Placeholder for eProsima Fast DDS namespace definitions
 
 namespace rcl_like_wrapper
 {
-    // Represents a message type, wrapping Fast DDS TypeSupport for serialization/deserialization
+    // Class representing a message type, encapsulating Fast DDS TypeSupport for serialization and deserialization.
     class MessageType
     {
     public:
-        // Constructor from a Fast DDS TopicDataType
+        // Constructs a MessageType with a given Fast DDS TopicDataType.
         MessageType(eprosima::fastdds::dds::TopicDataType *message_type);
-        // Copy constructor
+        // Copy constructor.
         MessageType(const MessageType &other);
-        // Assignment operator
+        // Copy assignment operator.
         MessageType &operator=(const MessageType &other);
-        // Default constructor
+        // Default constructor.
         MessageType();
-        // Destructor
+        // Destructor.
         ~MessageType();
 
-        // Fast DDS TypeSupport for this message type
+        // Holds Fast DDS TypeSupport for this message type, facilitating serialization/deserialization.
         eprosima::fastdds::dds::TypeSupport type_support;
     };
 
-    // Maps message type names to MessageType objects
+    // Maps message type names to their corresponding MessageType objects for easy lookup.
     using MessageTypes = std::unordered_map<std::string, MessageType>;
 
-    // Functions to manage nodes, publishers, subscriptions, and timers
+    // Functions for node management, publishing, and subscription handling.
     intptr_t create_node(uint16_t domain_id);
     void destroy_node(intptr_t node_ptr);
     void spin(intptr_t node_ptr);
@@ -60,52 +60,72 @@ namespace rcl_like_wrapper
     void stop_timer();
     void rcl_like_wrapper_init(const MessageTypes &types);
 
-    // Represents a node in the communication graph, managing lifecycle and communication capabilities
+    // Represents a node within the ROS-like communication graph, managing its lifecycle and communication capabilities.
     class RCLWNode
     {
     protected:
-        intptr_t node_ptr_;        // Pointer to the underlying implementation-specific node object
-        bool rclw_node_stop_flag_; // Flag to indicate the node should stop processing
-        std::mutex mutex_;         // Mutex to protect access to the nodes list
+        intptr_t node_ptr_;        // Pointer to the implementation-specific node object.
+        bool rclw_node_stop_flag_; // Flag to signal when the node should stop its processing.
+        std::mutex mutex_;         // Mutex for thread-safe access to the node.
 
     public:
         RCLWNode(uint16_t domain_number);
         virtual ~RCLWNode();
-        virtual bool init(const std::string &config_file_path) = 0; // Initialize the node with configuration
-        virtual void spin();                                        // Process messages continuously
-        virtual void stop();                                        // Stop processing messages
-        intptr_t get_node_pointer();                                // Get the underlying node pointer
+        virtual bool init(const std::string &config_file_path) = 0; // Initializes the node with a configuration file.
+        virtual void spin();                                        // Continuously processes messages.
+        virtual void spin_some();                                   // Processes available messages without blocking.
+        virtual void stop();                                        // Stops message processing.
+        intptr_t get_node_pointer();                                // Returns the underlying node pointer.
     };
 
-    // Manages a collection of nodes, coordinating their execution
-    class Executor
+    // Executor that manages and executes nodes in a single thread.
+    class SingleThreadedExecutor
     {
     public:
-        Executor();
-        ~Executor();
+        SingleThreadedExecutor();
+        ~SingleThreadedExecutor();
 
-        void add_node(intptr_t node_ptr);    // Add a node to the executor
-        void remove_node(intptr_t node_ptr); // Remove a node from the executor
-        void stop();                         // Stop all nodes in the executor
-        void spin();                         // Start processing messages for all nodes
+        void add_node(intptr_t node_ptr);
+        void remove_node(intptr_t node_ptr);
+        void stop();
+        void spin();
 
     private:
-        std::vector<intptr_t> nodes_; // List of nodes managed by the executor
-        std::mutex mutex_;            // Mutex to protect access to the nodes list
-        bool running_;                // Flag indicating if the executor is running
+        std::vector<intptr_t> nodes_; // List of nodes managed by the executor.
+        std::mutex mutex_;            // Mutex for thread-safe access to the nodes list.
+        bool running_;                // Indicates whether the executor is currently running.
     };
 
-    // Utility class to control the rate of execution in a loop
+    // Executor that manages and executes nodes, each in its own thread, allowing for parallel processing.
+    class MultiThreadedExecutor
+    {
+    public:
+        MultiThreadedExecutor();
+        ~MultiThreadedExecutor();
+
+        void add_node(intptr_t node_ptr);
+        void remove_node(intptr_t node_ptr);
+        void stop();
+        void spin();
+
+    private:
+        std::vector<intptr_t> nodes_;         // List of nodes managed by the executor.
+        std::vector<std::thread> threads_;    // Threads created for each node for parallel execution.
+        std::mutex mutex_;                    // Mutex for thread-safe access to the nodes and threads lists.
+        std::atomic<bool> running_;           // Atomic flag indicating whether the executor is currently running.
+    };
+
+    // Utility class for controlling the execution rate of a loop, e.g., limiting a loop to run at a fixed frequency.
     class Rate
     {
     public:
-        explicit Rate(std::chrono::milliseconds period); // Constructor with specified period
+        explicit Rate(std::chrono::milliseconds period); // Constructor specifying the period between executions.
 
-        void sleep(); // Sleep until the next period
+        void sleep(); // Blocks execution until the start of the next period, facilitating rate control.
 
     private:
-        std::chrono::milliseconds period_;                              // Duration of the period
-        std::chrono::steady_clock::time_point next_time_;               // Time point when the next period start
+        std::chrono::milliseconds period_;                // Duration of the period between executions.
+        std::chrono::steady_clock::time_point next_time_; // Next time point when execution should resume.
     };
 
 } // namespace rcl_like_wrapper
