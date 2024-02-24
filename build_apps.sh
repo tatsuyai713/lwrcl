@@ -16,17 +16,21 @@ cd apps
 CURRENT=`pwd`
 mkdir build
 cd build
-INSTALL_PATH=/opt/fast-dds-libs
+DDS_PATH=/opt/fast-dds
+LIB_PATH=/opt/fast-dds-libs
 
 mkdir -p ${CURRENT}/install
 
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$DDS_PATH/lib:$LIB_PATH/lib
+
 cmake ..  -DCMAKE_BUILD_TYPE=Debug \
-  -DCMAKE_SYSTEM_PREFIX_PATH=$INSTALL_PATH \
-  -DCMAKE_PREFIX_PATH=$INSTALL_PATH \
-  -Dfastcdr_DIR=$INSTALL_PATH/lib/cmake/fastcdr/ \
-  -Dfastrtps_DIR=$INSTALL_PATH/share/fastrtps/cmake/ \
-  -Dfoonathan_memory_DIR=$INSTALL_PATH/lib/foonathan_memory/cmake/ \
-  -Dyaml-cpp_DIR=$INSTALL_PATH/lib/cmake/yaml-cpp/ \
+  -DCMAKE_SYSTEM_PREFIX_PATH=$LIB_PATH \
+  -DCMAKE_PREFIX_PATH=$LIB_PATH \
+  -Dfastcdr_DIR=$DDS_PATH/lib/cmake/fastcdr/ \
+  -Dfastrtps_DIR=$DDS_PATH/share/fastrtps/cmake/ \
+  -Dfoonathan_memory_DIR=$DDS_PATH/lib/foonathan_memory/cmake/ \
+  -Dtinyxml2_DIR=$DDS_PATH/lib/cmake/tinyxml2/ \
+  -Dyaml-cpp_DIR=$LIB_PATH/lib/cmake/yaml-cpp/ \
   -DCMAKE_INSTALL_PREFIX=${CURRENT}/install
 make -j4
 
