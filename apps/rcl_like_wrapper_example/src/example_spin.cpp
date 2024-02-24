@@ -61,7 +61,7 @@ int main()
     }
 
     int data_value = 0;
-    Rate rate(std::chrono::milliseconds(100));
+    Rate rate(Duration(100000000)); // 100msec
 
     struct timespec curTime, lastTime;
     clock_gettime(CLOCK_REALTIME, &lastTime);

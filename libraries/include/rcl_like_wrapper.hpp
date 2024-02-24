@@ -109,23 +109,60 @@ namespace rcl_like_wrapper
         void spin();
 
     private:
-        std::vector<intptr_t> nodes_;         // List of nodes managed by the executor.
-        std::vector<std::thread> threads_;    // Threads created for each node for parallel execution.
-        std::mutex mutex_;                    // Mutex for thread-safe access to the nodes and threads lists.
-        std::atomic<bool> running_;           // Atomic flag indicating whether the executor is currently running.
+        std::vector<intptr_t> nodes_;      // List of nodes managed by the executor.
+        std::vector<std::thread> threads_; // Threads created for each node for parallel execution.
+        std::mutex mutex_;                 // Mutex for thread-safe access to the nodes and threads lists.
+        std::atomic<bool> running_;        // Atomic flag indicating whether the executor is currently running.
     };
 
-    // Utility class for controlling the execution rate of a loop, e.g., limiting a loop to run at a fixed frequency.
-    class Rate
+    class Time
     {
     public:
-        explicit Rate(std::chrono::milliseconds period); // Constructor specifying the period between executions.
+        int64_t nanoseconds_;
+        Time();
+        explicit Time(int64_t nanoseconds);
+        Time(int32_t seconds, uint32_t nanoseconds);
+        int64_t nanoseconds() const;
+        double seconds() const;
+    };
 
-        void sleep(); // Blocks execution until the start of the next period, facilitating rate control.
+    class Duration
+    {
+    public:
+        int64_t nanoseconds_;
+        Duration();
+        explicit Duration(int64_t nanoseconds);
+        Duration(int32_t seconds, uint32_t nanoseconds);
+        int64_t nanoseconds() const;
+        double seconds() const;
+    };
+
+    class Clock
+    {
+    public:
+        enum class ClockType
+        {
+            SYSTEM_TIME
+        };
 
     private:
-        std::chrono::milliseconds period_;                // Duration of the period between executions.
-        std::chrono::steady_clock::time_point next_time_; // Next time point when execution should resume.
+        ClockType type_;
+
+    public:
+        explicit Clock(ClockType type = ClockType::SYSTEM_TIME);
+        Time now();
+        ClockType get_clock_type() const;
+    };
+
+    class Rate
+    {
+    private:
+        Duration period_;
+        std::chrono::steady_clock::time_point next_time_;
+
+    public:
+        explicit Rate(const Duration &period);
+        void sleep();
     };
 
 } // namespace rcl_like_wrapper

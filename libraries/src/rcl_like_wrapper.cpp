@@ -262,26 +262,48 @@ namespace rcl_like_wrapper
     }
   }
 
-  // Rate control mechanism
-  Rate::Rate(std::chrono::milliseconds period)
-      : period_(period), next_time_(std::chrono::steady_clock::now() + period) {}
+  // Time implementation
+  Time::Time() : nanoseconds_(0) {}
+  Time::Time(int64_t nanoseconds) : nanoseconds_(nanoseconds) {}
+  Time::Time(int32_t seconds, uint32_t nanoseconds) : nanoseconds_(static_cast<int64_t>(seconds) * 1000000000 + nanoseconds) {}
+  int64_t Time::nanoseconds() const { return nanoseconds_; }
+  double Time::seconds() const { return static_cast<double>(nanoseconds_) / 1e9; }
 
-  // Sleeps for the remainder of the rate period
+  // Duration implementation
+  Duration::Duration() : nanoseconds_(0) {}
+  Duration::Duration(int64_t nanoseconds) : nanoseconds_(nanoseconds) {}
+  Duration::Duration(int32_t seconds, uint32_t nanoseconds) : nanoseconds_(static_cast<int64_t>(seconds) * 1000000000 + nanoseconds) {}
+  int64_t Duration::nanoseconds() const { return nanoseconds_; }
+  double Duration::seconds() const { return static_cast<double>(nanoseconds_) / 1e9; }
+
+  // Clock implementation
+  Clock::Clock(ClockType type) : type_(type) {}
+  Time Clock::now()
+  {
+    switch (type_)
+    {
+    case ClockType::SYSTEM_TIME:
+      return Time(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                      std::chrono::system_clock::now().time_since_epoch())
+                      .count());
+    default:
+      throw std::runtime_error("Unsupported clock type.");
+    }
+  }
+  Clock::ClockType Clock::get_clock_type() const { return type_; }
+
+  // Rate implementation
+  Rate::Rate(const Duration &period) : period_(period), next_time_(std::chrono::steady_clock::now() + std::chrono::nanoseconds(period.nanoseconds())) {}
   void Rate::sleep()
   {
     auto now = std::chrono::steady_clock::now();
-    if (now < next_time_)
+    if (now >= next_time_)
     {
-      std::this_thread::sleep_until(next_time_);
+      auto periods_missed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - next_time_) / std::chrono::nanoseconds(period_.nanoseconds()) + 1;
+      next_time_ += periods_missed * std::chrono::nanoseconds(period_.nanoseconds());
     }
-    else
-    {
-      while (now >= next_time_)
-      {
-        next_time_ += period_;
-      }
-      std::this_thread::sleep_until(next_time_);
-    }
+    std::this_thread::sleep_until(next_time_);
+    next_time_ += std::chrono::nanoseconds(period_.nanoseconds());
   }
 
   // Constructor for managing message type support
