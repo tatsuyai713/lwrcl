@@ -248,7 +248,7 @@ namespace rcl_like_wrapper
           {
             spin_some(node_ptr); // Execute node-specific spinning logic.
           }
-          std::this_thread::sleep_for(std::chrono::microseconds(1)); // Prevent busy waiting by sleeping briefly.
+          std::this_thread::sleep_for(std::chrono::microseconds(10)); // Prevent busy waiting by sleeping briefly.
         }
       });
     }
