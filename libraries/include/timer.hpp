@@ -14,8 +14,8 @@ namespace rcl_like_wrapper
   public:
     using CallbackFunction = std::function<void()>;
 
-    Timer(std::chrono::milliseconds period, CallbackFunction callback_function)
-        : period_(period), expired_(false), callback_function_(callback_function)
+    Timer(std::chrono::microseconds period, CallbackFunction callback_function)
+        : period_(period), callback_function_(callback_function)
     {
       last_execution_ = std::chrono::steady_clock::now();
     }
@@ -23,25 +23,32 @@ namespace rcl_like_wrapper
     void check_and_call()
     {
       auto now = std::chrono::steady_clock::now();
-      if (now - last_execution_ >= period_)
+      if (now >= last_execution_)
       {
-        last_execution_ = now;
+        last_execution_ += period_;
+
+        while (last_execution_ <= now)
+        {
+          last_execution_ += period_;
+        }
+
+        // コールバック関数の実行
         if (callback_function_)
         {
           callback_function_();
         }
       }
     }
+
     void reset()
     {
       last_execution_ = std::chrono::steady_clock::now();
     }
 
   private:
-    std::chrono::milliseconds period_;
+    std::chrono::microseconds period_;
     std::chrono::steady_clock::time_point last_execution_;
     CallbackFunction callback_function_;
-    std::atomic<bool> expired_;
   };
 
 } // namespace rcl_like_wrapper

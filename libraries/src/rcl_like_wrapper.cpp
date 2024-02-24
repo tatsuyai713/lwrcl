@@ -502,7 +502,8 @@ namespace rcl_like_wrapper
   }
 
   // Creates a timer for a node
-  intptr_t create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback)
+  template <typename Duration>
+  intptr_t create_timer(intptr_t node_ptr, Duration period, std::function<void()> callback)
   {
     if (!node_ptr)
     {
@@ -513,7 +514,7 @@ namespace rcl_like_wrapper
     // Attempts to create a timer with a specific period and callback function
     auto node = reinterpret_cast<Node *>(node_ptr);
 
-    auto timer = node->create_timer(period, callback);
+    auto timer = node->create_timer(std::chrono::duration_cast<std::chrono::microseconds>(period), callback);
 
     if (!timer)
     {
@@ -522,6 +523,10 @@ namespace rcl_like_wrapper
 
     return reinterpret_cast<intptr_t>(timer);
   }
+  template intptr_t rcl_like_wrapper::create_timer<std::chrono::nanoseconds>(intptr_t, std::chrono::nanoseconds, std::function<void()>);
+  template intptr_t rcl_like_wrapper::create_timer<std::chrono::microseconds>(intptr_t, std::chrono::microseconds, std::function<void()>);
+  template intptr_t rcl_like_wrapper::create_timer<std::chrono::milliseconds>(intptr_t, std::chrono::milliseconds, std::function<void()>);
+  template intptr_t rcl_like_wrapper::create_timer<std::chrono::seconds>(intptr_t, std::chrono::seconds, std::function<void()>);
 
   // Initializes the wrapper with a set of message types
   void rcl_like_wrapper_init(const MessageTypes &types)

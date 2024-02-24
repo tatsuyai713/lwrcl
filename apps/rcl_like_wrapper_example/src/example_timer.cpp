@@ -87,7 +87,7 @@ int main()
         return 1;
     }
 
-    int test = 10;
+    int test = 100;
     intptr_t timer_ptr = create_timer(node_ptr, std::chrono::milliseconds(test), [test, publisher_ptr]()
                                             { myTimerFunction(test, reinterpret_cast<void *>(publisher_ptr)); });
 

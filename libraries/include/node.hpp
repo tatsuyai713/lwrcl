@@ -67,7 +67,7 @@ namespace rcl_like_wrapper
       return raw_ptr;
     }
 
-    Timer *create_timer(std::chrono::milliseconds period, std::function<void()> callback_function)
+    Timer *create_timer(std::chrono::microseconds period, std::function<void()> callback_function)
     {
       auto timer = std::make_unique<Timer>(period, callback_function);
       Timer *raw_ptr = timer.get();
@@ -77,8 +77,6 @@ namespace rcl_like_wrapper
 
     void spin()
     {
-      auto last_check = std::chrono::steady_clock::now();
-      auto check_interval = std::chrono::microseconds(100);
 
       while (!channel_.is_closed())
       {
@@ -92,13 +90,9 @@ namespace rcl_like_wrapper
         }
 
         auto now = std::chrono::steady_clock::now();
-        if (now - last_check >= check_interval)
+        for (auto &timer : timer_list_)
         {
-          for (auto &timer : timer_list_)
-          {
-            timer->check_and_call();
-          }
-          last_check = now;
+          timer->check_and_call();
         }
 
         std::this_thread::sleep_for(std::chrono::microseconds(10));

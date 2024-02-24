@@ -56,8 +56,11 @@ namespace rcl_like_wrapper
     int32_t get_subscriber_count(intptr_t publisher_ptr);
     intptr_t create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos &qos, std::function<void(void *)> callback);
     int32_t get_publisher_count(intptr_t subscriber_ptr);
-    intptr_t create_timer(intptr_t node_ptr, std::chrono::milliseconds period, std::function<void()> callback);
-    void stop_timer();
+
+    // Template function for creating a timer, to be defined in the implementation file
+    template<typename Duration>
+    intptr_t create_timer(intptr_t node_ptr, Duration period, std::function<void()> callback);
+
     void rcl_like_wrapper_init(const MessageTypes &types);
 
     // Represents a node within the ROS-like communication graph, managing its lifecycle and communication capabilities.
