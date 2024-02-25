@@ -67,12 +67,10 @@ public:
   /** \brief  Constructor for a Buffer object
    * \param clock A clock to use for time and sleeping
    * \param cache_time How long to keep a history of transforms
-   * \param node If passed advertise the view_frames service that exposes debugging information from the buffer
    */
   TF2_ROS_PUBLIC Buffer(
     std::shared_ptr<rcl_like_wrapper::Clock> clock,
-    tf2::Duration cache_time = tf2::Duration(tf2::BUFFER_CORE_DEFAULT_CACHE_TIME),
-    std::shared_ptr<rcl_like_wrapper::RCLWNode> node = std::shared_ptr<rcl_like_wrapper::RCLWNode>());
+    tf2::Duration cache_time = tf2::Duration(tf2::BUFFER_CORE_DEFAULT_CACHE_TIME));
 
   /** \brief Get the transform between two frames by frame ID.
    * \param target_frame The frame to which data should be transformed
@@ -216,9 +214,9 @@ public:
    * \brief Cancel the future to make sure the callback of requested transform is clean.
    * \param ts_future The future to the requested transform.
    */
-  TF2_ROS_PUBLIC
-  void
-  cancel(const TransformStampedFuture & ts_future) override;
+  // TF2_ROS_PUBLIC
+  // void
+  // cancel(const TransformStampedFuture & ts_future) override;
 
 private:
 
@@ -227,9 +225,6 @@ private:
 
   /// \brief A clock to use for time and sleeping
   std::shared_ptr<rcl_like_wrapper::Clock> clock_;
-
-  /// \brief A node to advertise the view_frames service
-  std::shared_ptr<rcl_like_wrapper::RCLWNode> node_;
 
   /// \brief A mutex on the timer_to_request_map_ data
   std::mutex timer_to_request_map_mutex_;

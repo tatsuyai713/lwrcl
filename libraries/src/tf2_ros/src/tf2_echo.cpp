@@ -42,11 +42,18 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <csignal>
 
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
 
 #include "rcl_like_wrapper.hpp"
+#include <atomic>
+
+namespace rcl_like_wrapper
+{
+  extern std::atomic_bool global_stop_flag;
+}
 
 class echoListener
 {
@@ -55,9 +62,10 @@ public:
   std::shared_ptr<tf2_ros::TransformListener> tfl_;
 
   explicit echoListener(std::shared_ptr<rcl_like_wrapper::Clock> clock)
-  : buffer_(clock)
+      : buffer_(clock)
   {
-    tfl_ = std::make_shared<tf2_ros::TransformListener>(buffer_);
+    int32_t domain_id = 0;
+    tfl_ = std::make_shared<tf2_ros::TransformListener>(buffer_, 0, true, domain_id);
   }
 
   ~echoListener()
@@ -65,35 +73,40 @@ public:
   }
 };
 
-
-int main(int argc, char ** argv)
+int main(int argc, char **argv)
 {
 
   double rate_hz;
   // Allow 2 or 3 command line arguments
-  if (args.size() == 3) {
+  if (argc == 3)
+  {
     rate_hz = 1.0;
-  } else if (args.size() == 4) {
+  }
+  else if (argc == 4)
+  {
     size_t pos;
-    try {
-      rate_hz = std::stof(args[3], &pos);
-    } catch (const std::invalid_argument &) {
-      // If the user provided an argument that wasn't a number (like 'foo'), stof() will throw.
-      fprintf(
-        stderr, "Failed to convert rate argument '%s' to a floating-point number\n",
-        args[3].c_str());
+    try
+    {
+      // Convert the 4th argument from char* to std::string then to float
+      std::string rate_str(argv[3]);
+      rate_hz = std::stof(rate_str, &pos);
+    }
+    catch (const std::invalid_argument &)
+    {
+      // If the argument isn't a number, stof() will throw an exception.
+      fprintf(stderr, "Failed to convert rate argument '%s' to a floating-point number\n", argv[3]);
       return 2;
     }
 
-    // If the user provide an floating-point argument with junk on the end (like '1.0foo'), the pos
-    // argument will show it didn't convert the whole argument.
-    if (pos != args[3].length()) {
-      fprintf(
-        stderr, "Failed to convert rate argument '%s' to a floating-point number\n",
-        args[3].c_str());
+    // Check if the whole argument was converted to a float
+    if (pos != std::string(argv[3]).length())
+    {
+      fprintf(stderr, "Failed to convert rate argument '%s' to a floating-point number\n", argv[3]);
       return 3;
     }
-  } else {
+  }
+  else
+  {
     printf("Usage: tf2_echo source_frame target_frame [echo_rate]\n\n");
     printf("This will echo the transform from the coordinate frame of the source_frame\n");
     printf("to the coordinate frame of the target_frame. \n");
@@ -105,76 +118,82 @@ int main(int argc, char ** argv)
   // // read rate parameter
   // ros::NodeHandle p_nh("~");
   // p_nh.param("rate", rate_hz, 1.0);
-  rcl_like_wrapper::Rate rate(rate_hz);
+  rcl_like_wrapper::Rate rate(rcl_like_wrapper::Duration(1.0 / rate_hz * 1000000000));
 
   // TODO(tfoote): restore anonymous??
   // ros::init_options::AnonymousName);
 
-  std::shared_ptr<rcl_like_wrapper::RCLWNode> nh = rcl_like_wrapper::RCLWNode::make_shared(0);
+  // int32_t domain_id = 0;
 
-  std::shared_ptr<rcl_like_wrapper::Clock> clock = rcl_like_wrapper::Clock::make_shared(0);
+  // rcl_like_wrapper::RCLWNode nh = rcl_like_wrapper::RCLWNode(domain_id);
+
+  std::shared_ptr<rcl_like_wrapper::Clock> clock = std::make_shared<rcl_like_wrapper::Clock>();
   // Instantiate a local listener
   echoListener echoListener(clock);
 
-  std::string source_frameid = args[1];
-  std::string target_frameid = args[2];
+  std::string source_frameid(argv[1]);
+  std::string target_frameid(argv[2]);
 
   // Wait for the first transforms to become avaiable.
   std::string warning_msg;
-  while (1 && !echoListener.buffer_.canTransform(
+  while (!echoListener.buffer_.canTransform(
       source_frameid, target_frameid, tf2::TimePoint(), &warning_msg))
   {
-    printf("Waiting for transform %s ->  %s: %s",
-      source_frameid.c_str(), target_frameid.c_str(), warning_msg.c_str());
+    if (rcl_like_wrapper::global_stop_flag.load())
+    {
+      return 1;
+    }
+    printf("Waiting for transform %s ->  %s: %s\n",
+           source_frameid.c_str(), target_frameid.c_str(), warning_msg.c_str());
     rate.sleep();
   }
   constexpr double rad_to_deg = 180.0 / M_PI;
 
   // Nothing needs to be done except wait for a quit
   // The callbacks within the listener class will take care of everything
-  while (1) {
-    try {
+  while (!rcl_like_wrapper::global_stop_flag.load())
+  {
+    try
+    {
       geometry_msgs::msg::TransformStamped echo_transform;
       echo_transform = echoListener.buffer_.lookupTransform(
-        source_frameid, target_frameid,
-        tf2::TimePoint());
+          source_frameid, target_frameid,
+          tf2::TimePoint());
       std::cout.precision(3);
       std::cout.setf(std::ios::fixed, std::ios::floatfield);
-      std::cout << "At time " << echo_transform.header.stamp.sec << "." <<
-        echo_transform.header.stamp.nanosec << std::endl;
-      auto translation = echo_transform.transform.translation;
-      double translation_xyz[] = {translation.x, translation.y, translation.z};
-      auto rotation = echo_transform.transform.rotation;
-      std::cout << "- Translation: [" << translation.x << ", " << translation.y << ", " <<
-        translation.z << "]" << std::endl;
-      std::cout << "- Rotation: in Quaternion [" << rotation.x << ", " << rotation.y << ", " <<
-        rotation.z << ", " << rotation.w << "]" << std::endl;
+      std::cout << "At time " << echo_transform.header().stamp().sec() << "." << echo_transform.header().stamp().nanosec() << std::endl;
+      auto translation = echo_transform.transform().translation();
+      double translation_xyz[] = {translation.x(), translation.y(), translation.z()};
+      auto rotation = echo_transform.transform().rotation();
+      std::cout << "- Translation: [" << translation.x() << ", " << translation.y() << ", " << translation.z() << "]" << std::endl;
+      std::cout << "- Rotation: in Quaternion [" << rotation.x() << ", " << rotation.y() << ", " << rotation.z() << ", " << rotation.w() << "]" << std::endl;
 
-      tf2::Matrix3x3 mat(tf2::Quaternion{rotation.x, rotation.y, rotation.z, rotation.w});
+      tf2::Matrix3x3 mat(tf2::Quaternion{rotation.x(), rotation.y(), rotation.z(), rotation.w()});
 
       tf2Scalar yaw, pitch, roll;
       mat.getEulerYPR(yaw, pitch, roll);
 
-      std::cout << "- Rotation: in RPY (radian) [" << roll << ", " << pitch << ", " << yaw << "]" <<
-        std::endl;
-      std::cout << "- Rotation: in RPY (degree) [" <<
-        roll * rad_to_deg << ", " <<
-        pitch * rad_to_deg << ", " <<
-        yaw * rad_to_deg << "]" << std::endl;
+      std::cout << "- Rotation: in RPY (radian) [" << roll << ", " << pitch << ", " << yaw << "]" << std::endl;
+      std::cout << "- Rotation: in RPY (degree) [" << roll * rad_to_deg << ", " << pitch * rad_to_deg << ", " << yaw * rad_to_deg << "]" << std::endl;
 
       std::cout << "- Matrix:" << std::endl;
-      for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
+      for (int i = 0; i < 3; i++)
+      {
+        for (int j = 0; j < 3; j++)
+        {
           std::cout << " " << std::setw(6) << std::setprecision(3) << mat[i][j];
         }
         std::cout << " " << std::setw(6) << std::setprecision(3) << translation_xyz[i];
         std::cout << std::endl;
       }
-      for (int j = 0; j < 3; j++) {
+      for (int j = 0; j < 3; j++)
+      {
         std::cout << " " << std::setw(6) << std::setprecision(3) << 0.0;
       }
       std::cout << " " << std::setw(6) << std::setprecision(3) << 1.0 << std::endl;
-    } catch (const tf2::TransformException & ex) {
+    }
+    catch (const tf2::TransformException &ex)
+    {
       std::cout << "Failure at " << clock->now().seconds() << std::endl;
       std::cout << "Exception thrown:" << ex.what() << std::endl;
       std::cout << "The current list of frames is:" << std::endl;

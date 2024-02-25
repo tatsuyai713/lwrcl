@@ -144,7 +144,7 @@ public:
           framea_, frameb_, tf2::TimePoint(), &warning_msg))
       {
         printf(
-          "Waiting for transform %s ->  %s: %s", framea_.c_str(), frameb_.c_str(),
+          "Waiting for transform %s ->  %s: %s\n", framea_.c_str(), frameb_.c_str(),
           warning_msg.c_str());
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
       }

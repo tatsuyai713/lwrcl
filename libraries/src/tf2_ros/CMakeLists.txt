@@ -27,13 +27,13 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE "TF2_ROS_BUILDING_DLL")
 
-# add_executable(tf2_echo
-#   src/tf2_echo.cpp
-# )
-# target_link_libraries(tf2_echo
-#   ${PROJECT_NAME}
-#   rcl_like_wrapper
-# )
+add_executable(tf2_echo
+  src/tf2_echo.cpp
+)
+target_link_libraries(tf2_echo
+  ${PROJECT_NAME}
+  rcl_like_wrapper
+)
 
 # add_executable(tf2_monitor
 #   src/tf2_monitor.cpp

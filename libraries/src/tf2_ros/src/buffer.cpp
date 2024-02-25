@@ -44,9 +44,8 @@ namespace tf2_ros
 {
 
 Buffer::Buffer(
-  std::shared_ptr<rcl_like_wrapper::Clock> clock, tf2::Duration cache_time,
-  std::shared_ptr<rcl_like_wrapper::RCLWNode> node)
-: BufferCore(cache_time), clock_(clock), node_(node)
+  std::shared_ptr<rcl_like_wrapper::Clock> clock, tf2::Duration cache_time)
+: BufferCore(cache_time), clock_(clock)
 {
   if (nullptr == clock_) {
     throw std::invalid_argument("clock must be a valid instance");
@@ -173,7 +172,7 @@ bool Buffer::checkAndErrorDedicatedThreadPresent(std::string * error_str) const
     *error_str = tf2_ros::threading_error;
   }
 
-  printf("%s", tf2_ros::threading_error);
+  printf("%s\n", tf2_ros::threading_error);
   return false;
 }
 

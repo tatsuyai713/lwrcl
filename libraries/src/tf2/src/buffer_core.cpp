@@ -91,7 +91,7 @@ void fillOrWarnMessageForInvalidFrame(
   if (error_msg != nullptr) {
     *error_msg = s;
   } else {
-    printf("%s", s.c_str());
+    printf("%s\n", s.c_str());
   }
 }
 
@@ -209,7 +209,7 @@ bool BufferCore::setTransformImpl(
   if (stripped_child_frame_id == stripped_frame_id) {
     printf(
       "TF_SELF_TRANSFORM: Ignoring transform from authority \"%s\" with frame_id and  "
-      "child_frame_id \"%s\" because they are the same",
+      "child_frame_id \"%s\" because they are the same\n",
       authority.c_str(), stripped_child_frame_id.c_str());
     error_exists = true;
   }
@@ -217,14 +217,14 @@ bool BufferCore::setTransformImpl(
   if (stripped_child_frame_id.empty()) {
     printf(
       "TF_NO_CHILD_FRAME_ID: Ignoring transform from authority \"%s\" because child_frame_id not"
-      " set ", authority.c_str());
+      " set \n", authority.c_str());
     error_exists = true;
   }
 
   if (stripped_frame_id.empty()) {
     printf(
       "TF_NO_FRAME_ID: Ignoring transform with child_frame_id \"%s\"  from authority \"%s\" "
-      "because frame_id not set", stripped_child_frame_id.c_str(), authority.c_str());
+      "because frame_id not set\n", stripped_child_frame_id.c_str(), authority.c_str());
     error_exists = true;
   }
 
@@ -235,7 +235,7 @@ bool BufferCore::setTransformImpl(
   {
     printf(
       "TF_NAN_INPUT: Ignoring transform for child_frame_id \"%s\" from authority \"%s\" because"
-      " of a nan value in the transform (%f %f %f) (%f %f %f %f)",
+      " of a nan value in the transform (%f %f %f) (%f %f %f %f)\n",
       stripped_child_frame_id.c_str(), authority.c_str(),
       transform_in.getOrigin().x(), transform_in.getOrigin().y(), transform_in.getOrigin().z(),
       transform_in.getRotation().x(), transform_in.getRotation().y(),
@@ -254,7 +254,7 @@ bool BufferCore::setTransformImpl(
   if (!valid) {
     printf(
       "TF_DENORMALIZED_QUATERNION: Ignoring transform for child_frame_id \"%s\" from authority"
-      " \"%s\" because of an invalid quaternion in the transform (%f %f %f %f)",
+      " \"%s\" because of an invalid quaternion in the transform (%f %f %f %f)\n",
       stripped_child_frame_id.c_str(), authority.c_str(),
       transform_in.getRotation().x(), transform_in.getRotation().y(),
       transform_in.getRotation().z(), transform_in.getRotation().w());
@@ -292,7 +292,7 @@ bool BufferCore::setTransformImpl(
       std::string stamp_str = displayTimePoint(stamp);
       printf(
         "TF_OLD_DATA ignoring data from the past for frame %s at time %s according to authority"
-        " %s\nPossible reasons are listed at http://wiki.ros.org/tf/Errors%%20explained",
+        " %s\nPossible reasons are listed at http://wiki.ros.org/tf/Errors%%20explained\n",
         stripped_child_frame_id.c_str(), stamp_str.c_str(), authority.c_str());
       return false;
     }
@@ -667,7 +667,7 @@ void BufferCore::lookupTransformImpl(
       case tf2::TF2Error::TF2_LOOKUP_ERROR:
         throw LookupException(error_string);
       default:
-        printf("Unknown error code: %d", retval);
+        printf("Unknown error code: %d\n", retval);
         assert(0);
     }
   }
@@ -1461,7 +1461,7 @@ void BufferCore::_chainAsVector(
       case tf2::TF2Error::TF2_LOOKUP_ERROR:
         throw LookupException(error_string);
       default:
-        printf("Unknown error code: %d", retval);
+        printf("Unknown error code: %d\n", retval);
         assert(0);
     }
   }
@@ -1481,7 +1481,7 @@ void BufferCore::_chainAsVector(
         case tf2::TF2Error::TF2_LOOKUP_ERROR:
           throw LookupException(error_string);
         default:
-          printf("Unknown error code: %d", retval);
+          printf("Unknown error code: %d\n", retval);
           assert(0);
       }
     }

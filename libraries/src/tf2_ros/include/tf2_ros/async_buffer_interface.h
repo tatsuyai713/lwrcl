@@ -97,8 +97,8 @@ public:
    * \brief Cancel the future to make sure the callback of requested transform is clean.
    * \param ts_future The future to the requested transform.
    */
-  virtual void
-  cancel(const TransformStampedFuture & ts_future) = 0;
+  // virtual void
+  // cancel(const TransformStampedFuture & ts_future) = 0;
 };  // class AsyncBufferInterface
 
 }  // namespace tf2_ros
