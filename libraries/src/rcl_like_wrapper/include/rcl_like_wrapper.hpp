@@ -58,7 +58,7 @@ namespace rcl_like_wrapper
     int32_t get_publisher_count(intptr_t subscriber_ptr);
 
     // Template function for creating a timer, to be defined in the implementation file
-    template<typename Duration>
+    template <typename Duration>
     intptr_t create_timer(intptr_t node_ptr, Duration period, std::function<void()> callback);
 
     void rcl_like_wrapper_init(const MessageTypes &types);
@@ -118,26 +118,53 @@ namespace rcl_like_wrapper
         std::atomic<bool> running_;        // Atomic flag indicating whether the executor is currently running.
     };
 
+    class Duration;
+
     class Time
     {
     public:
-        int64_t nanoseconds_;
         Time();
-        explicit Time(int64_t nanoseconds);
+        Time(int64_t nanoseconds);
         Time(int32_t seconds, uint32_t nanoseconds);
         int64_t nanoseconds() const;
         double seconds() const;
+
+        Time operator+(const Duration &rhs) const;
+        Time operator-(const Duration &rhs) const;
+        Duration operator-(const Time &rhs) const;
+
+        bool operator==(const Time &rhs) const;
+        bool operator!=(const Time &rhs) const;
+        bool operator<(const Time &rhs) const;
+        bool operator<=(const Time &rhs) const;
+        bool operator>(const Time &rhs) const;
+        bool operator>=(const Time &rhs) const;
+
+    private:
+        int64_t nanoseconds_;
     };
 
     class Duration
     {
     public:
-        int64_t nanoseconds_;
         Duration();
-        explicit Duration(int64_t nanoseconds);
+        Duration(int64_t nanoseconds);
         Duration(int32_t seconds, uint32_t nanoseconds);
         int64_t nanoseconds() const;
         double seconds() const;
+
+        Duration operator+(const Duration &rhs) const;
+        Duration operator-(const Duration &rhs) const;
+
+        bool operator==(const Duration &rhs) const;
+        bool operator!=(const Duration &rhs) const;
+        bool operator<(const Duration &rhs) const;
+        bool operator<=(const Duration &rhs) const;
+        bool operator>(const Duration &rhs) const;
+        bool operator>=(const Duration &rhs) const;
+
+    private:
+        int64_t nanoseconds_;
     };
 
     class Clock

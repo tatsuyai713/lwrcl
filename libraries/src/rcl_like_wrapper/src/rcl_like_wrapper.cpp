@@ -262,19 +262,36 @@ namespace rcl_like_wrapper
     }
   }
 
-  // Time implementation
+  // Time コンストラクタとメソッド
   Time::Time() : nanoseconds_(0) {}
   Time::Time(int64_t nanoseconds) : nanoseconds_(nanoseconds) {}
   Time::Time(int32_t seconds, uint32_t nanoseconds) : nanoseconds_(static_cast<int64_t>(seconds) * 1000000000 + nanoseconds) {}
   int64_t Time::nanoseconds() const { return nanoseconds_; }
   double Time::seconds() const { return static_cast<double>(nanoseconds_) / 1e9; }
+  Time Time::operator+(const Duration &rhs) const { return Time(nanoseconds_ + rhs.nanoseconds()); }
+  Time Time::operator-(const Duration &rhs) const { return Time(nanoseconds_ - rhs.nanoseconds()); }
+  Duration Time::operator-(const Time &rhs) const { return Duration(nanoseconds_ - rhs.nanoseconds_); }
+  bool Time::operator==(const Time &rhs) const { return nanoseconds_ == rhs.nanoseconds_; }
+  bool Time::operator!=(const Time &rhs) const { return !(*this == rhs); }
+  bool Time::operator<(const Time &rhs) const { return nanoseconds_ < rhs.nanoseconds_; }
+  bool Time::operator<=(const Time &rhs) const { return nanoseconds_ <= rhs.nanoseconds_; }
+  bool Time::operator>(const Time &rhs) const { return nanoseconds_ > rhs.nanoseconds_; }
+  bool Time::operator>=(const Time &rhs) const { return nanoseconds_ >= rhs.nanoseconds_; }
 
-  // Duration implementation
+  // Duration コンストラクタとメソッド
   Duration::Duration() : nanoseconds_(0) {}
   Duration::Duration(int64_t nanoseconds) : nanoseconds_(nanoseconds) {}
   Duration::Duration(int32_t seconds, uint32_t nanoseconds) : nanoseconds_(static_cast<int64_t>(seconds) * 1000000000 + nanoseconds) {}
   int64_t Duration::nanoseconds() const { return nanoseconds_; }
   double Duration::seconds() const { return static_cast<double>(nanoseconds_) / 1e9; }
+  Duration Duration::operator+(const Duration &rhs) const { return Duration(nanoseconds_ + rhs.nanoseconds()); }
+  Duration Duration::operator-(const Duration &rhs) const { return Duration(nanoseconds_ - rhs.nanoseconds()); }
+  bool Duration::operator==(const Duration &rhs) const { return nanoseconds_ == rhs.nanoseconds_; }
+  bool Duration::operator!=(const Duration &rhs) const { return !(*this == rhs); }
+  bool Duration::operator<(const Duration &rhs) const { return nanoseconds_ < rhs.nanoseconds_; }
+  bool Duration::operator<=(const Duration &rhs) const { return nanoseconds_ <= rhs.nanoseconds_; }
+  bool Duration::operator>(const Duration &rhs) const { return nanoseconds_ > rhs.nanoseconds_; }
+  bool Duration::operator>=(const Duration &rhs) const { return nanoseconds_ >= rhs.nanoseconds_; }
 
   // Clock implementation
   Clock::Clock(ClockType type) : type_(type) {}
