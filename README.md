@@ -43,9 +43,54 @@ This library provides a simplified API similar to ROS 2's rclcpp for working wit
 - **create_timer**: Sets up a timer to call a function at a specified interval.
 - **stop_timer**: Halts the timer.
 
-### Rate
+## Time, Duration, Clock, and Rate Implementation
 
-- **Rate::sleep**: Delays execution to maintain a steady loop rate.
+This section outlines the implementation details of the Time, Duration, Clock, and Rate classes, which are essential for handling timing and scheduling within the system.
+
+### Time Implementation
+
+The `Time` class provides functionality to represent a point in time or a duration of time with nanosecond precision.
+
+- **Constructors:**
+  - Default constructor initializes time to 0 nanoseconds.
+  - Constructor accepting an `int64_t` for nanoseconds.
+  - Constructor accepting an `int32_t` for seconds and a `uint32_t` for additional nanoseconds.
+
+- **Methods:**
+  - `nanoseconds()`: Returns the time as an integer number of nanoseconds.
+  - `seconds()`: Returns the time as a floating-point number of seconds.
+
+### Duration Implementation
+
+The `Duration` class represents a time span with nanosecond precision.
+
+- **Constructors:**
+  - Default constructor initializes duration to 0 nanoseconds.
+  - Constructor accepting an `int64_t` for nanoseconds.
+  - Constructor accepting an `int32_t` for seconds and a `uint32_t` for additional nanoseconds.
+
+- **Methods:**
+  - `nanoseconds()`: Returns the duration as an integer number of nanoseconds.
+  - `seconds()`: Returns the duration as a floating-point number of seconds.
+
+### Clock Implementation
+
+The `Clock` class is used to access the current time, based on the clock type.
+
+- **Constructor:** Accepts a `ClockType` enumeration to specify the clock type (e.g., `SYSTEM_TIME`).
+- **Methods:**
+  - `now()`: Returns the current time as a `Time` object, based on the clock's type.
+  - `get_clock_type()`: Returns the type of the clock.
+
+### Rate Implementation
+
+The `Rate` class is designed to maintain a specified rate of loop iteration, using sleep to delay execution.
+
+- **Constructor:** Accepts a `Duration` object that specifies the desired period between iterations.
+- **Method:**
+  - `sleep()`: Sleeps until the next iteration should start, adjusting for any drift to maintain the rate.
+
+These classes provide a foundational framework for precise time management and rate control in the system, allowing for time-based scheduling and execution control.
 
 # Executors for Fast DDS
 
