@@ -19,6 +19,7 @@ DDS_PATH=/opt/fast-dds
 INSTALL_PATH=/opt/fast-dds-libs
 sudo mkdir -p $INSTALL_PATH
 
+sudo rm $INSTALL_PATH/include/rcl_like_wrapper.hpp
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$DDS_PATH/lib
 
 cmake ..  -DCMAKE_BUILD_TYPE=Release \
