@@ -69,7 +69,7 @@ int main()
     std::shared_ptr<sensor_msgs::msg::Image> my_message = std::make_shared<sensor_msgs::msg::Image>();
     
     // Main application loop
-    while (true)
+    while (ok())
     {
         // Perform other tasks in your application
 
