@@ -29,62 +29,50 @@
 
 /** \author Tully Foote */
 
-#ifndef TF2_ROS__TRANSFORM_BROADCASTER_H_
-#define TF2_ROS__TRANSFORM_BROADCASTER_H_
+#include "tf2_ros/static_transform_broadcaster.h"
 
-#include <memory>
 #include <vector>
 
-#include "tf2_ros/visibility_control.h"
-
-#include "rcl_like_wrapper.hpp"
 #include "geometry_msgs/msg/TransformStamped.h"
 #include "geometry_msgs/msg/TransformStampedPubSubTypes.h"
+#include "rcl_like_wrapper.hpp"
 #include "tf2_msgs/msg/TFMessage.h"
 #include "tf2_msgs/msg/TFMessagePubSubTypes.h"
 
 namespace tf2_ros
 {
 
-  /** \brief This class provides an easy way to publish coordinate frame transform information.
-   * It will handle all the messaging and stuffing of messages.  And the function prototypes lay out all the
-   * necessary data needed for each message.  */
-
-  class TransformBroadcaster
+  void StaticTransformBroadcaster::sendTransform(
+      const geometry_msgs::msg::TransformStamped &msgtf)
   {
-  public:
-    /** \brief Node interface constructor */
-    TransformBroadcaster(
-        std::shared_ptr<rcl_like_wrapper::RCLWNode> node_ptr)
+    std::vector<geometry_msgs::msg::TransformStamped> v1;
+    v1.push_back(msgtf);
+    sendTransform(v1);
+  }
+
+  void StaticTransformBroadcaster::sendTransform(
+      const std::vector<geometry_msgs::msg::TransformStamped> &msgtf)
+  {
+    for (auto it_in = msgtf.begin(); it_in != msgtf.end(); ++it_in)
     {
-      eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
-      publisher_ = rcl_like_wrapper::create_publisher(
-          node_ptr->get_node_pointer(), "tf2_msgs::msg::TFMessage", "tf", topic_qos);
+      bool match_found = false;
+      for (auto it_msg = net_message_.transforms().begin(); it_msg != net_message_.transforms().end();
+           ++it_msg)
+      {
+        if (it_in->child_frame_id() == it_msg->child_frame_id())
+        {
+          *it_msg = *it_in;
+          match_found = true;
+          break;
+        }
+      }
+      if (!match_found)
+      {
+        net_message_.transforms().push_back(*it_in);
+      }
     }
 
-    /** \brief Send a TransformStamped message
-     *
-     * The transform ʰTₐ added is from `child_frame_id`, `a` to `header.frame_id`,
-     * `h`. That is, position in `child_frame_id` ᵃp can be transformed to
-     * position in `header.frame_id` ʰp such that ʰp = ʰTₐ ᵃp .
-     *
-     */
-    TF2_ROS_PUBLIC
-    void sendTransform(const geometry_msgs::msg::TransformStamped &transform);
-
-    /** \brief Send a vector of TransformStamped messages
-     *
-     * The transforms ʰTₐ added are from `child_frame_id`, `a` to `header.frame_id`,
-     * `h`. That is, position in `child_frame_id` ᵃp can be transformed to
-     * position in `header.frame_id` ʰp such that ʰp = ʰTₐ ᵃp .
-     */
-    TF2_ROS_PUBLIC
-    void sendTransform(const std::vector<geometry_msgs::msg::TransformStamped> &transforms);
-
-  private:
-    intptr_t publisher_;
-  };
+    rcl_like_wrapper::publish(reinterpret_cast<intptr_t>(publisher_), &net_message_);
+  }
 
 } // namespace tf2_ros
-
-#endif // TF2_ROS__TRANSFORM_BROADCASTER_H_

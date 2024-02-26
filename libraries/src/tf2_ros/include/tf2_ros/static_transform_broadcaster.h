@@ -29,8 +29,8 @@
 
 /** \author Tully Foote */
 
-#ifndef TF2_ROS__TRANSFORM_BROADCASTER_H_
-#define TF2_ROS__TRANSFORM_BROADCASTER_H_
+#ifndef TF2_ROS__STATIC_TRANSFORM_BROADCASTER_H_
+#define TF2_ROS__STATIC_TRANSFORM_BROADCASTER_H_
 
 #include <memory>
 #include <vector>
@@ -50,41 +50,35 @@ namespace tf2_ros
    * It will handle all the messaging and stuffing of messages.  And the function prototypes lay out all the
    * necessary data needed for each message.  */
 
-  class TransformBroadcaster
+  class StaticTransformBroadcaster
   {
   public:
-    /** \brief Node interface constructor */
-    TransformBroadcaster(
-        std::shared_ptr<rcl_like_wrapper::RCLWNode> node_ptr)
+    /** \brief Node constructor */
+    StaticTransformBroadcaster(intptr_t node_ptr)
+    : node_ptr_(node_ptr)
     {
       eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
       publisher_ = rcl_like_wrapper::create_publisher(
-          node_ptr->get_node_pointer(), "tf2_msgs::msg::TFMessage", "tf", topic_qos);
+          node_ptr, "tf2_msgs::msg::TFMessage", "tf_static", topic_qos);
     }
 
     /** \brief Send a TransformStamped message
-     *
-     * The transform ʰTₐ added is from `child_frame_id`, `a` to `header.frame_id`,
-     * `h`. That is, position in `child_frame_id` ᵃp can be transformed to
-     * position in `header.frame_id` ʰp such that ʰp = ʰTₐ ᵃp .
-     *
-     */
+     * The stamped data structure includes frame_id, and time, and parent_id already.  */
     TF2_ROS_PUBLIC
     void sendTransform(const geometry_msgs::msg::TransformStamped &transform);
 
     /** \brief Send a vector of TransformStamped messages
-     *
-     * The transforms ʰTₐ added are from `child_frame_id`, `a` to `header.frame_id`,
-     * `h`. That is, position in `child_frame_id` ᵃp can be transformed to
-     * position in `header.frame_id` ʰp such that ʰp = ʰTₐ ᵃp .
-     */
+     * The stamped data structure includes frame_id, and time, and parent_id already.  */
     TF2_ROS_PUBLIC
     void sendTransform(const std::vector<geometry_msgs::msg::TransformStamped> &transforms);
 
   private:
+    /// Internal reference to ros::Node
     intptr_t publisher_;
+    intptr_t node_ptr_;
+    tf2_msgs::msg::TFMessage net_message_;
   };
 
 } // namespace tf2_ros
 
-#endif // TF2_ROS__TRANSFORM_BROADCASTER_H_
+#endif // TF2_ROS__STATIC_TRANSFORM_BROADCASTER_H_
