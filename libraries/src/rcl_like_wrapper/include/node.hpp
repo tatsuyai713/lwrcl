@@ -78,7 +78,7 @@ namespace rcl_like_wrapper
     void spin()
     {
 
-      while (!channel_.is_closed())
+      while (!channel_.is_closed() && rcl_like_wrapper::ok())
       {
         SubscriptionCallback *callback;
         while (channel_.consume_nowait(callback))

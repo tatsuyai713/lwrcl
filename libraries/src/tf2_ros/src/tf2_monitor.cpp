@@ -41,7 +41,19 @@
 #include "tf2_ros/transform_listener.h"
 
 #include "rcl_like_wrapper.hpp"
-#include "tf2_msgs/msg/tf_message.hpp"
+#include "tf2_msgs/msg/TFMessage.h"
+#include "tf2_msgs/msg/TFMessagePubSubTypes.h"
+
+class TFListenerRCLWNode : public rcl_like_wrapper::RCLWNode
+{
+public:
+  TFListenerRCLWNode(uint16_t domain_id) : RCLWNode(domain_id) {}
+  virtual bool init(const std::string &config_file_path) override
+  {
+    (void)config_file_path;
+    return true;
+  }
+};
 
 class TFMonitor
 {
@@ -49,7 +61,7 @@ public:
   std::string framea_, frameb_;
   bool using_specific_chain_;
 
-  std::shared_ptr<rcl_like_wrapper::RCLWNode> node_;
+  std::shared_ptr<TFListenerRCLWNode> node_;
   intptr_t subscriber_tf_, subscriber_tf_message_;
   std::vector<std::string> chain_;
   std::map<std::string, std::string> frame_authority_map;
@@ -58,7 +70,7 @@ public:
   std::map<std::string, std::vector<double>> authority_frequency_map;
 
   std::shared_ptr<rcl_like_wrapper::Clock> clock_;
-  tf2_ros::Buffer buffer_;
+  std::shared_ptr<tf2_ros::Buffer> buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_;
 
   tf2_msgs::msg::TFMessage message_;
@@ -80,17 +92,17 @@ public:
 
     double average_offset = 0;
     std::unique_lock<std::mutex> my_lock(map_mutex_);
-    for (size_t i = 0; i < message.transforms.size(); i++) {
-      frame_authority_map[message.transforms[i].child_frame_id] = authority;
+    for (size_t i = 0; i < message.transforms().size(); i++) {
+      frame_authority_map[message.transforms()[i].child_frame_id()] = authority;
 
       double offset = clock_->now().seconds() - tf2_ros::timeToSec(
-        message.transforms[i].header.stamp);
+        message.transforms()[i].header().stamp());
       average_offset += offset;
 
       std::map<std::string, std::vector<double>>::iterator it = delay_map.find(
-        message.transforms[i].child_frame_id);
+        message.transforms()[i].child_frame_id());
       if (it == delay_map.end()) {
-        delay_map[message.transforms[i].child_frame_id] = std::vector<double>(1, offset);
+        delay_map[message.transforms()[i].child_frame_id()] = std::vector<double>(1, offset);
       } else {
         it->second.push_back(offset);
         if (it->second.size() > 1000) {
@@ -99,7 +111,7 @@ public:
       }
     }
 
-    average_offset /= std::max(static_cast<size_t>(1), message.transforms.size());
+    average_offset /= std::max(static_cast<size_t>(1), message.transforms().size());
 
     // create the authority log
     std::map<std::string, std::vector<double>>::iterator it2 = authority_map.find(authority);
@@ -126,21 +138,23 @@ public:
   }
 
   TFMonitor(
-    std::shared_ptr<rcl_like_wrapper::RCLWNode> node, bool using_specific_chain,
+    std::shared_ptr<TFListenerRCLWNode> node, bool using_specific_chain,
     std::string framea = "", std::string frameb = "")
   : framea_(framea),
     frameb_(frameb),
     using_specific_chain_(using_specific_chain),
     node_(node)
   {
-    clock_ = std::make_shared<rcl_like_wrapper::Clock>(0),
-    tf_ = std::make_shared<tf2_ros::TransformListener>(buffer_);
+    clock_ = std::make_shared<rcl_like_wrapper::Clock>(rcl_like_wrapper::Clock::ClockType::SYSTEM_TIME);
 
-    buffer_ = tf2_ros::Buffer(clock_, tf2::Duration(tf2::BUFFER_CORE_DEFAULT_CACHE_TIME), node)
+    buffer_ = std::make_shared<tf2_ros::Buffer>(clock_, tf2::Duration(tf2::BUFFER_CORE_DEFAULT_CACHE_TIME));
+
+    tf_ = std::make_shared<tf2_ros::TransformListener>(*buffer_, reinterpret_cast<intptr_t>(node_->get_node_pointer()), true, 0);
+
 
     if (using_specific_chain_) {
       std::string warning_msg;
-      while (!buffer_.canTransform(
+      while (!buffer_->canTransform(
           framea_, frameb_, tf2::TimePoint(), &warning_msg))
       {
         printf(
@@ -150,20 +164,20 @@ public:
       }
 
       try {
-        buffer_._chainAsVector(
+        buffer_->_chainAsVector(
           frameb_, tf2::TimePointZero, framea_, tf2::TimePointZero, frameb_,
           chain_);
       } catch (const tf2::TransformException & ex) {
-        RCLCPP_WARN(node->get_logger(), "Transform Exception %s", ex.what());
+        printf("Transform Exception %s\n", ex.what());
         return;
       }
     }
 
     eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
-    subscriber_tf_ = node_->create_subscription<tf2_msgs::msg::TFMessage>(
+    subscriber_tf_ = rcl_like_wrapper::create_subscription(node_->get_node_pointer(), "tf2_msgs::msg::TFMessage",
       "tf", topic_qos,
       std::bind(&TFMonitor::callback, this, std::placeholders::_1));
-    subscriber_tf_message_ = node_->create_subscription<tf2_msgs::msg::TFMessage>(
+    subscriber_tf_message_ = rcl_like_wrapper::create_subscription(node_->get_node_pointer(), "tf2_msgs::msg::TFMessage",
       "tf_static", topic_qos,
       std::bind(&TFMonitor::callback, this, std::placeholders::_1));
   }
@@ -200,11 +214,11 @@ public:
     }
 
 
-    while (1) {
+    while (rcl_like_wrapper::ok()) {
       counter++;
       if (using_specific_chain_) {
-        auto tmp = buffer_.lookupTransform(framea_, frameb_, tf2::TimePointZero);
-        double diff = clock_->now().seconds() - tf2_ros::timeToSec(tmp.header.stamp);
+        auto tmp = buffer_->lookupTransform(framea_, frameb_, tf2::TimePointZero);
+        double diff = clock_->now().seconds() - tf2_ros::timeToSec(tmp.header().stamp());
         avg_diff = lowpass * diff + (1 - lowpass) * avg_diff;
         if (diff > max_diff) {
           max_diff = diff;
@@ -272,15 +286,22 @@ public:
 int main(int argc, char ** argv)
 {
 
+  rcl_like_wrapper::MessageTypes messageTypes;
+  std::unique_ptr<tf2_msgs::msg::TFMessagePubSubType> tfPubSubType = std::make_unique<tf2_msgs::msg::TFMessagePubSubType>();
+  // Directly create rcl_like_wrapper::MessageType with a raw pointer
+  messageTypes["tf2_msgs::msg::TFMessage"] = rcl_like_wrapper::MessageType(tfPubSubType.release());
+
+  rcl_like_wrapper::rcl_like_wrapper_init(messageTypes);
+
   // TODO(tfoote): make anonymous
-  std::shared_ptr<rcl_like_wrapper::RCLWNode> nh = rcl_like_wrapper::RCLWNode::make_shared(0);
+  std::shared_ptr<TFListenerRCLWNode> nh = std::make_shared<TFListenerRCLWNode>(0);
 
   std::string framea, frameb;
   bool using_specific_chain = true;
-  if (args.size() == 3) {
-    framea = args[1];
-    frameb = args[2];
-  } else if (args.size() == 1) {
+  if (argc == 3) {
+    framea = std::string(argv[1]);
+    frameb = std::string(argv[2]);
+  } else if (argc == 1) {
     using_specific_chain = false;
   } else {
     printf("TF_Monitor: usage: tf2_monitor framea frameb");

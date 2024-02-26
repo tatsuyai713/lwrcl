@@ -35,14 +35,14 @@ target_link_libraries(tf2_echo
   rcl_like_wrapper
 )
 
-# add_executable(tf2_monitor
-#   src/tf2_monitor.cpp
-# )
-# target_link_libraries(tf2_monitor
-#   ${PROJECT_NAME}
-#   rcl_like_wrapper
-#   ${tf2_msgs_TARGETS}
-# )
+add_executable(tf2_monitor
+  src/tf2_monitor.cpp
+)
+target_link_libraries(tf2_monitor
+  ${PROJECT_NAME}
+  rcl_like_wrapper
+  tf2_msgs
+)
 
 # Install rules
 install(TARGETS ${PROJECT_NAME}
