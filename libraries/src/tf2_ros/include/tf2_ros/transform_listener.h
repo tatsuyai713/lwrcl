@@ -84,9 +84,9 @@ namespace tf2_ros
         executor_ = std::make_shared<rcl_like_wrapper::SingleThreadedExecutor>();
         eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
         message_subscription_tf_ = rcl_like_wrapper::create_subscription(
-            tf_listener_node_->get_node_pointer(), "tf2_msgs::msg::TFMessage", "/tf", topic_qos, std::move(cb));
+            tf_listener_node_->get_node_pointer(), "tf2_msgs::msg::TFMessage", "tf", topic_qos, std::move(cb));
         message_subscription_tf_static_ = rcl_like_wrapper::create_subscription(
-            tf_listener_node_->get_node_pointer(), "tf2_msgs::msg::TFMessage", "/tf_static", topic_qos, std::move(static_cb));
+            tf_listener_node_->get_node_pointer(), "tf2_msgs::msg::TFMessage", "tf_static", topic_qos, std::move(static_cb));
         executor_->add_node(tf_listener_node_->get_node_pointer());
         dedicated_listener_thread_ = std::make_unique<std::thread>([&]()
                                                                    { executor_->spin(); });
@@ -95,9 +95,9 @@ namespace tf2_ros
       {
         eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
         message_subscription_tf_ = rcl_like_wrapper::create_subscription(
-            node_ptr_, "tf2_msgs::msg::TFMessage", "/tf", topic_qos, std::move(cb));
+            node_ptr_, "tf2_msgs::msg::TFMessage", "tf", topic_qos, std::move(cb));
         message_subscription_tf_static_ = rcl_like_wrapper::create_subscription(
-            node_ptr_, "tf2_msgs::msg::TFMessage", "/tf_static", topic_qos, std::move(static_cb));
+            node_ptr_, "tf2_msgs::msg::TFMessage", "tf_static", topic_qos, std::move(static_cb));
       }
     }
     /// Callback function for ros message subscriptoin

@@ -50,11 +50,6 @@
 #include "rcl_like_wrapper.hpp"
 #include <atomic>
 
-namespace rcl_like_wrapper
-{
-  extern std::atomic_bool global_stop_flag;
-}
-
 class echoListener
 {
 public:
@@ -114,6 +109,13 @@ int main(int argc, char **argv)
     printf("Default echo rate is 1 if echo_rate is not given.\n");
     return 1;
   }
+
+  rcl_like_wrapper::MessageTypes messageTypes;
+  std::unique_ptr<tf2_msgs::msg::TFMessagePubSubType> tfPubSubType = std::make_unique<tf2_msgs::msg::TFMessagePubSubType>();
+  // Directly create rcl_like_wrapper::MessageType with a raw pointer
+  messageTypes["tf2_msgs::msg::TFMessage"] = rcl_like_wrapper::MessageType(tfPubSubType.release());
+
+  rcl_like_wrapper::rcl_like_wrapper_init(messageTypes);
   // TODO(tfoote): restore parameter option
   // // read rate parameter
   // ros::NodeHandle p_nh("~");
@@ -136,13 +138,9 @@ int main(int argc, char **argv)
 
   // Wait for the first transforms to become avaiable.
   std::string warning_msg;
-  while (!echoListener.buffer_.canTransform(
-      source_frameid, target_frameid, tf2::TimePoint(), &warning_msg))
+  while (rcl_like_wrapper::ok() && !echoListener.buffer_.canTransform(
+                                       source_frameid, target_frameid, tf2::TimePoint(), &warning_msg))
   {
-    if (rcl_like_wrapper::global_stop_flag.load())
-    {
-      return 1;
-    }
     printf("Waiting for transform %s ->  %s: %s\n",
            source_frameid.c_str(), target_frameid.c_str(), warning_msg.c_str());
     rate.sleep();
@@ -151,7 +149,7 @@ int main(int argc, char **argv)
 
   // Nothing needs to be done except wait for a quit
   // The callbacks within the listener class will take care of everything
-  while (!rcl_like_wrapper::global_stop_flag.load())
+  while (rcl_like_wrapper::ok())
   {
     try
     {

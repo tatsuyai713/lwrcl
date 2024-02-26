@@ -56,6 +56,7 @@ namespace rcl_like_wrapper
     int32_t get_subscriber_count(intptr_t publisher_ptr);
     intptr_t create_subscription(intptr_t node_ptr, std::string message_type_name, std::string topic, eprosima::fastdds::dds::TopicQos &qos, std::function<void(void *)> callback);
     int32_t get_publisher_count(intptr_t subscriber_ptr);
+    bool ok(void);
 
     // Template function for creating a timer, to be defined in the implementation file
     template <typename Duration>

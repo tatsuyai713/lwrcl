@@ -545,6 +545,10 @@ namespace rcl_like_wrapper
   template intptr_t rcl_like_wrapper::create_timer<std::chrono::milliseconds>(intptr_t, std::chrono::milliseconds, std::function<void()>);
   template intptr_t rcl_like_wrapper::create_timer<std::chrono::seconds>(intptr_t, std::chrono::seconds, std::function<void()>);
 
+  bool ok(){
+    return !global_stop_flag.load();
+  }
+
   // Initializes the wrapper with a set of message types
   void rcl_like_wrapper_init(const MessageTypes &types)
   {

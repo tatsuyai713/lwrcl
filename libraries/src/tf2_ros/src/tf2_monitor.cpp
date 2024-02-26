@@ -161,10 +161,10 @@ public:
 
     eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
     subscriber_tf_ = node_->create_subscription<tf2_msgs::msg::TFMessage>(
-      "/tf", topic_qos,
+      "tf", topic_qos,
       std::bind(&TFMonitor::callback, this, std::placeholders::_1));
     subscriber_tf_message_ = node_->create_subscription<tf2_msgs::msg::TFMessage>(
-      "/tf_static", topic_qos,
+      "tf_static", topic_qos,
       std::bind(&TFMonitor::callback, this, std::placeholders::_1));
   }
 
