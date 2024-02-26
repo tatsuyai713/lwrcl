@@ -54,12 +54,12 @@ namespace tf2_ros
   {
   public:
     /** \brief Node interface constructor */
-    TransformBroadcaster(
-        std::shared_ptr<rcl_like_wrapper::RCLWNode> node_ptr)
+    TransformBroadcaster(intptr_t node_ptr)
+    : node_ptr_(node_ptr)
     {
       eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
       publisher_ = rcl_like_wrapper::create_publisher(
-          node_ptr->get_node_pointer(), "tf2_msgs::msg::TFMessage", "tf", topic_qos);
+          node_ptr, "tf2_msgs::msg::TFMessage", "tf", topic_qos);
     }
 
     /** \brief Send a TransformStamped message
@@ -83,6 +83,7 @@ namespace tf2_ros
 
   private:
     intptr_t publisher_;
+    intptr_t node_ptr_;
   };
 
 } // namespace tf2_ros
