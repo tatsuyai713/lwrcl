@@ -29,6 +29,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE "TF2_ROS_BUILDING_DLL")
 
 add_library(static_transform_broadcaster_node SHARED
   src/static_transform_broadcaster_node.cpp
+  src/static_transform_broadcaster.cpp
 )
 target_compile_definitions(static_transform_broadcaster_node PRIVATE "STATIC_TRANSFORM_BROADCASTER_BUILDING_DLL")
 target_include_directories(static_transform_broadcaster_node PUBLIC
@@ -44,7 +45,6 @@ target_link_libraries(static_transform_broadcaster_node PRIVATE)
 # static_transform_publisher
 add_executable(static_transform_publisher
   src/static_transform_broadcaster_program.cpp
-  src/static_transform_broadcaster.cpp
 )
 target_link_libraries(static_transform_publisher
   ${PROJECT_NAME}
