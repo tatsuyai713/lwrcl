@@ -436,12 +436,14 @@ namespace rcl_like_wrapper
     // Attempts to create a publisher for a specific message type and topic
     auto node = reinterpret_cast<Node *>(node_ptr);
 
-    if (message_types.find(message_type_name) == message_types.end())
-    {
-      return 0; // Returns 0 if the message type is not found
+    auto it = message_types.find(message_type_name);
+    if (it == message_types.end()) {
+        return 0; // Returns 0 if the message type is not found
     }
 
-    auto publisher = node->create_publisher(message_types.at(message_type_name), std::string("rt/") + topic, qos);
+    auto& message_type = it->second;
+
+    auto publisher = node->create_publisher(message_type, std::string("rt/") + topic, qos);
 
     if (!publisher)
     {
@@ -488,12 +490,12 @@ namespace rcl_like_wrapper
     // Attempts to create a subscription for a specific message type and topic with a callback
     auto node = reinterpret_cast<Node *>(node_ptr);
 
-    if (message_types.find(message_type_name) == message_types.end())
-    {
-      return 0; // Returns 0 if the message type is not found
+    auto it = message_types.find(message_type_name);
+    if (it == message_types.end()) {
+        return 0; // Returns 0 if the message type is not found
     }
 
-    MessageType &message_type = message_types.at(message_type_name);
+    auto& message_type = it->second;
 
     auto subscriber = node->create_subscription(message_type, std::string("rt/") + topic, qos, callback);
 
