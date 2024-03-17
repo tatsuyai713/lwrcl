@@ -48,6 +48,11 @@ namespace rcl_like_wrapper
     stop_spin();
   }
 
+  bool RCLWNode::init(const std::string &config_file_path)
+  {
+    return true;
+  }
+
   // Main function to start node operations and handle stop requests
   void RCLWNode::spin()
   {

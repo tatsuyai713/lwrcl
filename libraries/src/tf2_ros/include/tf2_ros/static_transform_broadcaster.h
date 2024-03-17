@@ -43,6 +43,7 @@
 #include "tf2_msgs/msg/TFMessage.h"
 #include "tf2_msgs/msg/TFMessagePubSubTypes.h"
 
+FAST_DDS_CUSTOM_CLASS(tf2_msgs::msg,TFMessage)
 namespace tf2_ros
 {
 
@@ -54,12 +55,11 @@ namespace tf2_ros
   {
   public:
     /** \brief Node constructor */
-    StaticTransformBroadcaster(Node* node_ptr)
+    StaticTransformBroadcaster(rcl_like_wrapper::Node* node_ptr)
     : node_ptr_(node_ptr)
     {
       eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
-      publisher_ = rcl_like_wrapper::create_publisher(
-          node_ptr, "tf2_msgs::msg::TFMessage", "tf_static", topic_qos);
+      publisher_ = node_ptr_->create_publisher<tf2_msgs::msg::TFMessage>( &pub_message_type_, "tf_static", topic_qos);
     }
 
     /** \brief Send a TransformStamped message
@@ -74,9 +74,10 @@ namespace tf2_ros
 
   private:
     /// Internal reference to ros::Node
-    intptr_t publisher_;
-    Node* node_ptr_;
+    rcl_like_wrapper::Node* node_ptr_;
+    rcl_like_wrapper::Publisher<tf2_msgs::msg::TFMessage>* publisher_;
     tf2_msgs::msg::TFMessage net_message_;
+    tf2_msgs::msg::TFMessageType pub_message_type_;
   };
 
 } // namespace tf2_ros

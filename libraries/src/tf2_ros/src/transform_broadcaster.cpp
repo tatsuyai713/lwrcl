@@ -56,7 +56,7 @@ namespace tf2_ros
       message->transforms().push_back(*it);
     }
 
-    rcl_like_wrapper::publish(reinterpret_cast<intptr_t>(publisher_), message.get());
+    publisher_->publish(message.get());
   }
 
 } // namespace tf2_ros

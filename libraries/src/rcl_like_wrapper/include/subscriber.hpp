@@ -48,7 +48,6 @@ namespace rcl_like_wrapper
         {
           std::cerr << "Error: Vector is empty" << std::endl;
         }
-        // callback_function_(message_.get());
       }
       catch (const std::exception &e)
       {
@@ -97,13 +96,12 @@ namespace rcl_like_wrapper
     std::atomic<int32_t> count{0};
 
   private:
-    // T* message_ptr_;
+    MessageType *message_type_;
+    std::function<void(T *)> callback_function_;
+    Channel<ISubscriptionCallback *> &channel_;
     std::vector<std::shared_ptr<T>> message_ptr_buffer_;
     std::unique_ptr<SubscriptionCallback<T>> subscription_callback_;
     dds::SampleInfo sample_info_;
-    MessageType *message_type_;
-    Channel<ISubscriptionCallback *> &channel_;
-    std::function<void(T *)> callback_function_;
   };
 
   class ISubscriber
@@ -173,10 +171,10 @@ namespace rcl_like_wrapper
 
   private:
     dds::DomainParticipant *participant_;
+    SubscriberListener<T> listener_;
     dds::Topic *topic_;
     dds::Subscriber *subscriber_;
     dds::DataReader *reader_;
-    SubscriberListener<T> listener_;
   };
 
 } // namespace rcl_like_wrapper

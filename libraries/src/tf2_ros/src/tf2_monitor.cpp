@@ -47,7 +47,7 @@
 class TFListenerRCLWNode : public rcl_like_wrapper::RCLWNode
 {
 public:
-  TFListenerRCLWNode(uint16_t domain_id) : RCLWNode(domain_id) {}
+  TFListenerRCLWNode(int domain_id) : RCLWNode(domain_id) {}
   virtual bool init(const std::string &config_file_path) override
   {
     (void)config_file_path;
@@ -62,7 +62,10 @@ public:
   bool using_specific_chain_;
 
   std::shared_ptr<TFListenerRCLWNode> node_;
-  intptr_t subscriber_tf_, subscriber_tf_message_;
+  rcl_like_wrapper::Subscriber<tf2_msgs::msg::TFMessage>* subscriber_tf_;
+  rcl_like_wrapper::Subscriber<tf2_msgs::msg::TFMessage>* subscriber_tf_static_;
+  tf2_msgs::msg::TFMessageType sub_tf_message_type_;
+  tf2_msgs::msg::TFMessageType sub_tf_static_message_type_;
   std::vector<std::string> chain_;
   std::map<std::string, std::string> frame_authority_map;
   std::map<std::string, std::vector<double>> delay_map;
@@ -76,7 +79,7 @@ public:
   tf2_msgs::msg::TFMessage message_;
   std::mutex map_mutex_;
 
-  void callback(void *in_message)
+  void callback(tf2_msgs::msg::TFMessage *in_message)
 {
     if (in_message == nullptr)
     {
@@ -84,9 +87,7 @@ public:
         return;
     }
 
-    tf2_msgs::msg::TFMessage* message_ptr = static_cast<tf2_msgs::msg::TFMessage *>(in_message);
-
-    const tf2_msgs::msg::TFMessage & message = *(message_ptr);
+    const tf2_msgs::msg::TFMessage & message = *(in_message);
     // TODO(tfoote): recover authority info
     std::string authority = "<no authority available>";
 
@@ -143,13 +144,15 @@ public:
   : framea_(framea),
     frameb_(frameb),
     using_specific_chain_(using_specific_chain),
-    node_(node)
+    node_(node),
+    subscriber_tf_(0),
+    subscriber_tf_static_(0)
   {
     clock_ = std::make_shared<rcl_like_wrapper::Clock>(rcl_like_wrapper::Clock::ClockType::SYSTEM_TIME);
 
     buffer_ = std::make_shared<tf2_ros::Buffer>(clock_, tf2::Duration(tf2::BUFFER_CORE_DEFAULT_CACHE_TIME));
 
-    tf_ = std::make_shared<tf2_ros::TransformListener>(*buffer_, reinterpret_cast<intptr_t>(node_->get_node_pointer()), true, 0);
+    tf_ = std::make_shared<tf2_ros::TransformListener>(*buffer_, this->node_.get(), true, 0);
 
 
     if (using_specific_chain_) {
@@ -174,11 +177,9 @@ public:
     }
 
     eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
-    subscriber_tf_ = rcl_like_wrapper::create_subscription(node_->get_node_pointer(), "tf2_msgs::msg::TFMessage",
-      "tf", topic_qos,
+    subscriber_tf_ = node_->create_subscription<tf2_msgs::msg::TFMessage>(&sub_tf_message_type_, "tf", topic_qos,
       std::bind(&TFMonitor::callback, this, std::placeholders::_1));
-    subscriber_tf_message_ = rcl_like_wrapper::create_subscription(node_->get_node_pointer(), "tf2_msgs::msg::TFMessage",
-      "tf_static", topic_qos,
+    subscriber_tf_static_ = node_->create_subscription<tf2_msgs::msg::TFMessage>(&sub_tf_static_message_type_, "tf_static", topic_qos,
       std::bind(&TFMonitor::callback, this, std::placeholders::_1));
   }
 
@@ -286,13 +287,6 @@ public:
 int main(int argc, char ** argv)
 {
 
-  rcl_like_wrapper::MessageTypes messageTypes;
-  std::unique_ptr<tf2_msgs::msg::TFMessagePubSubType> tfPubSubType = std::make_unique<tf2_msgs::msg::TFMessagePubSubType>();
-  // Directly create rcl_like_wrapper::MessageType with a raw pointer
-  messageTypes["tf2_msgs::msg::TFMessage"] = rcl_like_wrapper::MessageType(tfPubSubType.release());
-
-  rcl_like_wrapper::rcl_like_wrapper_init(messageTypes);
-
   // TODO(tfoote): make anonymous
   std::shared_ptr<TFListenerRCLWNode> nh = std::make_shared<TFListenerRCLWNode>(0);
 
@@ -326,7 +320,7 @@ int main(int argc, char ** argv)
   // see: http://stackoverflow.com/a/27389714/671658
   // I (wjwwood) chose to use the lamda rather than the static cast solution.
   auto run_func = [](std::shared_ptr<rcl_like_wrapper::RCLWNode> node) {
-      return rcl_like_wrapper::spin(node->get_node_pointer());
+      return node->spin();
     };
   TFMonitor monitor(nh, using_specific_chain, framea, frameb);
   std::thread spinner(run_func, nh);

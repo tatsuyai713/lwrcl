@@ -93,11 +93,11 @@ namespace rcl_like_wrapper
 
   private:
     dds::DomainParticipant *participant_;
+    MessageType *message_type_;
     dds::Topic *topic_;
     dds::Publisher *publisher_;
     dds::DataWriter *writer_;
     PublisherListener listener_;
-    MessageType *message_type_;
   };
 
 } // namespace rcl_like_wrapper

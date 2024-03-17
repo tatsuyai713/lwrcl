@@ -56,11 +56,11 @@ public:
   tf2_ros::Buffer buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tfl_;
 
-  explicit echoListener(std::shared_ptr<rcl_like_wrapper::Clock> clock)
+  explicit echoListener(rcl_like_wrapper::Node* nh, std::shared_ptr<rcl_like_wrapper::Clock> clock)
       : buffer_(clock)
   {
     int32_t domain_id = 0;
-    tfl_ = std::make_shared<tf2_ros::TransformListener>(buffer_, 0, true, domain_id);
+    tfl_ = std::make_shared<tf2_ros::TransformListener>(buffer_, nh, true, domain_id);
   }
 
   ~echoListener()
@@ -110,12 +110,6 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  rcl_like_wrapper::MessageTypes messageTypes;
-  std::unique_ptr<tf2_msgs::msg::TFMessagePubSubType> tfPubSubType = std::make_unique<tf2_msgs::msg::TFMessagePubSubType>();
-  // Directly create rcl_like_wrapper::MessageType with a raw pointer
-  messageTypes["tf2_msgs::msg::TFMessage"] = rcl_like_wrapper::MessageType(tfPubSubType.release());
-
-  rcl_like_wrapper::rcl_like_wrapper_init(messageTypes);
   // TODO(tfoote): restore parameter option
   // // read rate parameter
   // ros::NodeHandle p_nh("~");
@@ -125,13 +119,13 @@ int main(int argc, char **argv)
   // TODO(tfoote): restore anonymous??
   // ros::init_options::AnonymousName);
 
-  // int32_t domain_id = 0;
+  int domain_id = 0;
 
-  // rcl_like_wrapper::RCLWNode nh = rcl_like_wrapper::RCLWNode(domain_id);
+  rcl_like_wrapper::RCLWNode nh(domain_id);
 
   std::shared_ptr<rcl_like_wrapper::Clock> clock = std::make_shared<rcl_like_wrapper::Clock>();
   // Instantiate a local listener
-  echoListener echoListener(clock);
+  echoListener echoListener(&nh, clock);
 
   std::string source_frameid(argv[1]);
   std::string target_frameid(argv[2]);

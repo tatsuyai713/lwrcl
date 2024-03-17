@@ -60,7 +60,7 @@ namespace tf2_ros
   {
   public:
     STATIC_TRANSFORM_BROADCASTER_PUBLIC
-    explicit StaticTransformBroadcasterNode(int16_t domain_id, TransformData transformData);
+    explicit StaticTransformBroadcasterNode(int domain_id, TransformData transformData);
 
     STATIC_TRANSFORM_BROADCASTER_PUBLIC
     ~StaticTransformBroadcasterNode() override = default;

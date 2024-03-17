@@ -72,7 +72,7 @@ namespace tf2_ros
       }
     }
 
-    rcl_like_wrapper::publish(reinterpret_cast<intptr_t>(publisher_), &net_message_);
+    publisher_->publish(&net_message_);
   }
 
 } // namespace tf2_ros

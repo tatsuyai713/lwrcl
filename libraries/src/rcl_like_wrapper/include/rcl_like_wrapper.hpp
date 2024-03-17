@@ -35,7 +35,7 @@ namespace rcl_like_wrapper
   {
   public:
     Node(int domain_id);
-    ~Node();
+    virtual ~Node();
 
     template <typename T>
     Publisher<T> *create_publisher(MessageType *message_type, const std::string &topic, const dds::TopicQos &qos)
@@ -91,7 +91,7 @@ namespace rcl_like_wrapper
   public:
     RCLWNode(int domain_number);
     virtual ~RCLWNode();
-    virtual bool init(const std::string &config_file_path) = 0; // Initializes the node with a configuration file.
+    virtual bool init(const std::string &config_file_path);     // Initializes the node with a configuration file.
     virtual void spin();                                        // Continuously processes messages.
     virtual void spin_some();                                   // Processes available messages without blocking.
     virtual void stop_spin();

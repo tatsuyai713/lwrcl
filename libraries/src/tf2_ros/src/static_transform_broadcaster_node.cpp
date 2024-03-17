@@ -37,7 +37,7 @@
 
 namespace tf2_ros
 {
-StaticTransformBroadcasterNode::StaticTransformBroadcasterNode(int16_t domain_id, TransformData transformData)
+StaticTransformBroadcasterNode::StaticTransformBroadcasterNode(int domain_id, TransformData transformData)
 : rcl_like_wrapper::RCLWNode(domain_id)
 // TODO(clalancette): Anonymize the node name like it is in ROS1.
 {
@@ -65,7 +65,7 @@ StaticTransformBroadcasterNode::StaticTransformBroadcasterNode(int16_t domain_id
     throw std::runtime_error("child_frame_id cannot equal frame_id");
   }
 
-  broadcaster_ = std::make_unique<tf2_ros::StaticTransformBroadcaster>(this->get_node_pointer());
+  broadcaster_ = std::make_unique<tf2_ros::StaticTransformBroadcaster>(this);
 
   // send transform
   broadcaster_->sendTransform(tf_msg);

@@ -358,16 +358,6 @@ int main(int argc, char ** argv)
 {
   std::vector<std::string> args(argv + 1, argv + argc);
   
-  // Initialize ROS
-  rcl_like_wrapper::MessageTypes messageTypes;
-  std::unique_ptr<tf2_msgs::msg::TFMessagePubSubType> tfPubSubType = std::make_unique<tf2_msgs::msg::TFMessagePubSubType>();
-  // Directly create rcl_like_wrapper::MessageType with a raw pointer
-  messageTypes["tf2_msgs::msg::TFMessage"] = rcl_like_wrapper::MessageType(tfPubSubType.release());
-  std::unique_ptr<geometry_msgs::msg::TransformStampedPubSubType> tfsPubSubType = std::make_unique<geometry_msgs::msg::TransformStampedPubSubType>();
-  messageTypes["geometry_msgs::msg::TransformStamped"] = rcl_like_wrapper::MessageType(tfsPubSubType.release());
-
-  rcl_like_wrapper::rcl_like_wrapper_init(messageTypes);
-
   bool help = false;
   tf2::Quaternion rotation(0.0, 0.0, 0.0, 1.0);
   tf2::Vector3 translation(0.0, 0.0, 0.0);
@@ -392,7 +382,7 @@ int main(int argc, char ** argv)
 
   std::shared_ptr<tf2_ros::StaticTransformBroadcasterNode> node;
 
-  int16_t domain_id = 0;
+  int domain_id = 0;
   
   node = std::make_shared<tf2_ros::StaticTransformBroadcasterNode>(domain_id, transformData);
 
@@ -402,7 +392,7 @@ int main(int argc, char ** argv)
     rotation.x(), rotation.y(), rotation.z(), rotation.w(),
     frame_id.c_str(), child_frame_id.c_str());
 
-  rcl_like_wrapper::spin(node->get_node_pointer());
+  node->spin();
 
   return 0;
 }
