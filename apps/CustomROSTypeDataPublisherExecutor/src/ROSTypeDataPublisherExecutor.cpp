@@ -7,10 +7,7 @@ ROSTypeDataPublisherExecutor::ROSTypeDataPublisherExecutor(uint16_t domain_numbe
 
     // Initialization of custom publisher subtype
     std::unique_ptr<CustomMessagePubSubType> custom_pubsubtype =std::make_unique<CustomMessagePubSubType>();
-    std::unique_ptr<sensor_msgs::msg::ImagePubSubType> image_pubsubtype =std::make_unique<sensor_msgs::msg::ImagePubSubType>();
-    message_types_["CustomMessage"] = MessageType(custom_pubsubtype.release());
-    message_types_["sensor_msgs::msg::Image"] = MessageType(image_pubsubtype.release());
-    rcl_like_wrapper_init(message_types_);
+    pub_message_type_ = MessageType(custom_pubsubtype.release());
 }
 
 ROSTypeDataPublisherExecutor::~ROSTypeDataPublisherExecutor() {
@@ -34,8 +31,8 @@ bool ROSTypeDataPublisherExecutor::init(const std::string& config_file_path) {
         return false;
     }
 
-    dds::TopicQos topic_qos = dds::TOPIC_QOS_DEFAULT;
-    publisher_ptr_ = create_publisher(get_node_pointer(), "CustomMessage", topic_name_, topic_qos);
+    eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
+    publisher_ptr_ = create_publisher<CustomMessage>(&pub_message_type_, topic_name_, topic_qos);
     if (!publisher_ptr_) {
         std::cerr << "Error: Failed to create a publisher." << std::endl;
         return false;
@@ -43,7 +40,7 @@ bool ROSTypeDataPublisherExecutor::init(const std::string& config_file_path) {
 
     // Setup timer for periodic callback
     timer_callback_ = [this]() { this->callbackPublish(interval_ms_); };
-    timer_ptr_ = create_timer(get_node_pointer(), std::chrono::milliseconds(interval_ms_), timer_callback_);
+    timer_ptr_ = create_timer<std::chrono::milliseconds>(std::chrono::milliseconds(interval_ms_), timer_callback_);
     if (!timer_ptr_) {
         std::cerr << "Error: Failed to create a timer." << std::endl;
         return false;
@@ -64,5 +61,5 @@ void ROSTypeDataPublisherExecutor::callbackPublish(int test) {
         return;
     }
 
-    publish(reinterpret_cast<intptr_t>(publisher_ptr_), publish_msg.get());
+    publisher_ptr_->publish(publish_msg.get());
 }

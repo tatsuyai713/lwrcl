@@ -4,104 +4,90 @@
 
 using namespace rcl_like_wrapper;
 
-void myCallbackFunction(void *message)
+FAST_DDS_CUSTOM_CLASS(sensor_msgs::msg,Image)
+
+void myCallbackFunction(sensor_msgs::msg::Image *message)
 {
     if (message == nullptr)
     {
         std::cerr << "Error: Received null message in callback." << std::endl;
         return;
     }
-
-    sensor_msgs::msg::Image *my_message = static_cast<sensor_msgs::msg::Image *>(message);
-    if (my_message == nullptr)
-    {
-        std::cerr << "Error: Failed to cast message to sensor_msgs::msg::Image." << std::endl;
-        return;
-    }
-
-    // Handle the received message
-    std::cout << "Received data: " << my_message->header().frame_id() << std::endl;
+    // Print the received image data
+    std::cout << "Received Image data: ";
+    std::cout << "Width: " << message->width() << ", ";
+    std::cout << "Height: " << message->height() << ", ";
+    std::cout << "Encoding: " << message->encoding() << std::endl;
 }
 
-int data_value = 0;
-std::shared_ptr<sensor_msgs::msg::Image> my_message;
-void myTimerFunction(int test, void *ptr)
+void myTimerFunction(sensor_msgs::msg::Image *my_message, Publisher<sensor_msgs::msg::Image>* publisher_ptr)
 {
-
-    if (ptr == nullptr)
-    {
-        std::cerr << "Error: nullptr in callback." << std::endl;
-        return;
-    }
-    void *publisher_ptr = ptr;
-
-    // Simulate sending data periodically
-    my_message->header().stamp().sec() = data_value;
-    data_value++;
-
-    // Publish the message
+    static int data_value = 0;
     if (publisher_ptr == nullptr)
     {
         std::cerr << "Error: Invalid publisher pointer." << std::endl;
         return;
     }
-    publish(reinterpret_cast<intptr_t>(publisher_ptr), my_message.get()); // Pass the raw pointer
+
+    // Simulate sending data periodically
+    my_message->header().stamp().sec() = data_value;
+    my_message->header().stamp().nanosec() = data_value;
+    my_message->header().frame_id() = "TEST";
+    my_message->height() = 100;
+    my_message->width() = 200;
+    my_message->encoding() = "H263";
+    my_message->is_bigendian() = false;
+    my_message->step() = 1;
+    my_message->data() = {0, 0, 0, 0, 0, 0};
+
+
+    // Publish the message
+    publisher_ptr->publish(my_message);
+    data_value++;
 }
 
 int main()
 {
-    MessageTypes messageTypes;
-
-    std::unique_ptr<sensor_msgs::msg::ImagePubSubType>imagePubSubType = std::make_unique<sensor_msgs::msg::ImagePubSubType>();
-
-    // Directly create rcl_like_wrapper::MessageType with a raw pointer
-    messageTypes["sensor_msgs::msg::Image"] = rcl_like_wrapper::MessageType(imagePubSubType.release());
-
-    rcl_like_wrapper_init(messageTypes);
-
-    my_message = std::make_shared<sensor_msgs::msg::Image>();
+    // MessageType
+    sensor_msgs::msg::ImageType sub_message_type;
+    sensor_msgs::msg::ImageType pub_message_type;
 
     // Create a node with domain ID 0
-    intptr_t node_ptr = create_node(0);
-    if (node_ptr == 0)
-    {
-        std::cerr << "Error: Failed to create a node." << std::endl;
-        return 1;
-    }
+    std::shared_ptr<Node>node_ptr = std::make_shared<Node>(0);
 
-    // Create a publisher with a topic named "MyTopic1" and default QoS
-    dds::TopicQos topic_qos = dds::TOPIC_QOS_DEFAULT;
-    intptr_t publisher_ptr = create_publisher(node_ptr, "sensor_msgs::msg::Image", "MyTopic1", topic_qos);
-    if (publisher_ptr == 0)
+    // Create a publisher with default QoS settings
+    rcl_like_wrapper::dds::TopicQos pub_topic_qos = rcl_like_wrapper::dds::TOPIC_QOS_DEFAULT;
+    auto publisher_ptr = node_ptr->create_publisher<sensor_msgs::msg::Image>(&pub_message_type, "TESTTopic2", pub_topic_qos);
+    if (publisher_ptr == nullptr)
     {
         std::cerr << "Error: Failed to create a publisher." << std::endl;
         return 1;
     }
 
-    // Create a subscription with a topic named "MyTopic2" and default QoS
-    intptr_t subscriber_ptr = create_subscription(
-        node_ptr, "sensor_msgs::msg::Image", "MyTopic2", topic_qos, myCallbackFunction);
-    if (subscriber_ptr == 0)
+    // Create a subscription with default QoS settings
+    rcl_like_wrapper::dds::TopicQos sub_topic_qos = rcl_like_wrapper::dds::TOPIC_QOS_DEFAULT;
+    auto subscriber_ptr = node_ptr->create_subscription<sensor_msgs::msg::Image>(&sub_message_type, "TESTTopic1", sub_topic_qos, myCallbackFunction);
+    if (subscriber_ptr == nullptr)
     {
         std::cerr << "Error: Failed to create a subscription." << std::endl;
         return 1;
     }
 
-    int test = 100;
-    intptr_t timer_ptr = create_timer(node_ptr, std::chrono::milliseconds(test), [test, publisher_ptr]()
-                                            { myTimerFunction(test, reinterpret_cast<void *>(publisher_ptr)); });
+    sensor_msgs::msg::Image pub_message;
+    auto timer_ptr = node_ptr->create_timer(std::chrono::milliseconds(100), [&pub_message, publisher_ptr]()
+                                            { myTimerFunction(&pub_message, publisher_ptr); });
 
-    if (timer_ptr == 0)
+    if (timer_ptr == nullptr)
     {
         std::cerr << "Error: Failed to create a timer." << std::endl;
         return 1;
     }
 
     // Spin the node to handle incoming messages
-    spin(node_ptr);
+    node_ptr->spin();
 
     // Clean up
-    stop_spin(node_ptr);
+    node_ptr->stop_spin();
 
     return 0;
 }

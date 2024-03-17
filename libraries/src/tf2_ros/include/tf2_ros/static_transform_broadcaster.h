@@ -54,7 +54,7 @@ namespace tf2_ros
   {
   public:
     /** \brief Node constructor */
-    StaticTransformBroadcaster(intptr_t node_ptr)
+    StaticTransformBroadcaster(Node* node_ptr)
     : node_ptr_(node_ptr)
     {
       eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
@@ -75,7 +75,7 @@ namespace tf2_ros
   private:
     /// Internal reference to ros::Node
     intptr_t publisher_;
-    intptr_t node_ptr_;
+    Node* node_ptr_;
     tf2_msgs::msg::TFMessage net_message_;
   };
 

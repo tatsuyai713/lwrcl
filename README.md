@@ -108,8 +108,8 @@ The `SingleThreadedExecutor` manages and spins multiple nodes sequentially withi
 
 ### Key Functions
 
-- **add_node(intptr_t node_ptr):** Integrates a node into the executor's workflow.
-- **remove_node(intptr_t node_ptr):** Detaches a node from the executor.
+- **add_node(Node* node_ptr):** Integrates a node into the executor's workflow.
+- **remove_node(Node* node_ptr):** Detaches a node from the executor.
 - **spin():** Begins the sequential processing of messages for all nodes managed by the executor.
 - **stop():** Halts the processing loop, ensuring all nodes are gracefully stopped.
 
@@ -126,8 +126,8 @@ The `MultiThreadedExecutor` extends the functionality of the SingleThreadedExecu
 
 ### Key Functions
 
-- **add_node(intptr_t node_ptr):** Adds a node to be managed concurrently by the executor.
-- **remove_node(intptr_t node_ptr):** Removes a node from the concurrent processing pool.
+- **add_node(Node* node_ptr):** Adds a node to be managed concurrently by the executor.
+- **remove_node(Node* node_ptr):** Removes a node from the concurrent processing pool.
 - **spin():** Starts concurrent message processing for all nodes, leveraging multi-threading to achieve parallel execution.
 - **stop():** Stops all threads and ensures a clean shutdown of node operations.
 
@@ -195,8 +195,8 @@ int main() {
     auto node2 = std::make_shared<MyCustomNode>(domain_id);
 
     // Add custom nodes to the executor
-    executor.add_node(node1->get_node_pointer());
-    executor.add_node(node2->get_node_pointer());
+    executor.add_node(&node1);
+    executor.add_node(&node2);
 
     // Execute the executor to spin both nodes concurrently
     executor.spin();

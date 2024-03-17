@@ -65,7 +65,7 @@ namespace tf2_ros
   public:
     /**@brief Constructor for transform listener */
     TF2_ROS_PUBLIC
-    TransformListener(tf2::BufferCore &buffer, intptr_t node_ptr, bool spin_thread = true, int32_t domain_id = 0);
+    TransformListener(tf2::BufferCore &buffer, Node* node_ptr, bool spin_thread = true, int32_t domain_id = 0);
     TF2_ROS_PUBLIC
     virtual ~TransformListener();
 
@@ -105,7 +105,7 @@ namespace tf2_ros
     void subscription_callback(void *msg, bool is_static);
 
     tf2::BufferCore &buffer_;
-    intptr_t node_ptr_{0};
+    Node* node_ptr_{0};
     bool spin_thread_{false};
     int32_t domain_id_{0};
     std::unique_ptr<std::thread> dedicated_listener_thread_{nullptr};

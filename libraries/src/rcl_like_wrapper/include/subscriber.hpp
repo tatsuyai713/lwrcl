@@ -13,17 +13,25 @@
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
 #include "channel.hpp"
-#include "rcl_like_wrapper.hpp"
+#include "eprosima_namespace.hpp"
+#include "dds_message_type.hpp"
 
 namespace rcl_like_wrapper
 {
 
-  class SubscriptionCallback
+  class ISubscriptionCallback
   {
   public:
-    SubscriptionCallback(MessageType &message_type, std::function<void(void *)> callback_function, std::shared_ptr<void> message)
-        : message_type_(message_type), callback_function_(callback_function),
-          message_(message) {}
+    virtual ~ISubscriptionCallback() = default;
+    virtual void invoke() = 0;
+  };
+
+  template <typename T>
+  class SubscriptionCallback : public ISubscriptionCallback
+  {
+  public:
+    SubscriptionCallback(std::function<void(T *)> callback_function, std::vector<std::shared_ptr<T>> *message_buffer)
+        : callback_function_(callback_function), message_buffer_(message_buffer) {}
 
     ~SubscriptionCallback() = default;
 
@@ -31,7 +39,16 @@ namespace rcl_like_wrapper
     {
       try
       {
-        callback_function_(message_.get());
+        if (!message_buffer_->empty())
+        {
+          callback_function_(message_buffer_->front().get());
+          message_buffer_->erase(message_buffer_->begin());
+        }
+        else
+        {
+          std::cerr << "Error: Vector is empty" << std::endl;
+        }
+        // callback_function_(message_.get());
       }
       catch (const std::exception &e)
       {
@@ -44,22 +61,16 @@ namespace rcl_like_wrapper
     }
 
   private:
-    MessageType &message_type_;
-    std::function<void(void *)> callback_function_;
-    std::shared_ptr<void> message_;
+    std::function<void(T *)> callback_function_;
+    std::vector<std::shared_ptr<T>> *message_buffer_;
   };
 
+  template <typename T>
   class SubscriberListener : public dds::DataReaderListener
   {
   public:
-    SubscriberListener(MessageType &message_type, std::function<void(void *)> callback_function, Channel<SubscriptionCallback *> &channel)
-        : message_type_(message_type), callback_function_(callback_function), channel_(channel)
+    virtual ~SubscriberListener()
     {
-      // Initialize the SubscriptionCallback instance with a message for now
-      message_ptr_ = std::shared_ptr<void>(message_type_.type_support.create_data(),
-                                           [this](void *data)
-                                           { this->message_type_.type_support.delete_data(data); });
-      subscription_callback_ = std::make_unique<SubscriptionCallback>(message_type_, callback_function_, message_ptr_);
     }
 
     void on_subscription_matched(dds::DataReader *, const dds::SubscriptionMatchedStatus &status) override
@@ -69,37 +80,54 @@ namespace rcl_like_wrapper
 
     void on_data_available(dds::DataReader *reader) override
     {
-      if (reader->take_next_sample(message_ptr_.get(), &sample_info_) == ReturnCode_t::RETCODE_OK && sample_info_.valid_data)
+      T temp_instance;
+      if (reader->take_next_sample(&temp_instance, &sample_info_) == ReturnCode_t::RETCODE_OK && sample_info_.valid_data)
       {
+        auto data_ptr = std::make_shared<T>(temp_instance);
+        message_ptr_buffer_.emplace_back(data_ptr);
         channel_.produce(subscription_callback_.get());
       }
     }
 
+    SubscriberListener(MessageType *message_type, std::function<void(T *)> callback_function, Channel<ISubscriptionCallback *> &channel)
+        : message_type_(message_type), callback_function_(callback_function), channel_(channel)
+    {
+      subscription_callback_ = std::make_unique<SubscriptionCallback<T>>(callback_function_, &message_ptr_buffer_);
+    }
     std::atomic<int32_t> count{0};
 
   private:
-    std::shared_ptr<void> message_ptr_;
-    std::unique_ptr<SubscriptionCallback> subscription_callback_;
+    // T* message_ptr_;
+    std::vector<std::shared_ptr<T>> message_ptr_buffer_;
+    std::unique_ptr<SubscriptionCallback<T>> subscription_callback_;
     dds::SampleInfo sample_info_;
-    MessageType &message_type_;
-    Channel<SubscriptionCallback *> &channel_;
-    std::function<void(void *)> callback_function_;
+    MessageType *message_type_;
+    Channel<ISubscriptionCallback *> &channel_;
+    std::function<void(T *)> callback_function_;
   };
 
-  class Subscriber
+  class ISubscriber
   {
   public:
-    Subscriber(dds::DomainParticipant *participant, MessageType &message_type, const std::string &topic,
-               const dds::TopicQos &qos, std::function<void(void *)> callback_function,
-               Channel<SubscriptionCallback *> &channel)
+    virtual ~ISubscriber() = default;
+    virtual int32_t get_publisher_count() = 0;
+  };
+
+  template <typename T>
+  class Subscriber : public ISubscriber
+  {
+  public:
+    Subscriber(dds::DomainParticipant *participant, MessageType *message_type, const std::string &topic,
+               const dds::TopicQos &qos, std::function<void(T *)> callback_function,
+               Channel<ISubscriptionCallback *> &channel)
         : participant_(participant),
           listener_(message_type, callback_function, channel)
     {
-      if (message_type.type_support.register_type(participant_) != ReturnCode_t::RETCODE_OK)
+      if (message_type->get_type_support().register_type(participant_) != ReturnCode_t::RETCODE_OK)
       {
         throw std::runtime_error("Failed to register message type");
       }
-      topic_ = participant_->create_topic(topic, message_type.type_support.get_type_name(), qos);
+      topic_ = participant_->create_topic(topic, message_type->get_type_support().get_type_name(), qos);
       if (!topic_)
       {
         throw std::runtime_error("Failed to create topic");
@@ -124,15 +152,15 @@ namespace rcl_like_wrapper
 
     ~Subscriber()
     {
-      if (reader_)
+      if (reader_ != nullptr)
       {
         subscriber_->delete_datareader(reader_);
       }
-      if (subscriber_)
+      if (subscriber_ != nullptr)
       {
         participant_->delete_subscriber(subscriber_);
       }
-      if (topic_)
+      if (topic_ != nullptr)
       {
         participant_->delete_topic(topic_);
       }
@@ -148,7 +176,7 @@ namespace rcl_like_wrapper
     dds::Topic *topic_;
     dds::Subscriber *subscriber_;
     dds::DataReader *reader_;
-    SubscriberListener listener_;
+    SubscriberListener<T> listener_;
   };
 
 } // namespace rcl_like_wrapper

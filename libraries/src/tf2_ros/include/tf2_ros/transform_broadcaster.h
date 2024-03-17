@@ -54,7 +54,7 @@ namespace tf2_ros
   {
   public:
     /** \brief Node interface constructor */
-    TransformBroadcaster(intptr_t node_ptr)
+    TransformBroadcaster(Node* node_ptr)
     : node_ptr_(node_ptr)
     {
       eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
@@ -83,7 +83,7 @@ namespace tf2_ros
 
   private:
     intptr_t publisher_;
-    intptr_t node_ptr_;
+    Node* node_ptr_;
   };
 
 } // namespace tf2_ros

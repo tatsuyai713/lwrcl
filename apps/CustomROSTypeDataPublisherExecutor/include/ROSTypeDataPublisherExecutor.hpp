@@ -27,10 +27,10 @@ public:
 private:
     std::string topic_name_;
     uint16_t interval_ms_;
-    intptr_t publisher_ptr_;
-    intptr_t timer_ptr_;
+    Publisher<CustomMessage>* publisher_ptr_;
+    Timer<std::chrono::milliseconds>* timer_ptr_;
     std::function<void()> timer_callback_;
-    MessageTypes message_types_;
+    MessageType pub_message_type_;
 };
 
 #endif /* ROSTYPEDATAPUBLISHER_H_ */

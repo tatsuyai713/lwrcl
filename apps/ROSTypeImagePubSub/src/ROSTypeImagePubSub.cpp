@@ -6,9 +6,10 @@ ROSTypeImagePubSub::ROSTypeImagePubSub(uint16_t domain_number)
     : RCLWNode(domain_number), publish_topic_name_("default_topic"), subscribe_topic_name_("default_topic"), interval_ms_(1000) {
 
     // Initialization of Image publisher subtype
-    std::unique_ptr<sensor_msgs::msg::ImagePubSubType> image_pubsubtype =std::make_unique<sensor_msgs::msg::ImagePubSubType>();
-    message_types_["sensor_msgs::msg::Image"] = MessageType(image_pubsubtype.release());
-    rcl_like_wrapper_init(message_types_);
+    std::unique_ptr<sensor_msgs::msg::ImagePubSubType> image_pubtype =std::make_unique<sensor_msgs::msg::ImagePubSubType>();
+    pub_message_type_ = MessageType(image_pubtype.release());
+    std::unique_ptr<sensor_msgs::msg::ImagePubSubType> image_subtype =std::make_unique<sensor_msgs::msg::ImagePubSubType>();
+    sub_message_type_ = MessageType(image_subtype.release());
 
     counter_ = 0;
 }
@@ -37,15 +38,15 @@ bool ROSTypeImagePubSub::init(const std::string& config_file_path) {
         return false;
     }
 
-    dds::TopicQos topic_qos = dds::TOPIC_QOS_DEFAULT;
-    publisher_ptr_ = create_publisher(get_node_pointer(), "sensor_msgs::msg::Image", publish_topic_name_, topic_qos);
+    rcl_like_wrapper::dds::TopicQos topic_qos = rcl_like_wrapper::dds::TOPIC_QOS_DEFAULT;
+    publisher_ptr_ = create_publisher<sensor_msgs::msg::Image>(&pub_message_type_, publish_topic_name_, topic_qos);
     if (!publisher_ptr_) {
         std::cerr << "Error: Failed to create a publisher." << std::endl;
         return false;
     }
     
     // Create a subscription with a topic named subscribe_topic_name_ and default QoS
-    subscriber_ptr_ = create_subscription(get_node_pointer(), "sensor_msgs::msg::Image", subscribe_topic_name_, topic_qos, std::bind(&ROSTypeImagePubSub::callbackSubscribe, this, std::placeholders::_1));
+    subscriber_ptr_ = create_subscription<sensor_msgs::msg::Image>(&sub_message_type_, subscribe_topic_name_, topic_qos, std::bind(&ROSTypeImagePubSub::callbackSubscribe, this, std::placeholders::_1));
     if (subscriber_ptr_ == 0)
     {
         std::cerr << "Error: Failed to create a subscription." << std::endl;
@@ -56,7 +57,7 @@ bool ROSTypeImagePubSub::init(const std::string& config_file_path) {
 
     // Setup timer for periodic callback
     timer_callback_ = [this,test]() { this->callbackPublish(test); };
-    timer_ptr_ = create_timer(get_node_pointer(), std::chrono::milliseconds(interval_ms_), timer_callback_);
+    timer_ptr_ = create_timer(std::chrono::milliseconds(interval_ms_), timer_callback_);
     if (!timer_ptr_) {
         std::cerr << "Error: Failed to create a timer." << std::endl;
         return false;
@@ -76,10 +77,10 @@ void ROSTypeImagePubSub::callbackPublish(int test) {
         return;
     }
 
-    publish(reinterpret_cast<intptr_t>(publisher_ptr_), publish_msg.get());
+    publisher_ptr_->publish(publish_msg.get());
 }
 
-void ROSTypeImagePubSub::callbackSubscribe(void *message)
+void ROSTypeImagePubSub::callbackSubscribe(sensor_msgs::msg::Image *message)
 {
     if (message == nullptr)
     {
@@ -87,13 +88,6 @@ void ROSTypeImagePubSub::callbackSubscribe(void *message)
         return;
     }
 
-    sensor_msgs::msg::Image *my_message = static_cast<sensor_msgs::msg::Image *>(message);
-    if (my_message == nullptr)
-    {
-        std::cerr << "Error: Failed to cast message to sensor_msgs::msg::Image." << std::endl;
-        return;
-    }
-
     // Handle the received message
-    std::cout << "Received data: " << my_message->header().frame_id() << std::endl;
+    std::cout << "Received data: " << message->header().frame_id() << std::endl;
 }

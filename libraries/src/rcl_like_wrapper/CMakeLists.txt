@@ -50,4 +50,12 @@ install(TARGETS ${PROJECT_NAME}
         RUNTIME DESTINATION bin)
 
 # Install headers
-install(FILES include/rcl_like_wrapper.hpp include/eprosima_namespace.hpp DESTINATION include/)
+install(FILES 
+include/rcl_like_wrapper.hpp 
+include/eprosima_namespace.hpp
+include/publisher.hpp 
+include/subscriber.hpp 
+include/timer.hpp 
+include/channel.hpp 
+include/dds_message_type.hpp 
+DESTINATION include/)

@@ -23,17 +23,18 @@ public:
     void callbackPublish(int test);
 
     // Callback function to subscribe data
-    void callbackSubscribe(void* message);
+    void callbackSubscribe(sensor_msgs::msg::Image* message);
 
 private:
     std::string publish_topic_name_;
     std::string subscribe_topic_name_;
     uint16_t interval_ms_;
-    intptr_t publisher_ptr_;
-    intptr_t subscriber_ptr_;
-    intptr_t timer_ptr_;
+    Publisher<sensor_msgs::msg::Image>* publisher_ptr_;
+    Subscriber<sensor_msgs::msg::Image>* subscriber_ptr_;
+    Timer<std::chrono::milliseconds>* timer_ptr_;
     std::function<void()> timer_callback_;
-    MessageTypes message_types_;
+    MessageType pub_message_type_;
+    MessageType sub_message_type_;
     int counter_;
 };
 

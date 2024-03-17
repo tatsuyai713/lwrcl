@@ -30,7 +30,6 @@ private:
     intptr_t publisher_ptr_;
     intptr_t timer_ptr_;
     std::function<void()> timer_callback_;
-    MessageTypes message_types_;
 };
 
 #endif /* ROSTYPEDATAPUBLISHER_H_ */

@@ -4,84 +4,65 @@
 
 using namespace rcl_like_wrapper;
 
-void myCallbackFunction(void *message)
+FAST_DDS_CUSTOM_CLASS(sensor_msgs::msg,Image)
+
+// Callback function for handling received messages
+void myCallbackFunction(sensor_msgs::msg::Image *message)
 {
     if (message == nullptr)
     {
         std::cerr << "Error: Received null message in callback." << std::endl;
         return;
     }
-
-    sensor_msgs::msg::Image *my_message = static_cast<sensor_msgs::msg::Image *>(message);
-    if (my_message == nullptr)
-    {
-        std::cerr << "Error: Failed to cast message to sensor_msgs::msg::Image." << std::endl;
-        return;
-    }
-
-    // Handle the received message
-    std::cout << "Received data: " << my_message->header().frame_id() << std::endl;
+    // Print the received image data
+    std::cout << "Received Image data: ";
+    std::cout << "Width: " << message->width() << ", ";
+    std::cout << "Height: " << message->height() << ", ";
+    std::cout << "Encoding: " << message->encoding() << std::endl;
 }
 
 int main()
 {
-    MessageTypes messageTypes;
-
-    std::unique_ptr<sensor_msgs::msg::ImagePubSubType>imagePubSubType = std::make_unique<sensor_msgs::msg::ImagePubSubType>();
-
-    // Directly create rcl_like_wrapper::MessageType with a raw pointer
-    messageTypes["sensor_msgs::msg::Image"] = rcl_like_wrapper::MessageType(imagePubSubType.release());
-
-    rcl_like_wrapper_init(messageTypes);
+    // MessageType
+    sensor_msgs::msg::ImageType sub_message_type;
+    sensor_msgs::msg::ImageType pub_message_type;
 
     // Create a node with domain ID 0
-    intptr_t node_ptr = create_node(0);
-    if (node_ptr == 0)
-    {
-        std::cerr << "Error: Failed to create a node." << std::endl;
-        return 1;
-    }
+    std::shared_ptr<Node>node_ptr = std::make_shared<Node>(0);
 
-    // Create a publisher with a topic named "MyTopic1" and default QoS
-    dds::TopicQos topic_qos = dds::TOPIC_QOS_DEFAULT;
-    intptr_t publisher_ptr = create_publisher(node_ptr, "sensor_msgs::msg::Image", "MyTopic1", topic_qos);
-    if (publisher_ptr == 0)
+    // Create a publisher with default QoS settings
+    rcl_like_wrapper::dds::TopicQos pub_topic_qos = rcl_like_wrapper::dds::TOPIC_QOS_DEFAULT;
+    auto publisher_ptr = node_ptr->create_publisher<sensor_msgs::msg::Image>(&pub_message_type, "TESTTopic1", pub_topic_qos);
+    if (publisher_ptr == nullptr)
     {
         std::cerr << "Error: Failed to create a publisher." << std::endl;
         return 1;
     }
 
-    // Create a subscription with a topic named "MyTopic2" and default QoS
-    intptr_t subscriber_ptr = create_subscription(
-        node_ptr, "sensor_msgs::msg::Image", "MyTopic2", topic_qos, myCallbackFunction);
-    if (subscriber_ptr == 0)
+    // Create a subscription with default QoS settings
+    rcl_like_wrapper::dds::TopicQos sub_topic_qos = rcl_like_wrapper::dds::TOPIC_QOS_DEFAULT;
+    auto subscriber_ptr = node_ptr->create_subscription<sensor_msgs::msg::Image>(&sub_message_type, "TESTTopic2", sub_topic_qos, myCallbackFunction);
+    if (subscriber_ptr == nullptr)
     {
         std::cerr << "Error: Failed to create a subscription." << std::endl;
         return 1;
     }
 
     int data_value = 0;
-    Rate rate(Duration(100000000)); // 100msec
+    Rate rate(Duration(100000000)); // Set rate to 100 milliseconds
 
     struct timespec curTime, lastTime;
     clock_gettime(CLOCK_REALTIME, &lastTime);
     
-    std::shared_ptr<sensor_msgs::msg::Image> my_message = std::make_shared<sensor_msgs::msg::Image>();
-    
     // Main application loop
     while (ok())
     {
-        // Perform other tasks in your application
-
-        // Check the number of publishers in the subscription
-        int32_t publisher_count = get_publisher_count(subscriber_ptr);
+        // Check the number of publishers
+        int32_t publisher_count = subscriber_ptr->get_publisher_count();
         std::cout << "Number of publishers: " << publisher_count << std::endl;
 
-        // Simulate sending data periodically
-        my_message->header().stamp().sec() = data_value;
-        data_value++;
-
         clock_gettime(CLOCK_REALTIME, &curTime);
+        // Print the interval between the last two messages
         if (curTime.tv_nsec < lastTime.tv_nsec)
         {
             printf("Interval = %10ld.%09ld\n", curTime.tv_sec - lastTime.tv_sec - 1, curTime.tv_nsec + 1000000000 - lastTime.tv_nsec);
@@ -92,16 +73,27 @@ int main()
         }
         lastTime = curTime;
 
-        publish(publisher_ptr, my_message.get()); // Pass the raw pointer
+        // Simulate sending data periodically
+        sensor_msgs::msg::Image pub_message;
+        pub_message.header().stamp().sec() = data_value;
+        pub_message.header().stamp().nanosec() = data_value;
+        pub_message.header().frame_id() = "TEST";
+        pub_message.height() = 100;
+        pub_message.width() = 200;
+        pub_message.encoding() = "H263";
+        pub_message.is_bigendian() = false;
+        pub_message.step() = 1;
+        pub_message.data() = {0, 0, 0, 0, 0, 0};
 
-        // Spin the node to handle incoming messages
-        spin_once(node_ptr);
+        // Publish the data
+        publisher_ptr->publish(&pub_message);
 
+        // Handle incoming messages
+        node_ptr->spin_once();
+
+        data_value++;
         rate.sleep();
     }
-
-    // Clean up
-    stop_spin(node_ptr);
 
     return 0;
 }

@@ -20,19 +20,18 @@ namespace rcl_like_wrapper
         cv_.notify_all();
       }
     }
-
+    
     bool consume(T &x)
     {
       std::unique_lock<std::mutex> lock{mtx_};
       cv_.wait(lock, [this]
                { return !queue_.empty() || closed_; });
-      if (closed_)
+      if (closed_ && queue_.empty())
       {
         return false;
       }
       x = std::move(queue_.front());
       queue_.pop();
-      cv_.notify_all();
       return true;
     }
 
@@ -47,7 +46,6 @@ namespace rcl_like_wrapper
 
       x = std::move(queue_.front());
       queue_.pop();
-      cv_.notify_all();
       return true;
     }
 
@@ -60,6 +58,7 @@ namespace rcl_like_wrapper
 
     bool is_closed()
     {
+      std::lock_guard<std::mutex> lock{mtx_};
       return closed_;
     }
 

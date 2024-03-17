@@ -9,7 +9,8 @@
 #include <fastdds/dds/publisher/Publisher.hpp>
 #include <fastdds/dds/topic/TypeSupport.hpp>
 
-#include "rcl_like_wrapper.hpp"
+#include "eprosima_namespace.hpp"
+#include "dds_message_type.hpp"
 
 namespace rcl_like_wrapper
 {
@@ -25,18 +26,25 @@ namespace rcl_like_wrapper
     std::atomic<int32_t> count{0};
   };
 
-  class Publisher
+  class IPublisher
   {
   public:
-    Publisher(dds::DomainParticipant *participant, MessageType &message_type, const std::string &topic,
+    virtual ~IPublisher() = default;
+    virtual int32_t get_subscriber_count() = 0;
+  };
+  template <typename T>
+  class Publisher : public IPublisher
+  {
+  public:
+    Publisher(dds::DomainParticipant *participant, MessageType *message_type, const std::string &topic,
               const dds::TopicQos &qos)
         : participant_(participant), message_type_(message_type), topic_(nullptr), publisher_(nullptr), writer_(nullptr)
     {
-      if (message_type_.type_support.register_type(participant_) != ReturnCode_t::RETCODE_OK)
+      if (message_type_->get_type_support().register_type(participant_) != ReturnCode_t::RETCODE_OK)
       {
         throw std::runtime_error("Failed to register message type");
       }
-      topic_ = participant_->create_topic(topic, message_type_.type_support.get_type_name(), qos);
+      topic_ = participant_->create_topic(topic, message_type_->get_type_support().get_type_name(), qos);
       if (!topic_)
       {
         throw std::runtime_error("Failed to create topic");
@@ -59,21 +67,21 @@ namespace rcl_like_wrapper
 
     ~Publisher()
     {
-      if (writer_)
+      if (writer_ != nullptr)
       {
         publisher_->delete_datawriter(writer_);
       }
-      if (publisher_)
+      if (publisher_ != nullptr)
       {
         participant_->delete_publisher(publisher_);
       }
-      if (topic_)
+      if (topic_ != nullptr)
       {
         participant_->delete_topic(topic_);
       }
     }
 
-    void publish(void *message) const
+    void publish(T *message) const
     {
       writer_->write(message);
     }
@@ -89,7 +97,7 @@ namespace rcl_like_wrapper
     dds::Publisher *publisher_;
     dds::DataWriter *writer_;
     PublisherListener listener_;
-    MessageType &message_type_;
+    MessageType *message_type_;
   };
 
 } // namespace rcl_like_wrapper

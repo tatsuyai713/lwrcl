@@ -40,7 +40,7 @@
 namespace tf2_ros
 {
 
-  TransformListener::TransformListener(tf2::BufferCore &buffer, intptr_t node_ptr, bool spin_thread, int32_t domain_id)
+  TransformListener::TransformListener(tf2::BufferCore &buffer, Node* node_ptr, bool spin_thread, int32_t domain_id)
       : buffer_(buffer), node_ptr_(node_ptr), spin_thread_(spin_thread), domain_id_(domain_id)
   {
     init();

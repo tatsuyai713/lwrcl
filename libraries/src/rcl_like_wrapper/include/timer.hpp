@@ -9,30 +9,35 @@
 namespace rcl_like_wrapper
 {
 
-  class Timer
+  class ITimer
+  {
+  public:
+    virtual ~ITimer() = default;
+    virtual void check_and_call() = 0;
+  };
+
+  template <typename DurationType>
+  class Timer : public ITimer
   {
   public:
     using CallbackFunction = std::function<void()>;
 
-    Timer(std::chrono::microseconds period, CallbackFunction callback_function)
+    Timer(DurationType period, CallbackFunction callback_function)
         : period_(period), callback_function_(callback_function)
     {
       last_execution_ = std::chrono::steady_clock::now();
+    }
+    ~Timer()
+    {
     }
 
     void check_and_call()
     {
       auto now = std::chrono::steady_clock::now();
-      if (now >= last_execution_)
+      if (now - last_execution_ >= period_)
       {
-        last_execution_ += period_;
+        last_execution_ = now;
 
-        while (last_execution_ <= now)
-        {
-          last_execution_ += period_;
-        }
-
-        // コールバック関数の実行
         if (callback_function_)
         {
           callback_function_();
@@ -46,7 +51,7 @@ namespace rcl_like_wrapper
     }
 
   private:
-    std::chrono::microseconds period_;
+    DurationType period_;
     std::chrono::steady_clock::time_point last_execution_;
     CallbackFunction callback_function_;
   };
