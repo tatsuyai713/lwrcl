@@ -14,14 +14,9 @@ This library provides a simplified API similar to ROS 2's rclcpp for working wit
 - Executors for managing and spinning multiple nodes concurrently.
 
 ## API Overview
-
-### Initialization
-
-- **rcl_like_wrapper_init**: Initializes the wrapper with a set of predefined message types for communication.
   
 ### Node Management
 
-- **create_node**: Initializes a new Fast DDS node within the specified domain.
 - **spin**: Continuously processes incoming messages and executes callbacks.
 - **spin_once**: Processes a single message, if available.
 - **spin_some**: Processes available messages without blocking.
@@ -111,7 +106,7 @@ The `SingleThreadedExecutor` manages and spins multiple nodes sequentially withi
 - **add_node(Node* node_ptr):** Integrates a node into the executor's workflow.
 - **remove_node(Node* node_ptr):** Detaches a node from the executor.
 - **spin():** Begins the sequential processing of messages for all nodes managed by the executor.
-- **stop():** Halts the processing loop, ensuring all nodes are gracefully stopped.
+- **stop_spin():** Halts the processing loop, ensuring all nodes are gracefully stopped.
 
 ## MultiThreadedExecutor
 
@@ -129,7 +124,7 @@ The `MultiThreadedExecutor` extends the functionality of the SingleThreadedExecu
 - **add_node(Node* node_ptr):** Adds a node to be managed concurrently by the executor.
 - **remove_node(Node* node_ptr):** Removes a node from the concurrent processing pool.
 - **spin():** Starts concurrent message processing for all nodes, leveraging multi-threading to achieve parallel execution.
-- **stop():** Stops all threads and ensures a clean shutdown of node operations.
+- **stop_spin():** Stops all threads and ensures a clean shutdown of node operations.
 
 ## Choosing Between Executors
 
@@ -162,54 +157,9 @@ Integrating `RCLWNode` with Executors in the Fast DDS environment facilitates th
 
 The choice between SingleThreadedExecutor and MultiThreadedExecutor depends on the specific requirements of your application, including the need for real-time data processing, the complexity of the tasks performed by each node, and the overall system architecture.
 
-#### Example Usage: MultiThreadedExecutor
-
-This simplified example demonstrates the use of `MultiThreadedExecutor` to manage two `RCLWNode` instances concurrently. We'll use arbitrary constants for demonstration purposes, focusing on the executor's ability to handle multiple nodes in parallel.
-
-```cpp
-#include "rcl_like_wrapper.hpp"
-
-// Define a custom node class inheriting from RCLWNode
-class MyCustomNode : public rcl_like_wrapper::RCLWNode {
-public:
-    MyCustomNode(int domain_id) : RCLWNode(domain_id) {
-        // Create a subscription in the constructor
-        create_subscription(domain_id, "my_topic", rcl_like_wrapper::default_qos, std::bind(&MyCustomNode::subscriptionCallback, this, std::placeholders::_1));
-    }
-
-    // Define a callback function for the subscription
-    void subscriptionCallback(const void* msg) {
-        std::cout << "Received message on my_topic" << std::endl;
-        // Handle the message
-    }
-};
-
-int main() {
-    // Use the same domain ID for both nodes to ensure they can communicate
-    int domain_id = 0;
-
-    rcl_like_wrapper::MultiThreadedExecutor executor;
-
-    // Create instances of the custom node
-    auto node1 = std::make_shared<MyCustomNode>(domain_id);
-    auto node2 = std::make_shared<MyCustomNode>(domain_id);
-
-    // Add custom nodes to the executor
-    executor.add_node(&node1);
-    executor.add_node(&node2);
-
-    // Execute the executor to spin both nodes concurrently
-    executor.spin();
-
-    return 0;
-}
-
-```
-
-In this example, we showcase the `MultiThreadedExecutor`'s capability to facilitate concurrent message processing for two nodes within the same Fast DDS domain. By utilizing this executor, each node can independently and simultaneously perform its operations, such as publishing or subscribing to topics. This model is advantageous for developing complex, distributed systems requiring efficient parallel data processing, embodying a more dynamic and responsive approach compared to the `SingleThreadedExecutor`.
-
 The `MultiThreadedExecutor` is especially suitable for applications that demand high performance and scalability, where tasks across different nodes do not need to be executed in a strict sequence. It exemplifies how Fast DDS can be employed to build robust and high-throughput distributed applications, making it an invaluable tool for developers working on advanced systems within the ROS 2 ecosystem and beyond.
 
 ## License
 
 This project is a fork and has been modified under the terms of the Apache 2.0 license. The original work is also licensed under Apache 2.0. See the LICENSE file for more details.
+
