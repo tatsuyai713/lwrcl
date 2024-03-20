@@ -133,9 +133,9 @@ The `MultiThreadedExecutor` extends the functionality of the SingleThreadedExecu
 
 By selecting the appropriate executor based on your application's requirements, you can optimize your Fast DDS application for performance, simplicity, or a balance of both.
 
-## RCLWNode: Enhanced Node Management
+## Node and RCLWNode: Enhanced Node Management
 
-`RCLWNode` provides an abstraction layer for creating and managing nodes within the Fast DDS ecosystem, mirroring the functionality found in ROS 2's `rclcpp::Node`. It simplifies the interaction with the underlying DDS layer, offering a user-friendly interface for developing distributed systems that communicate over DDS.
+`Node` and `RCLWNode` provides an abstraction layer for creating and managing nodes within the Fast DDS ecosystem, mirroring the functionality found in ROS 2's `rclcpp::Node`. It simplifies the interaction with the underlying DDS layer, offering a user-friendly interface for developing distributed systems that communicate over DDS.
 
 ### Key Features
 
