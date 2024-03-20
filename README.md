@@ -145,9 +145,9 @@ By selecting the appropriate executor based on your application's requirements, 
 - **Signal Handling**: Integrates signal handling for graceful shutdown and cleanup, enhancing the robustness of applications.
 - **Executors Compatibility**: Designed to work seamlessly with the `Executors` for concurrent message processing across multiple nodes.
 
-### Using RCLWNode with Executors
+### Using Node and RCLWNode with Executors
 
-Integrating `RCLWNode` with Executors in the Fast DDS environment facilitates the effective management and operation of multiple nodes. This setup is essential for developing distributed applications that require efficient multitasking and the ability to handle messages from multiple sources in parallel. The use of Executors, specifically the `SingleThreadedExecutor` and `MultiThreadedExecutor`, plays a pivotal role in how messages are processed and how nodes communicate within a Fast DDS domain.
+Integrating `Node` and `RCLWNode` with Executors in the Fast DDS environment facilitates the effective management and operation of multiple nodes. This setup is essential for developing distributed applications that require efficient multitasking and the ability to handle messages from multiple sources in parallel. The use of Executors, specifically the `SingleThreadedExecutor` and `MultiThreadedExecutor`, plays a pivotal role in how messages are processed and how nodes communicate within a Fast DDS domain.
 
 #### SingleThreadedExecutor vs. MultiThreadedExecutor
 
