@@ -7,7 +7,7 @@ This repository provides build scripts and samples for Fast DDS, designed to be 
 - **Fast DDS Build Scripts:** Simplify the process of installing and setting up Fast DDS on Ubuntu/Debian systems.
 - **ROS 2 Compatible Topics:** Includes samples that demonstrate how to publish and subscribe to ROS 2 topics using Fast DDS, facilitating integration into existing ROS 2 projects.
 - **ROS Compatible Libraries:** Offers support for building and installing libraries crucial for ROS compatibility, such as yaml-cpp, ROS data types, and tf2.
-- **RCL Like Wrapper:** Please Read `rcl_like_wrapper/README.md`.
+- **RCL Like Wrapper:** Please read `rcl_like_wrapper/README.md`.
 
 ## How to Use This Repository
 
