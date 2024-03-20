@@ -4,7 +4,7 @@
 
 using namespace rcl_like_wrapper;
 
-FAST_DDS_CUSTOM_TYPE(sensor_msgs::msg,Image)
+FAST_DDS_CUSTOM_TYPE(sensor_msgs, msg, Image)
 
 // Callback function for handling received messages
 void myCallbackFunction(sensor_msgs::msg::Image *message)

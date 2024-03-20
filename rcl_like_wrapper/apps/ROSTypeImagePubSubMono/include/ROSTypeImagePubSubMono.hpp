@@ -14,7 +14,7 @@
 
 using namespace rcl_like_wrapper;
 
-FAST_DDS_CUSTOM_TYPE(sensor_msgs::msg,Image)
+FAST_DDS_CUSTOM_TYPE(sensor_msgs, msg, Image)
 
 class ROSTypeImagePubSubMono : public RCLWNode {
 public:

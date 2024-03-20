@@ -31,15 +31,18 @@ namespace rcl_like_wrapper
         eprosima::fastdds::dds::TypeSupport type_support_; //
     };
 
-#define FAST_DDS_CUSTOM_TYPE(NAMESPACE, TYPE)                                      \
-    namespace NAMESPACE                                                            \
-    {                                                                              \
-        class TYPE##Type : public rcl_like_wrapper::MessageType, public TYPE       \
-        {                                                                          \
-        public:                                                                    \
-            TYPE##Type()                                                           \
-                : rcl_like_wrapper::MessageType(new TYPE##PubSubType()), TYPE() {} \
-        };                                                                         \
+#define FAST_DDS_CUSTOM_TYPE(NAMESPACE1, NAMESPACE2, TYPE)                             \
+    namespace NAMESPACE1                                                               \
+    {                                                                                  \
+        namespace NAMESPACE2                                                           \
+        {                                                                              \
+            class TYPE##Type : public rcl_like_wrapper::MessageType, public TYPE       \
+            {                                                                          \
+            public:                                                                    \
+                TYPE##Type()                                                           \
+                    : rcl_like_wrapper::MessageType(new TYPE##PubSubType()), TYPE() {} \
+            };                                                                         \
+        }                                                                              \
     }
 
 } // namespace rcl_like_wrapper

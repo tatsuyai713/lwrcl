@@ -45,7 +45,7 @@
 #include "tf2_msgs/msg/TFMessagePubSubTypes.h"
 #include "rcl_like_wrapper.hpp"
 
-FAST_DDS_CUSTOM_TYPE(tf2_msgs::msg,TFMessage)
+FAST_DDS_CUSTOM_TYPE(tf2_msgs, msg, TFMessage)
 namespace tf2_ros
 {
   class TFListenerRCLWNode : public rcl_like_wrapper::RCLWNode

@@ -13,7 +13,7 @@
 
 using namespace rcl_like_wrapper;
 
-FAST_DDS_CUSTOM_TYPE(msg,CustomMessage)
+FAST_DDS_CUSTOM_TYPE(ROSTypeData, msg, CustomMessage)
 
 class ROSTypeDataPublisher : public RCLWNode {
 public:
@@ -34,7 +34,7 @@ private:
     Timer<std::chrono::milliseconds>* timer_ptr_;
     std::function<void()> timer_callback_;
     // MessageType
-    msg::CustomMessageType pub_message_type_;
+    ROSTypeData::msg::CustomMessageType pub_message_type_;
 };
 
 #endif /* ROSTYPEDATAPUBLISHER_H_ */

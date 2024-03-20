@@ -44,7 +44,7 @@
 #include "tf2_msgs/msg/TFMessagePubSubTypes.h"
 
 
-FAST_DDS_CUSTOM_TYPE(tf2_msgs::msg,TFMessage)
+FAST_DDS_CUSTOM_TYPE(tf2_msgs, msg, TFMessage)
 
 namespace tf2_ros
 {
