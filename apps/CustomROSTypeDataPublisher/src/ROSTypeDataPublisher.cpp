@@ -4,13 +4,6 @@
 
 ROSTypeDataPublisher::ROSTypeDataPublisher(uint16_t domain_number)
     : RCLWNode(domain_number), topic_name_("default_topic"), interval_ms_(1000) {
-
-    // Initialization of custom publisher subtype
-    std::unique_ptr<CustomMessagePubSubType> custom_pubsubtype =std::make_unique<CustomMessagePubSubType>();
-    std::unique_ptr<sensor_msgs::msg::ImagePubSubType> image_pubsubtype =std::make_unique<sensor_msgs::msg::ImagePubSubType>();
-    message_types_["CustomMessage"] = MessageType(custom_pubsubtype.release());
-    message_types_["sensor_msgs::msg::Image"] = MessageType(image_pubsubtype.release());
-    rcl_like_wrapper_init(message_types_);
 }
 
 ROSTypeDataPublisher::~ROSTypeDataPublisher() {
@@ -32,8 +25,8 @@ bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
         return false;
     }
 
-    dds::TopicQos topic_qos = dds::TOPIC_QOS_DEFAULT;
-    publisher_ptr_ = create_publisher(get_node_pointer(), "CustomMessage", topic_name_, topic_qos);
+    rcl_like_wrapper::dds::TopicQos topic_qos = rcl_like_wrapper::dds::TOPIC_QOS_DEFAULT;
+    publisher_ptr_ = create_publisher<CustomMessage>(&pub_message_type_, topic_name_, topic_qos);
     if (!publisher_ptr_) {
         std::cerr << "Error: Failed to create a publisher." << std::endl;
         return false;
@@ -41,7 +34,7 @@ bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
 
     // Setup timer for periodic callback
     timer_callback_ = [this]() { this->callbackPublish(interval_ms_); };
-    timer_ptr_ = create_timer(get_node_pointer(), std::chrono::milliseconds(interval_ms_), timer_callback_);
+    timer_ptr_ = create_timer<std::chrono::milliseconds>(std::chrono::milliseconds(interval_ms_), timer_callback_);
     if (!timer_ptr_) {
         std::cerr << "Error: Failed to create a timer." << std::endl;
         return false;
@@ -52,15 +45,10 @@ bool ROSTypeDataPublisher::init(const std::string& config_file_path) {
 
 void ROSTypeDataPublisher::callbackPublish(int test) {
     // Update and publish message
-    std::unique_ptr<CustomMessage> publish_msg = std::make_unique<CustomMessage>();
+    std::shared_ptr<CustomMessage> publish_msg = std::make_shared<CustomMessage>();
     publish_msg->index(publish_msg->index() + 1);
     std::string s = "BigData" + std::to_string(publish_msg->index() % 10);
     publish_msg->message(s);
 
-    if (!publisher_ptr_) {
-        std::cerr << "Error: Invalid publisher pointer." << std::endl;
-        return;
-    }
-
-    publish(reinterpret_cast<intptr_t>(publisher_ptr_), publish_msg.get());
+    publisher_ptr_->publish(publish_msg.get());
 }

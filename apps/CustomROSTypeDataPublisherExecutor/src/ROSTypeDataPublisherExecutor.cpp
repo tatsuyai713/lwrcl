@@ -4,18 +4,12 @@
 
 ROSTypeDataPublisherExecutor::ROSTypeDataPublisherExecutor(uint16_t domain_number)
     : RCLWNode(domain_number), topic_name_("default_topic"), interval_ms_(1000) {
-
-    // Initialization of custom publisher subtype
-    std::unique_ptr<CustomMessagePubSubType> custom_pubsubtype =std::make_unique<CustomMessagePubSubType>();
-    pub_message_type_ = MessageType(custom_pubsubtype.release());
 }
 
 ROSTypeDataPublisherExecutor::~ROSTypeDataPublisherExecutor() {
 }
 
 bool ROSTypeDataPublisherExecutor::init(const std::string& config_file_path) {
-
-
     // Load configuration from YAML file
     YAML::Node node = YAML::LoadFile(config_file_path);
     YAML::Node config = node["config"];
@@ -31,7 +25,7 @@ bool ROSTypeDataPublisherExecutor::init(const std::string& config_file_path) {
         return false;
     }
 
-    eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
+    rcl_like_wrapper::dds::TopicQos topic_qos = rcl_like_wrapper::dds::TOPIC_QOS_DEFAULT;
     publisher_ptr_ = create_publisher<CustomMessage>(&pub_message_type_, topic_name_, topic_qos);
     if (!publisher_ptr_) {
         std::cerr << "Error: Failed to create a publisher." << std::endl;
@@ -51,15 +45,10 @@ bool ROSTypeDataPublisherExecutor::init(const std::string& config_file_path) {
 
 void ROSTypeDataPublisherExecutor::callbackPublish(int test) {
     // Update and publish message
-    std::unique_ptr<CustomMessage> publish_msg = std::make_unique<CustomMessage>();
+    std::shared_ptr<CustomMessage> publish_msg = std::make_shared<CustomMessage>();
     publish_msg->index(publish_msg->index() + 1);
     std::string s = "BigData" + std::to_string(publish_msg->index() % 10);
     publish_msg->message(s);
-
-    if (!publisher_ptr_) {
-        std::cerr << "Error: Invalid publisher pointer." << std::endl;
-        return;
-    }
 
     publisher_ptr_->publish(publish_msg.get());
 }

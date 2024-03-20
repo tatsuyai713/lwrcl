@@ -10,6 +10,9 @@
 #include <yaml-cpp/yaml.h>
 
 using namespace rcl_like_wrapper;
+
+FAST_DDS_CUSTOM_TYPE(sensor_msgs::msg,Image)
+
 class ROSTypeImagePubSub : public RCLWNode {
 public:
     ROSTypeImagePubSub(uint16_t domain_number);
@@ -33,8 +36,8 @@ private:
     Subscriber<sensor_msgs::msg::Image>* subscriber_ptr_;
     Timer<std::chrono::milliseconds>* timer_ptr_;
     std::function<void()> timer_callback_;
-    MessageType pub_message_type_;
-    MessageType sub_message_type_;
+    sensor_msgs::msg::ImageType pub_message_type_;
+    sensor_msgs::msg::ImageType sub_message_type_;
     int counter_;
 };
 

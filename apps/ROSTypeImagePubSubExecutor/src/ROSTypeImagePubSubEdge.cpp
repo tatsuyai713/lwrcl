@@ -4,11 +4,6 @@
 
 ROSTypeImagePubSubEdge::ROSTypeImagePubSubEdge(uint16_t domain_number)
     : RCLWNode(domain_number), publish_topic_name_("default_topic"), subscribe_topic_name_("default_topic"), interval_ms_(1000) {
-
-    std::unique_ptr<sensor_msgs::msg::ImagePubSubType> image_pubsubtype = std::make_unique<sensor_msgs::msg::ImagePubSubType>();
-    message_types_["sensor_msgs::msg::Image"] = MessageType(image_pubsubtype.release());
-    rcl_like_wrapper_init(message_types_);
-
     counter_ = 0;
 
     edge_msg_ = std::make_shared<sensor_msgs::msg::Image>();
@@ -37,14 +32,14 @@ bool ROSTypeImagePubSubEdge::init(const std::string& config_file_path) {
         return false;
     }
 
-    dds::TopicQos topic_qos = dds::TOPIC_QOS_DEFAULT;
-    publisher_ptr_ = create_publisher(get_node_pointer(), "sensor_msgs::msg::Image", publish_topic_name_, topic_qos);
+    rcl_like_wrapper::dds::TopicQos topic_qos = rcl_like_wrapper::dds::TOPIC_QOS_DEFAULT;
+    publisher_ptr_ = create_publisher<sensor_msgs::msg::Image>(&pub_message_type_, publish_topic_name_, topic_qos);
     if (!publisher_ptr_) {
         std::cerr << "Error: Failed to create a publisher." << std::endl;
         return false;
     }
 
-    subscriber_ptr_ = create_subscription(get_node_pointer(), "sensor_msgs::msg::Image", subscribe_topic_name_, topic_qos, std::bind(&ROSTypeImagePubSubEdge::callbackSubscribe, this, std::placeholders::_1));
+    subscriber_ptr_ = create_subscription<sensor_msgs::msg::Image>(&sub_message_type_, subscribe_topic_name_, topic_qos, std::bind(&ROSTypeImagePubSubEdge::callbackSubscribe, this, std::placeholders::_1));
     if (subscriber_ptr_ == 0)
     {
         std::cerr << "Error: Failed to create a subscription." << std::endl;
@@ -54,7 +49,7 @@ bool ROSTypeImagePubSubEdge::init(const std::string& config_file_path) {
     return true;
 }
 
-void ROSTypeImagePubSubEdge::callbackSubscribe(void *message)
+void ROSTypeImagePubSubEdge::callbackSubscribe(sensor_msgs::msg::Image *message)
 {
     if (message == nullptr)
     {
@@ -62,17 +57,10 @@ void ROSTypeImagePubSubEdge::callbackSubscribe(void *message)
         return;
     }
 
-    sensor_msgs::msg::Image *my_message = static_cast<sensor_msgs::msg::Image *>(message);
-    if (my_message == nullptr)
-    {
-        std::cerr << "Error: Failed to cast message to sensor_msgs::msg::Image." << std::endl;
-        return;
-    }
+    int width = message->width();
+    int height = message->height();
 
-    int width = my_message->width();
-    int height = my_message->height();
-
-    cv::Mat gray_image(height, width, CV_8UC1, my_message->data().data());
+    cv::Mat gray_image(height, width, CV_8UC1, message->data().data());
 
     cv::Mat edges;
     cv::Canny(gray_image, edges, 50, 150);
@@ -83,5 +71,5 @@ void ROSTypeImagePubSubEdge::callbackSubscribe(void *message)
     edge_msg_->step(edges.step);
     edge_msg_->data(std::vector<uint8_t>(edges.data, edges.data + edges.total() * edges.elemSize()));
 
-    publish(reinterpret_cast<intptr_t>(publisher_ptr_), edge_msg_.get());
+    publisher_ptr_->publish(edge_msg_.get());
 }

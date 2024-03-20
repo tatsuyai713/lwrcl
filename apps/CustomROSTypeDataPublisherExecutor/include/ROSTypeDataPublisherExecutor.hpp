@@ -12,6 +12,9 @@
 #include <yaml-cpp/yaml.h>
 
 using namespace rcl_like_wrapper;
+
+FAST_DDS_CUSTOM_TYPE(msg,CustomMessage)
+
 class ROSTypeDataPublisherExecutor : public RCLWNode {
 public:
     ROSTypeDataPublisherExecutor(uint16_t domain_number);
@@ -30,7 +33,8 @@ private:
     Publisher<CustomMessage>* publisher_ptr_;
     Timer<std::chrono::milliseconds>* timer_ptr_;
     std::function<void()> timer_callback_;
-    MessageType pub_message_type_;
+    // MessageType
+    msg::CustomMessageType pub_message_type_;
 };
 
 #endif /* ROSTYPEDATAPUBLISHER_H_ */

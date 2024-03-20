@@ -31,7 +31,7 @@ namespace rcl_like_wrapper
         eprosima::fastdds::dds::TypeSupport type_support_; //
     };
 
-#define FAST_DDS_CUSTOM_TYPE(NAMESPACE, TYPE)                                     \
+#define FAST_DDS_CUSTOM_TYPE(NAMESPACE, TYPE)                                      \
     namespace NAMESPACE                                                            \
     {                                                                              \
         class TYPE##Type : public rcl_like_wrapper::MessageType, public TYPE       \

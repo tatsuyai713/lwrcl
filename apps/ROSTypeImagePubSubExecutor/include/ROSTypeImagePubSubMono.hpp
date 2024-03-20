@@ -11,6 +11,7 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 
+#include "ROSTypeImagePubSubEdge.hpp"
 
 using namespace rcl_like_wrapper;
 class ROSTypeImagePubSubMono : public RCLWNode {
@@ -23,16 +24,17 @@ public:
     // void run() override;
 
     // Callback function to subscribe data
-    void callbackSubscribe(void* message);
+    void callbackSubscribe(sensor_msgs::msg::Image* message);
 
 private:
     std::string publish_topic_name_;
     std::string subscribe_topic_name_;
     uint16_t interval_ms_;
-    intptr_t publisher_ptr_;
-    intptr_t subscriber_ptr_;
-    intptr_t timer_ptr_;
-    MessageTypes message_types_;
+    Publisher<sensor_msgs::msg::Image>* publisher_ptr_;
+    Subscriber<sensor_msgs::msg::Image>* subscriber_ptr_;
+    Timer<std::chrono::milliseconds>* timer_ptr_;
+    sensor_msgs::msg::ImageType pub_message_type_;
+    sensor_msgs::msg::ImageType sub_message_type_;
     int counter_;
     std::shared_ptr<sensor_msgs::msg::Image> gray_msg_;
 };

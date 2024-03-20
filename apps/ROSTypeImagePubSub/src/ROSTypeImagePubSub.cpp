@@ -4,13 +4,6 @@
 
 ROSTypeImagePubSub::ROSTypeImagePubSub(uint16_t domain_number)
     : RCLWNode(domain_number), publish_topic_name_("default_topic"), subscribe_topic_name_("default_topic"), interval_ms_(1000) {
-
-    // Initialization of Image publisher subtype
-    std::unique_ptr<sensor_msgs::msg::ImagePubSubType> image_pubtype =std::make_unique<sensor_msgs::msg::ImagePubSubType>();
-    pub_message_type_ = MessageType(image_pubtype.release());
-    std::unique_ptr<sensor_msgs::msg::ImagePubSubType> image_subtype =std::make_unique<sensor_msgs::msg::ImagePubSubType>();
-    sub_message_type_ = MessageType(image_subtype.release());
-
     counter_ = 0;
 }
 
@@ -71,11 +64,6 @@ void ROSTypeImagePubSub::callbackPublish(int test) {
     std::unique_ptr<sensor_msgs::msg::Image> publish_msg = std::make_unique<sensor_msgs::msg::Image>();
     publish_msg->header().stamp().sec() = (test + counter_);
     counter_++;
-
-    if (!publisher_ptr_) {
-        std::cerr << "Error: Invalid publisher pointer." << std::endl;
-        return;
-    }
 
     publisher_ptr_->publish(publish_msg.get());
 }
