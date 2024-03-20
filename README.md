@@ -24,8 +24,8 @@ source /opt/ros/humble/setup.bash
 Clone this repository and enter the directory:
 
 ```
-git clone --recursive https://github.com/tatsuyai713/FastDDS-ROS2-Compatible-Workspace.git
-cd FastDDS-ROS2-Compatible-Workspace
+git clone --recursive https://github.com/tatsuyai713/RCL-like-Wrapper-for-Fast-DDS.git
+cd RCL-like-Wrapper-for-Fast-DDS
 ```
 
 
