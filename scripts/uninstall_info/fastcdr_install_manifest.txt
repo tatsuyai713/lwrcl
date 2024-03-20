@@ -1,0 +1,17 @@
+/usr/local/share/fastcdr/LICENSE
+/usr/local/include/fastcdr/exceptions/Exception.h
+/usr/local/include/fastcdr/exceptions/NotEnoughMemoryException.h
+/usr/local/include/fastcdr/exceptions/BadParamException.h
+/usr/local/include/fastcdr/fastcdr_dll.h
+/usr/local/include/fastcdr/FastCdr.h
+/usr/local/include/fastcdr/Cdr.h
+/usr/local/include/fastcdr/FastBuffer.h
+/usr/local/include/fastcdr/eProsima_auto_link.h
+/usr/local/include/fastcdr/config.h
+/usr/local/lib/libfastcdr.so.1.0.25
+/usr/local/lib/libfastcdr.so.1
+/usr/local/lib/libfastcdr.so
+/usr/local/lib/cmake/fastcdr/fastcdr-dynamic-targets.cmake
+/usr/local/lib/cmake/fastcdr/fastcdr-dynamic-targets-release.cmake
+/usr/local/lib/cmake/fastcdr/fastcdr-config.cmake
+/usr/local/lib/cmake/fastcdr/fastcdr-config-version.cmake

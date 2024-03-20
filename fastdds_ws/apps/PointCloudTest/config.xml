@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+    <participant profile_name="name_is_mandatory" is_default_profile="true">
+        <rtps>
+            <name>Profiles example name</name>
+        </rtps>
+    </participant>
+    <data_writer profile_name="datawriter_name_is_mandatory" is_default_profile="true">
+        <qos>
+            <reliability>
+                <kind>BEST_EFFORT</kind>
+            </reliability>
+        </qos>
+        <historyMemoryPolicy>PREALLOCATED_WITH_REALLOC</historyMemoryPolicy>
+    </data_writer>
+    <data_reader profile_name="datareader_name_is_mandatory" is_default_profile="true">
+        <topic>
+            <historyQos>
+                <kind>KEEP_LAST</kind>
+                <depth>5</depth>
+            </historyQos>
+        </topic>
+        <historyMemoryPolicy>PREALLOCATED_WITH_REALLOC</historyMemoryPolicy>
+    </data_reader>
+</profiles>
