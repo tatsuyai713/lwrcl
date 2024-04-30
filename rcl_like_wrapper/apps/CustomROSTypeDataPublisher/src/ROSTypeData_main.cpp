@@ -4,7 +4,11 @@
 #include <limits.h>
 #include <string>
 
-int main(int argc, char **argv) {
+SIGNAL_HANDLER_DEFINE()
+
+int main(int argc, char **argv) 
+{
+    SIGNAL_HANDLER_INIT()
     std::cout << "Starting ROSTypeDataPublisher" << std::endl;
 
     // Buffer to hold the path to the current executable
