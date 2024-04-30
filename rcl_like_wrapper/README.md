@@ -133,9 +133,9 @@ The `MultiThreadedExecutor` extends the functionality of the SingleThreadedExecu
 
 By selecting the appropriate executor based on your application's requirements, you can optimize your Fast DDS application for performance, simplicity, or a balance of both.
 
-## Node and RCLWNode: Enhanced Node Management
+## Node and Node: Enhanced Node Management
 
-`Node` and `RCLWNode` provides an abstraction layer for creating and managing nodes within the Fast DDS ecosystem, mirroring the functionality found in ROS 2's `rclcpp::Node`. It simplifies the interaction with the underlying DDS layer, offering a user-friendly interface for developing distributed systems that communicate over DDS.
+`Node` and `Node` provides an abstraction layer for creating and managing nodes within the Fast DDS ecosystem, mirroring the functionality found in ROS 2's `rclcpp::Node`. It simplifies the interaction with the underlying DDS layer, offering a user-friendly interface for developing distributed systems that communicate over DDS.
 
 ### Key Features
 
@@ -145,9 +145,9 @@ By selecting the appropriate executor based on your application's requirements, 
 - **Signal Handling**: Integrates signal handling for graceful shutdown and cleanup, enhancing the robustness of applications.
 - **Executors Compatibility**: Designed to work seamlessly with the `Executors` for concurrent message processing across multiple nodes.
 
-### Using Node and RCLWNode with Executors
+### Using Node and Node with Executors
 
-Integrating `Node` and `RCLWNode` with Executors in the Fast DDS environment facilitates the effective management and operation of multiple nodes. This setup is essential for developing distributed applications that require efficient multitasking and the ability to handle messages from multiple sources in parallel. The use of Executors, specifically the `SingleThreadedExecutor` and `MultiThreadedExecutor`, plays a pivotal role in how messages are processed and how nodes communicate within a Fast DDS domain.
+Integrating `Node` and `Node` with Executors in the Fast DDS environment facilitates the effective management and operation of multiple nodes. This setup is essential for developing distributed applications that require efficient multitasking and the ability to handle messages from multiple sources in parallel. The use of Executors, specifically the `SingleThreadedExecutor` and `MultiThreadedExecutor`, plays a pivotal role in how messages are processed and how nodes communicate within a Fast DDS domain.
 
 #### SingleThreadedExecutor vs. MultiThreadedExecutor
 

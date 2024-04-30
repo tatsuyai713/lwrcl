@@ -3,7 +3,7 @@
 #include <chrono>
 
 ROSTypeImagePubSub::ROSTypeImagePubSub(uint16_t domain_number)
-    : RCLWNode(domain_number), publish_topic_name_("default_topic"), subscribe_topic_name_("default_topic"), interval_ms_(1000) {
+    : Node(domain_number), publish_topic_name_("default_topic"), subscribe_topic_name_("default_topic"), interval_ms_(1000) {
     counter_ = 0;
 }
 

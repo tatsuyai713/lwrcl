@@ -3,7 +3,7 @@
 #include <chrono>
 
 ROSTypeDataPublisherExecutor::ROSTypeDataPublisherExecutor(uint16_t domain_number)
-    : RCLWNode(domain_number), topic_name_("default_topic"), interval_ms_(1000) {
+    : Node(domain_number), topic_name_("default_topic"), interval_ms_(1000) {
 }
 
 ROSTypeDataPublisherExecutor::~ROSTypeDataPublisherExecutor() {

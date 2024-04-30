@@ -121,7 +121,7 @@ int main(int argc, char **argv)
 
   int domain_id = 0;
 
-  rcl_like_wrapper::RCLWNode nh(domain_id);
+  rcl_like_wrapper::Node nh(domain_id);
 
   std::shared_ptr<rcl_like_wrapper::Clock> clock = std::make_shared<rcl_like_wrapper::Clock>();
   // Instantiate a local listener

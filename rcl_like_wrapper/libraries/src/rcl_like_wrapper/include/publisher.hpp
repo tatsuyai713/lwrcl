@@ -1,17 +1,10 @@
-#pragma once
+#ifndef RCL_LIKE_WRAPPER_PUBLISHER_HPP_
+#define RCL_LIKE_WRAPPER_PUBLISHER_HPP_
 
 #include <atomic>
 #include <string>
 
-#include <fastdds/dds/domain/DomainParticipant.hpp>
-#include <fastdds/dds/publisher/DataWriter.hpp>
-#include <fastdds/dds/publisher/DataWriterListener.hpp>
-#include <fastdds/dds/publisher/Publisher.hpp>
-#include <fastdds/dds/topic/TypeSupport.hpp>
-
-#include "eprosima_namespace.hpp"
-#include "dds_message_type.hpp"
-
+#include "fast_dds_header.hpp"
 namespace rcl_like_wrapper
 {
 
@@ -99,5 +92,6 @@ namespace rcl_like_wrapper
     dds::DataWriter *writer_;
     PublisherListener listener_;
   };
-
 } // namespace rcl_like_wrapper
+
+#endif // RCL_LIKE_WRAPPER_PUBLISHER_HPP_

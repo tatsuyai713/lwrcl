@@ -3,7 +3,7 @@
 #include <chrono>
 
 ROSTypeImagePubSubEdge::ROSTypeImagePubSubEdge(uint16_t domain_number)
-    : RCLWNode(domain_number), publish_topic_name_("default_topic"), subscribe_topic_name_("default_topic"), interval_ms_(1000) {
+    : Node(domain_number), publish_topic_name_("default_topic"), subscribe_topic_name_("default_topic"), interval_ms_(1000) {
     counter_ = 0;
 
     edge_msg_ = std::make_shared<sensor_msgs::msg::Image>();

@@ -4,7 +4,8 @@
 
 using namespace rcl_like_wrapper;
 
-FAST_DDS_CUSTOM_TYPE(sensor_msgs, msg, Image)
+FAST_DDS_DATA_TYPE(sensor_msgs, msg, Image)
+SIGNAL_HANDLER_DEFINE()
 
 void myCallbackFunction(sensor_msgs::msg::Image *message)
 {
@@ -48,6 +49,8 @@ void myTimerFunction(sensor_msgs::msg::Image *my_message, Publisher<sensor_msgs:
 
 int main()
 {
+    SIGNAL_HANDLER_INIT()
+
     // MessageType
     sensor_msgs::msg::ImageType sub_message_type;
     sensor_msgs::msg::ImageType pub_message_type;
@@ -85,9 +88,6 @@ int main()
 
     // Spin the node to handle incoming messages
     node_ptr->spin();
-
-    // Clean up
-    node_ptr->stop_spin();
 
     return 0;
 }

@@ -4,7 +4,8 @@
 
 using namespace rcl_like_wrapper;
 
-FAST_DDS_CUSTOM_TYPE(sensor_msgs, msg, Image)
+FAST_DDS_DATA_TYPE(sensor_msgs, msg, Image)
+SIGNAL_HANDLER_DEFINE()
 
 // Callback function for handling received messages
 void myCallbackFunction(sensor_msgs::msg::Image *message)
@@ -23,6 +24,8 @@ void myCallbackFunction(sensor_msgs::msg::Image *message)
 
 int main()
 {
+    SIGNAL_HANDLER_INIT()
+
     // MessageType
     sensor_msgs::msg::ImageType sub_message_type;
     sensor_msgs::msg::ImageType pub_message_type;
@@ -49,7 +52,7 @@ int main()
     }
 
     int data_value = 0;
-    Rate rate(Duration(100000000)); // Set rate to 100 milliseconds
+    Rate rate(Duration(std::chrono::milliseconds(100))); // Set rate to 100 milliseconds
 
     struct timespec curTime, lastTime;
     clock_gettime(CLOCK_REALTIME, &lastTime);
@@ -89,7 +92,7 @@ int main()
         publisher_ptr->publish(&pub_message);
 
         // Handle incoming messages
-        node_ptr->spin_once();
+        node_ptr->spin_some();
 
         data_value++;
         rate.sleep();

@@ -5,29 +5,13 @@
 #include <memory>
 #include <string>
 
-#include <fastdds/dds/domain/DomainParticipant.hpp>
-#include <fastdds/dds/subscriber/DataReader.hpp>
-#include <fastdds/dds/subscriber/DataReaderListener.hpp>
-#include <fastdds/dds/subscriber/SampleInfo.hpp>
-#include <fastdds/dds/subscriber/Subscriber.hpp>
-#include <fastdds/dds/topic/TypeSupport.hpp>
-
+#include "fast_dds_header.hpp"
 #include "channel.hpp"
-#include "eprosima_namespace.hpp"
-#include "dds_message_type.hpp"
 
 namespace rcl_like_wrapper
 {
-
-  class ISubscriptionCallback
-  {
-  public:
-    virtual ~ISubscriptionCallback() = default;
-    virtual void invoke() = 0;
-  };
-
   template <typename T>
-  class SubscriptionCallback : public ISubscriptionCallback
+  class SubscriptionCallback : public ChannelCallback
   {
   public:
     SubscriptionCallback(std::function<void(T *)> callback_function, std::vector<std::shared_ptr<T>> *message_buffer)
@@ -88,7 +72,7 @@ namespace rcl_like_wrapper
       }
     }
 
-    SubscriberListener(MessageType *message_type, std::function<void(T *)> callback_function, Channel<ISubscriptionCallback *> &channel)
+    SubscriberListener(MessageType *message_type, std::function<void(T *)> callback_function, Channel<ChannelCallback *> &channel)
         : message_type_(message_type), callback_function_(callback_function), channel_(channel)
     {
       subscription_callback_ = std::make_unique<SubscriptionCallback<T>>(callback_function_, &message_ptr_buffer_);
@@ -98,7 +82,7 @@ namespace rcl_like_wrapper
   private:
     MessageType *message_type_;
     std::function<void(T *)> callback_function_;
-    Channel<ISubscriptionCallback *> &channel_;
+    Channel<ChannelCallback *> &channel_;
     std::vector<std::shared_ptr<T>> message_ptr_buffer_;
     std::unique_ptr<SubscriptionCallback<T>> subscription_callback_;
     dds::SampleInfo sample_info_;
@@ -117,7 +101,7 @@ namespace rcl_like_wrapper
   public:
     Subscriber(dds::DomainParticipant *participant, MessageType *message_type, const std::string &topic,
                const dds::TopicQos &qos, std::function<void(T *)> callback_function,
-               Channel<ISubscriptionCallback *> &channel)
+               Channel<ChannelCallback *> &channel)
         : participant_(participant),
           listener_(message_type, callback_function, channel)
     {

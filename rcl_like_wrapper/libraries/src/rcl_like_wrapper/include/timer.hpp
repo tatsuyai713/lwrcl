@@ -1,4 +1,5 @@
-#pragma once
+#ifndef RCL_LIKE_WRAPPER_TIMER_HPP_
+#define RCL_LIKE_WRAPPER_TIMER_HPP_
 
 #include <atomic>
 #include <functional>
@@ -6,54 +7,96 @@
 #include <thread>
 #include <chrono>
 
+#include "fast_dds_header.hpp"
+#include "channel.hpp"
+
 namespace rcl_like_wrapper
 {
+
+  class TimerCallback : public ChannelCallback
+  {
+  public:
+    TimerCallback(std::function<void()> callback_function)
+        : callback_function_(callback_function) {}
+
+    ~TimerCallback() = default;
+
+    void invoke()
+    {
+      try
+      {
+        callback_function_();
+      }
+      catch (const std::exception &e)
+      {
+        std::cerr << "Exception during callback invocation: " << e.what() << std::endl;
+      }
+      catch (...)
+      {
+        std::cerr << "Unknown exception during callback invocation." << std::endl;
+      }
+    }
+
+  private:
+    std::function<void()> callback_function_;
+  };
 
   class ITimer
   {
   public:
     virtual ~ITimer() = default;
-    virtual void check_and_call() = 0;
   };
 
   template <typename DurationType>
   class Timer : public ITimer
   {
   public:
-    using CallbackFunction = std::function<void()>;
-
-    Timer(DurationType period, CallbackFunction callback_function)
-        : period_(period), callback_function_(callback_function)
+    Timer(DurationType period, std::function<void()> callback_function, Channel<ChannelCallback *> &channel)
+        : period_(period), channel_(channel), stop_flag_(false)
     {
-      last_execution_ = std::chrono::steady_clock::now();
+      timer_callback_ = std::make_unique<TimerCallback>(callback_function);
+      start();
     }
+
     ~Timer()
     {
+      stop();
     }
 
-    void check_and_call()
+    void start()
     {
-      auto now = std::chrono::steady_clock::now();
-      if (now - last_execution_ >= period_)
-      {
-        last_execution_ = now;
 
-        if (callback_function_)
-        {
-          callback_function_();
-        }
+      worker_ = std::thread([this]()
+                            { run(); });
+    }
+
+    void stop()
+    {
+      stop_flag_ = true;
+      if (worker_.joinable())
+      {
+        worker_.join(); // Wait for the worker thread to finish
       }
     }
 
-    void reset()
-    {
-      last_execution_ = std::chrono::steady_clock::now();
-    }
-
   private:
+    void run()
+    {
+      auto next_execution_time = std::chrono::steady_clock::now() + period_;
+      while (!stop_flag_)
+      {
+        std::this_thread::sleep_until(next_execution_time);
+        channel_.produce(timer_callback_.get());
+        next_execution_time += period_; // Schedule next execution
+      }
+    }
+    bool stop_flag_;
     DurationType period_;
-    std::chrono::steady_clock::time_point last_execution_;
-    CallbackFunction callback_function_;
+    std::unique_ptr<TimerCallback> timer_callback_;
+    std::thread worker_;
+    Channel<ChannelCallback *> &channel_;
   };
 
 } // namespace rcl_like_wrapper
+
+#endif // RCL_LIKE_WRAPPER_TIMER_HPP_

@@ -44,7 +44,7 @@
 #include "tf2_msgs/msg/TFMessagePubSubTypes.h"
 
 
-FAST_DDS_CUSTOM_TYPE(tf2_msgs, msg, TFMessage)
+FAST_DDS_DATA_TYPE(tf2_msgs, msg, TFMessage)
 
 namespace tf2_ros
 {
@@ -60,7 +60,7 @@ namespace tf2_ros
     TransformBroadcaster(rcl_like_wrapper::Node* node_ptr)
     : node_ptr_(node_ptr)
     {
-      eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
+      rcl_like_wrapper::dds::TopicQos topic_qos = rcl_like_wrapper::dds::TOPIC_QOS_DEFAULT;
       publisher_ = node_ptr_->create_publisher<tf2_msgs::msg::TFMessage>(&pub_message_type_, "tf", topic_qos);
     }
 

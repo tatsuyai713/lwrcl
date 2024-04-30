@@ -13,24 +13,16 @@
 #include <iostream>
 #include <atomic>
 
-#include <fastdds/dds/domain/DomainParticipant.hpp>
-#include <fastdds/dds/domain/DomainParticipantFactory.hpp>
-#include <fastdds/dds/topic/TypeSupport.hpp>
-#include <fastdds/dds/topic/qos/TopicQos.hpp>
-#include <fastdds/dds/publisher/qos/PublisherQos.hpp>
-#include <fastdds/dds/publisher/qos/DataWriterQos.hpp>
-#include <fastdds/dds/subscriber/qos/SubscriberQos.hpp>
-#include <fastdds/dds/subscriber/qos/DataReaderQos.hpp>
+#include "fast_dds_header.hpp"
+#include "signal_handler.hpp"
 
-#include "eprosima_namespace.hpp"
-#include "dds_message_type.hpp"
 #include "publisher.hpp"
 #include "subscriber.hpp"
 #include "timer.hpp"
 
 namespace rcl_like_wrapper
 {
-  
+
   class Node
   {
   public:
@@ -59,13 +51,12 @@ namespace rcl_like_wrapper
     template <typename T>
     Timer<T> *create_timer(T period, std::function<void()> callback_function)
     {
-      auto timer = std::make_unique<Timer<T>>(period, callback_function);
+      auto timer = std::make_unique<Timer<T>>(period, callback_function, channel_);
       Timer<T> *raw_ptr = timer.get();
       timer_list_.push_front(std::move(timer));
       return raw_ptr;
     }
     virtual void spin();
-    virtual void spin_once();
     virtual void spin_some();
     virtual void stop_spin();
     virtual void shutdown();
@@ -75,28 +66,11 @@ namespace rcl_like_wrapper
     std::forward_list<std::unique_ptr<IPublisher>> publisher_list_;
     std::forward_list<std::unique_ptr<ISubscriber>> subscription_list_;
     std::forward_list<std::unique_ptr<ITimer>> timer_list_;
-    Channel<ISubscriptionCallback *> channel_;
+    Channel<ChannelCallback *> channel_;
   };
 
   // rcl_like_wrapper state
   bool ok(void);
-
-  // Represents a node within the ROS-like communication graph, managing its lifecycle and communication capabilities.
-  class RCLWNode : public Node
-  {
-  protected:
-    bool rclw_node_stop_flag_; // Flag to signal when the node should stop its processing.
-    std::mutex mutex_;         // Mutex for thread-safe access to the node.
-
-  public:
-    RCLWNode(int domain_number);
-    virtual ~RCLWNode();
-    virtual bool init(const std::string &config_file_path);     // Initializes the node with a configuration file.
-    virtual void spin();                                        // Continuously processes messages.
-    virtual void spin_some();                                   // Processes available messages without blocking.
-    virtual void stop_spin();
-    virtual void shutdown();
-  };
 
   // Executor that manages and executes nodes in a single thread.
   class SingleThreadedExecutor
@@ -115,7 +89,6 @@ namespace rcl_like_wrapper
   private:
     std::vector<Node *> nodes_; // List of nodes managed by the executor.
     std::mutex mutex_;          // Mutex for thread-safe access to the nodes list.
-    bool running_;              // Indicates whether the executor is currently running.
   };
 
   // Executor that manages and executes nodes, each in its own thread, allowing for parallel processing.
@@ -136,7 +109,6 @@ namespace rcl_like_wrapper
     std::vector<Node *> nodes_;        // List of nodes managed by the executor.
     std::vector<std::thread> threads_; // Threads created for each node for parallel execution.
     std::mutex mutex_;                 // Mutex for thread-safe access to the nodes and threads lists.
-    std::atomic<bool> running_;        // Atomic flag indicating whether the executor is currently running.
   };
 
   class Duration;
@@ -171,6 +143,14 @@ namespace rcl_like_wrapper
     Duration();
     Duration(int64_t nanoseconds);
     Duration(int32_t seconds, uint32_t nanoseconds);
+
+    template <typename Rep, typename Period>
+    Duration(const std::chrono::duration<Rep, Period> &duration)
+    {
+      auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
+      nanoseconds_ = nanos.count();
+    }
+
     int64_t nanoseconds() const;
     double seconds() const;
 

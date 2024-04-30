@@ -56,7 +56,7 @@ namespace tf2_ros
           rotation_x(rx), rotation_y(ry), rotation_z(rz), rotation_w(rw),
           frame_id(fid), child_frame_id(cfid) {}
   };
-  class StaticTransformBroadcasterNode final : public rcl_like_wrapper::RCLWNode
+  class StaticTransformBroadcasterNode final : public rcl_like_wrapper::Node
   {
   public:
     STATIC_TRANSFORM_BROADCASTER_PUBLIC
@@ -64,7 +64,7 @@ namespace tf2_ros
 
     STATIC_TRANSFORM_BROADCASTER_PUBLIC
     ~StaticTransformBroadcasterNode() override = default;
-    bool init(const std::string &config_file_path) override
+    bool init(const std::string &config_file_path)
     {
       (void)config_file_path;
       return true;

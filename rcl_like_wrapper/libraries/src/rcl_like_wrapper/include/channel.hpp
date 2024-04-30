@@ -1,4 +1,5 @@
-#pragma once
+#ifndef RCL_LIKE_WRAPPER_CHANNEL_HPP_
+#define RCL_LIKE_WRAPPER_CHANNEL_HPP_
 
 #include <condition_variable>
 #include <mutex>
@@ -6,6 +7,13 @@
 
 namespace rcl_like_wrapper
 {
+
+  class ChannelCallback
+  {
+  public:
+    virtual ~ChannelCallback() = default;
+    virtual void invoke() = 0;
+  };
 
   template <class T>
   class Channel
@@ -20,7 +28,7 @@ namespace rcl_like_wrapper
         cv_.notify_all();
       }
     }
-    
+
     bool consume(T &x)
     {
       std::unique_lock<std::mutex> lock{mtx_};
@@ -68,5 +76,6 @@ namespace rcl_like_wrapper
     std::mutex mtx_;
     std::condition_variable cv_;
   };
-
 } // namespace rcl_like_wrapper
+
+#endif // RCL_LIKE_WRAPPER_CHANNEL_HPP_

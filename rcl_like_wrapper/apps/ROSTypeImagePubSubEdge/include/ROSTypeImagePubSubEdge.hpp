@@ -14,15 +14,15 @@
 
 using namespace rcl_like_wrapper;
 
-FAST_DDS_CUSTOM_TYPE(sensor_msgs, msg, Image)
+FAST_DDS_DATA_TYPE(sensor_msgs, msg, Image)
 
-class ROSTypeImagePubSubEdge : public RCLWNode {
+class ROSTypeImagePubSubEdge : public Node {
 public:
     ROSTypeImagePubSubEdge(uint16_t domain_number);
     virtual ~ROSTypeImagePubSubEdge();
 
-    // Override init and run methods from RCLWNode
-    bool init(const std::string& config_file_path) override;
+    // Override init and run methods from Node
+    bool init(const std::string& config_file_path);
     // void run() override;
 
     // Callback function to subscribe data

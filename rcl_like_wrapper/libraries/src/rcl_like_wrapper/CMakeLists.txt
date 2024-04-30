@@ -52,10 +52,10 @@ install(TARGETS ${PROJECT_NAME}
 # Install headers
 install(FILES 
 include/rcl_like_wrapper.hpp 
-include/eprosima_namespace.hpp
+include/fast_dds_header.hpp
 include/publisher.hpp 
 include/subscriber.hpp 
 include/timer.hpp 
 include/channel.hpp 
-include/dds_message_type.hpp 
+include/signal_handler.hpp 
 DESTINATION include/)

@@ -44,11 +44,11 @@
 #include "tf2_msgs/msg/TFMessage.h"
 #include "tf2_msgs/msg/TFMessagePubSubTypes.h"
 
-class TFListenerRCLWNode : public rcl_like_wrapper::RCLWNode
+class TFListenerNode : public rcl_like_wrapper::Node
 {
 public:
-  TFListenerRCLWNode(int domain_id) : RCLWNode(domain_id) {}
-  virtual bool init(const std::string &config_file_path) override
+  TFListenerNode(int domain_id) : Node(domain_id) {}
+  virtual bool init(const std::string &config_file_path)
   {
     (void)config_file_path;
     return true;
@@ -61,7 +61,7 @@ public:
   std::string framea_, frameb_;
   bool using_specific_chain_;
 
-  std::shared_ptr<TFListenerRCLWNode> node_;
+  std::shared_ptr<TFListenerNode> node_;
   rcl_like_wrapper::Subscriber<tf2_msgs::msg::TFMessage>* subscriber_tf_;
   rcl_like_wrapper::Subscriber<tf2_msgs::msg::TFMessage>* subscriber_tf_static_;
   tf2_msgs::msg::TFMessageType sub_tf_message_type_;
@@ -139,7 +139,7 @@ public:
   }
 
   TFMonitor(
-    std::shared_ptr<TFListenerRCLWNode> node, bool using_specific_chain,
+    std::shared_ptr<TFListenerNode> node, bool using_specific_chain,
     std::string framea = "", std::string frameb = "")
   : framea_(framea),
     frameb_(frameb),
@@ -176,7 +176,7 @@ public:
       }
     }
 
-    eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
+    rcl_like_wrapper::dds::TopicQos topic_qos = rcl_like_wrapper::dds::TOPIC_QOS_DEFAULT;
     subscriber_tf_ = node_->create_subscription<tf2_msgs::msg::TFMessage>(&sub_tf_message_type_, "tf", topic_qos,
       std::bind(&TFMonitor::callback, this, std::placeholders::_1));
     subscriber_tf_static_ = node_->create_subscription<tf2_msgs::msg::TFMessage>(&sub_tf_static_message_type_, "tf_static", topic_qos,
@@ -288,7 +288,7 @@ int main(int argc, char ** argv)
 {
 
   // TODO(tfoote): make anonymous
-  std::shared_ptr<TFListenerRCLWNode> nh = std::make_shared<TFListenerRCLWNode>(0);
+  std::shared_ptr<TFListenerNode> nh = std::make_shared<TFListenerNode>(0);
 
   std::string framea, frameb;
   bool using_specific_chain = true;
@@ -319,7 +319,7 @@ int main(int argc, char ** argv)
   // rcl_like_wrapper::spin, since there are more than one versions of it (overloaded).
   // see: http://stackoverflow.com/a/27389714/671658
   // I (wjwwood) chose to use the lamda rather than the static cast solution.
-  auto run_func = [](std::shared_ptr<rcl_like_wrapper::RCLWNode> node) {
+  auto run_func = [](std::shared_ptr<rcl_like_wrapper::Node> node) {
       return node->spin();
     };
   TFMonitor monitor(nh, using_specific_chain, framea, frameb);

@@ -45,18 +45,13 @@
 #include "tf2_msgs/msg/TFMessagePubSubTypes.h"
 #include "rcl_like_wrapper.hpp"
 
-FAST_DDS_CUSTOM_TYPE(tf2_msgs, msg, TFMessage)
+FAST_DDS_DATA_TYPE(tf2_msgs, msg, TFMessage)
 namespace tf2_ros
 {
-  class TFListenerRCLWNode : public rcl_like_wrapper::RCLWNode
+  class TFListenerNode : public rcl_like_wrapper::Node
   {
   public:
-    TFListenerRCLWNode(uint16_t domain_id) : RCLWNode(domain_id) {}
-    virtual bool init(const std::string &config_file_path) override
-    {
-      (void)config_file_path;
-      return true;
-    }
+    TFListenerNode(uint16_t domain_id) : Node(domain_id) {}
   };
 
   /** \brief This class provides an easy way to request and receive coordinate frame transform information.
@@ -80,10 +75,9 @@ namespace tf2_ros
 
       if (spin_thread_)
       {
-        tf_listener_node_ = std::make_shared<TFListenerRCLWNode>(domain_id_);
-        tf_listener_node_->init(std::string(""));
+        tf_listener_node_ = std::make_shared<TFListenerNode>(domain_id_);
         executor_ = std::make_shared<rcl_like_wrapper::SingleThreadedExecutor>();
-        eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
+        rcl_like_wrapper::dds::TopicQos topic_qos = rcl_like_wrapper::dds::TOPIC_QOS_DEFAULT;
         message_subscription_tf_ = tf_listener_node_->create_subscription<tf2_msgs::msg::TFMessage>(&sub_tf_message_type_, "tf", topic_qos, std::move(cb));
         message_subscription_tf_static_ = tf_listener_node_->create_subscription<tf2_msgs::msg::TFMessage>(&sub_tf_static_message_type_, "tf_static", topic_qos, std::move(static_cb));
         executor_->add_node(tf_listener_node_.get());
@@ -92,7 +86,7 @@ namespace tf2_ros
       }
       else
       {
-        eprosima::fastdds::dds::TopicQos topic_qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
+        rcl_like_wrapper::dds::TopicQos topic_qos = rcl_like_wrapper::dds::TOPIC_QOS_DEFAULT;
         message_subscription_tf_ = node_ptr_->create_subscription<tf2_msgs::msg::TFMessage>(&sub_tf_message_type_, "tf", topic_qos, std::move(cb));
         message_subscription_tf_static_ = node_ptr_->create_subscription<tf2_msgs::msg::TFMessage>(&sub_tf_static_message_type_, "tf_static", topic_qos, std::move(static_cb));
         
@@ -107,7 +101,7 @@ namespace tf2_ros
     bool spin_thread_{false};
     int32_t domain_id_{0};
     std::unique_ptr<std::thread> dedicated_listener_thread_{nullptr};
-    std::shared_ptr<TFListenerRCLWNode> tf_listener_node_;
+    std::shared_ptr<TFListenerNode> tf_listener_node_;
     std::shared_ptr<rcl_like_wrapper::SingleThreadedExecutor> executor_;
     rcl_like_wrapper::Subscriber<tf2_msgs::msg::TFMessage>* message_subscription_tf_{0};
     rcl_like_wrapper::Subscriber<tf2_msgs::msg::TFMessage>* message_subscription_tf_static_{0};

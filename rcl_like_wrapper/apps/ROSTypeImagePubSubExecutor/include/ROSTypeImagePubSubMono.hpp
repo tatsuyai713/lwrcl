@@ -14,13 +14,13 @@
 #include "ROSTypeImagePubSubEdge.hpp"
 
 using namespace rcl_like_wrapper;
-class ROSTypeImagePubSubMono : public RCLWNode {
+class ROSTypeImagePubSubMono : public Node {
 public:
     ROSTypeImagePubSubMono(uint16_t domain_number);
     virtual ~ROSTypeImagePubSubMono();
 
-    // Override init and run methods from RCLWNode
-    bool init(const std::string& config_file_path) override;
+    // Override init and run methods from Node
+    bool init(const std::string& config_file_path);
     // void run() override;
 
     // Callback function to subscribe data

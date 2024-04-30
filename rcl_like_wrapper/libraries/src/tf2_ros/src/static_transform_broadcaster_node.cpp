@@ -38,7 +38,7 @@
 namespace tf2_ros
 {
 StaticTransformBroadcasterNode::StaticTransformBroadcasterNode(int domain_id, TransformData transformData)
-: rcl_like_wrapper::RCLWNode(domain_id)
+: rcl_like_wrapper::Node(domain_id)
 // TODO(clalancette): Anonymize the node name like it is in ROS1.
 {
   geometry_msgs::msg::TransformStamped tf_msg;
