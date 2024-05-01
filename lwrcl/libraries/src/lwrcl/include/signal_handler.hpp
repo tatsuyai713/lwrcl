@@ -5,7 +5,7 @@
 #include <functional>
 
 #define SIGNAL_HANDLER_DEFINE()             \
-  namespace lwrcl                \
+  namespace lwrcl                           \
   {                                         \
     extern void signal_handler(int signal); \
   }

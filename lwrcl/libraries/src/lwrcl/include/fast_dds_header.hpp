@@ -131,18 +131,18 @@ namespace lwrcl
 
 } // namespace lwrcl
 
-#define FAST_DDS_DATA_TYPE(NAMESPACE0, NAMESPACE1, TYPE)                       \
-  namespace NAMESPACE0                                                         \
-  {                                                                            \
-    namespace NAMESPACE1                                                       \
-    {                                                                          \
+#define FAST_DDS_DATA_TYPE(NAMESPACE0, NAMESPACE1, TYPE)            \
+  namespace NAMESPACE0                                              \
+  {                                                                 \
+    namespace NAMESPACE1                                            \
+    {                                                               \
       class TYPE##Type : public lwrcl::MessageType, public TYPE     \
-      {                                                                        \
-      public:                                                                  \
-        TYPE##Type()                                                           \
+      {                                                             \
+      public:                                                       \
+        TYPE##Type()                                                \
             : lwrcl::MessageType(new TYPE##PubSubType()), TYPE() {} \
-      };                                                                       \
-    }                                                                          \
+      };                                                            \
+    }                                                               \
   }
 
 #endif // RCL_LIKE_WRAPPER_FAST_DDS_HEADER_HPP_
