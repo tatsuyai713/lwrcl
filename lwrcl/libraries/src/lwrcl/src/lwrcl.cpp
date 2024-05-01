@@ -314,7 +314,23 @@ namespace lwrcl
 
   Node::Node(int domain_id)
   {
-    participant_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance()->create_participant(domain_id, eprosima::fastdds::dds::PARTICIPANT_QOS_DEFAULT);
+    dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT;
+
+    // Create a descriptor for the new transport.
+    auto udp_transport = std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>();
+    udp_transport->sendBufferSize = 4194304;
+    udp_transport->receiveBufferSize = 4194304;
+    udp_transport->non_blocking_send = true;
+
+    // // Link the Transport Layer to the Participant.
+    participant_qos.transport().user_transports.push_back(udp_transport);
+
+    // Increase the sending buffer size
+    participant_qos.transport().send_socket_buffer_size = 4194304;
+    // Increase the receiving buffer size
+    participant_qos.transport().listen_socket_buffer_size = 4194304;
+
+    participant_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance()->create_participant(domain_id, participant_qos);
     if (!participant_)
     {
       throw std::runtime_error("Failed to create domain participant");
