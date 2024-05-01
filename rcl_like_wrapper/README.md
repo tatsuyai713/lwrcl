@@ -59,7 +59,7 @@ The `Duration` class represents a time span with nanosecond precision.
 
 - **Constructors:**
   - Default constructor initializes duration to 0 nanoseconds.
-  - Constructor accepting an `std::chrono` data types.
+  - Constructor accepting an `std::chrono` data type.
   - Constructor accepting an `int64_t` for nanoseconds.
   - Constructor accepting an `int32_t` for seconds and a `uint32_t` for additional nanoseconds.
 
