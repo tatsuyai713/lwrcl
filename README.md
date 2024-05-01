@@ -1,4 +1,4 @@
-# RCL Like Wrapper (Native Fast DDS / ROS 2 Compatible Libraries)
+# Lightweight RCL Like Middleware (Native Fast DDS / ROS 2 Compatible Libraries)
 
 This repository provides build scripts and samples for Fast DDS, designed to be compatible with ROS 2 topics. It serves as a bridge for developers looking to integrate Fast DDS with ROS 2 ecosystems, ensuring seamless communication and interoperability between systems using these technologies.
 
@@ -7,7 +7,7 @@ This repository provides build scripts and samples for Fast DDS, designed to be 
 - **Fast DDS Build Scripts:** Simplify the process of installing and setting up Fast DDS on Ubuntu/Debian systems.
 - **ROS 2 Compatible Topics:** Includes samples that demonstrate how to publish and subscribe to ROS 2 topics using Fast DDS, facilitating integration into existing ROS 2 projects.
 - **ROS Compatible Libraries:** Offers support for building and installing libraries crucial for ROS compatibility, such as yaml-cpp, ROS data types, and tf2.
-- **RCL Like Wrapper:** Please read `rcl_like_wrapper/README.md`.
+- **lwrcl:** Please read `lwrcl/README.md`.
 
 ## How to Use This Repository
 
@@ -24,8 +24,8 @@ source /opt/ros/humble/setup.bash
 Clone this repository and enter the directory:
 
 ```
-git clone --recursive https://github.com/tatsuyai713/RCL-like-Wrapper-for-Fast-DDS.git
-cd RCL-like-Wrapper-for-Fast-DDS
+git clone --recursive https://github.com/tatsuyai713/lwrcl.git
+cd lwrcl
 ```
 
 
@@ -59,16 +59,16 @@ Compile the sample applications:
 
 ### Build and Install RCL Like Wrapper
 
-Build and install the RCL (ROS Client Library) Like Wrapper for enhanced ROS 2 compatibility:
+Build and install the lwrcl for enhanced ROS 2 compatibility:
 
 ```
-cd ../rcl_like_wrapper
+cd ../lwrcl
 ./build_libraries.sh install
 ```
 
 ### Build RCL Like Wrapper Sample Applications
 
-Compile the RCL Like Wrapper sample applications:
+Compile the lwrcl sample applications:
 
 ```
 ./build_apps.sh
