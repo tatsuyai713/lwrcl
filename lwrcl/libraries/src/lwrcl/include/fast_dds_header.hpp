@@ -85,6 +85,11 @@ namespace lwrcl
         eprosima::fastdds::dds::TRANSIENT_DURABILITY_QOS;
     static const DurabilityQosPolicyKind_t PERSISTENT_DURABILITY_QOS =
         eprosima::fastdds::dds::PERSISTENT_DURABILITY_QOS;
+    using ReliabilityQosPolicyKind = eprosima::fastdds::dds::ReliabilityQosPolicyKind;
+    static const ReliabilityQosPolicyKind BEST_EFFORT_RELIABILITY_QOS =
+        eprosima::fastdds::dds::BEST_EFFORT_RELIABILITY_QOS;
+    static const ReliabilityQosPolicyKind RELIABLE_RELIABILITY_QOS =
+        eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS;
   }
 
   namespace rtps

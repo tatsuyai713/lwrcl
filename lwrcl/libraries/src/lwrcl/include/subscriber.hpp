@@ -122,7 +122,10 @@ namespace lwrcl
       }
       dds::DataReaderQos reader_qos = dds::DATAREADER_QOS_DEFAULT;
       reader_qos.endpoint().history_memory_policy = rtps::PREALLOCATED_WITH_REALLOC_MEMORY_MODE;
-      reader_qos.data_sharing().off();
+      reader_qos.history().depth = 10;
+      reader_qos.reliability().kind = dds::RELIABLE_RELIABILITY_QOS;
+      // reader_qos.durability().kind = dds::TRANSIENT_LOCAL_DURABILITY_QOS;
+      reader_qos.data_sharing().automatic();
       reader_ = subscriber_->create_datareader(topic_, reader_qos, &listener_);
       if (!reader_)
       {

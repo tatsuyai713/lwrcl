@@ -49,6 +49,13 @@ namespace lwrcl
         throw std::runtime_error("Failed to create publisher");
       }
       dds::DataWriterQos writer_qos = dds::DATAWRITER_QOS_DEFAULT;
+      writer_qos.endpoint().history_memory_policy = rtps::PREALLOCATED_WITH_REALLOC_MEMORY_MODE;
+      // writer_qos.data_sharing().automatic();
+      writer_qos.history().depth = 10;
+      writer_qos.reliability().kind = dds::RELIABLE_RELIABILITY_QOS;
+      // writer_qos.durability().kind = dds::TRANSIENT_LOCAL_DURABILITY_QOS;
+      writer_qos.data_sharing().automatic();
+      // writer_qos.data_sharing().on("shared_directory");
       writer_ = publisher_->create_datawriter(topic_, writer_qos, &listener_);
       if (!writer_)
       {
