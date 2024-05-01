@@ -322,7 +322,7 @@ namespace lwrcl
     udp_transport->receiveBufferSize = 4194304;
     udp_transport->non_blocking_send = true;
 
-    // // Link the Transport Layer to the Participant.
+    // Link the Transport Layer to the Participant.
     participant_qos.transport().user_transports.push_back(udp_transport);
 
     // Increase the sending buffer size
