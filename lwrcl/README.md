@@ -1,4 +1,4 @@
-# Lightweight RCL Like Middleware for Fast DDS
+# lwrcl (Lightweight RCL Like Middleware) for Fast DDS
 
 This library provides a simplified API similar to ROS 2's rclcpp for working with Fast DDS, enabling easier integration and management of nodes, publishers, subscribers, and timers within the Fast DDS ecosystem.
 
