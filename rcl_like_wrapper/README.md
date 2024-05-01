@@ -9,7 +9,6 @@ This library provides a simplified API similar to ROS 2's rclcpp for working wit
 - Seamless communication with ROS 2 topics without needing special modifications.
 - Compatible with lightweight SBCs such as Raspberry Pi for easy integration with ROS 2 ecosystems.
 - Periodic task execution using timers.
-- Signal handling for graceful shutdown and resource cleanup.
 - Supports custom message types for flexible communication needs.
 - Executors for managing and spinning multiple nodes concurrently.
 
@@ -18,7 +17,6 @@ This library provides a simplified API similar to ROS 2's rclcpp for working wit
 ### Node Management
 
 - **spin**: Continuously processes incoming messages and executes callbacks.
-- **spin_once**: Processes a single message, if available.
 - **spin_some**: Processes available messages without blocking.
 - **stop_spin**: Stops the continuous message processing loop.
 
@@ -61,6 +59,7 @@ The `Duration` class represents a time span with nanosecond precision.
 
 - **Constructors:**
   - Default constructor initializes duration to 0 nanoseconds.
+  - Constructor accepting an `std::chrono` data types.
   - Constructor accepting an `int64_t` for nanoseconds.
   - Constructor accepting an `int32_t` for seconds and a `uint32_t` for additional nanoseconds.
 
@@ -103,8 +102,8 @@ The `SingleThreadedExecutor` manages and spins multiple nodes sequentially withi
 
 ### Key Functions
 
-- **add_node(Node* node_ptr):** Integrates a node into the executor's workflow.
-- **remove_node(Node* node_ptr):** Detaches a node from the executor.
+- **add_node(Node* node):** Integrates a node into the executor's workflow.
+- **remove_node(Node* node):** Detaches a node from the executor.
 - **spin():** Begins the sequential processing of messages for all nodes managed by the executor.
 - **stop_spin():** Halts the processing loop, ensuring all nodes are gracefully stopped.
 
@@ -121,8 +120,8 @@ The `MultiThreadedExecutor` extends the functionality of the SingleThreadedExecu
 
 ### Key Functions
 
-- **add_node(Node* node_ptr):** Adds a node to be managed concurrently by the executor.
-- **remove_node(Node* node_ptr):** Removes a node from the concurrent processing pool.
+- **add_node(Node* node):** Adds a node to be managed concurrently by the executor.
+- **remove_node(Node* node):** Removes a node from the concurrent processing pool.
 - **spin():** Starts concurrent message processing for all nodes, leveraging multi-threading to achieve parallel execution.
 - **stop_spin():** Stops all threads and ensures a clean shutdown of node operations.
 
@@ -135,19 +134,18 @@ By selecting the appropriate executor based on your application's requirements, 
 
 ## Node and Node: Enhanced Node Management
 
-`Node` and `Node` provides an abstraction layer for creating and managing nodes within the Fast DDS ecosystem, mirroring the functionality found in ROS 2's `rclcpp::Node`. It simplifies the interaction with the underlying DDS layer, offering a user-friendly interface for developing distributed systems that communicate over DDS.
+`Node` provides an abstraction layer for creating and managing nodes within the Fast DDS ecosystem, mirroring the functionality found in ROS 2's `rclcpp::Node`. It simplifies the interaction with the underlying DDS layer, offering a user-friendly interface for developing distributed systems that communicate over DDS.
 
 ### Key Features
 
 - **Simplified Node Creation**: Facilitates the setup of DDS nodes by abstracting away the complexity of DDS configurations.
 - **Message Publishing and Subscription**: Offers easy-to-use methods for publishing messages to topics and subscribing to topics with callback functions for received messages.
 - **Timer Management**: Allows the scheduling of periodic tasks, making it easier to handle time-driven operations.
-- **Signal Handling**: Integrates signal handling for graceful shutdown and cleanup, enhancing the robustness of applications.
 - **Executors Compatibility**: Designed to work seamlessly with the `Executors` for concurrent message processing across multiple nodes.
 
-### Using Node and Node with Executors
+### Using Node with Executors
 
-Integrating `Node` and `Node` with Executors in the Fast DDS environment facilitates the effective management and operation of multiple nodes. This setup is essential for developing distributed applications that require efficient multitasking and the ability to handle messages from multiple sources in parallel. The use of Executors, specifically the `SingleThreadedExecutor` and `MultiThreadedExecutor`, plays a pivotal role in how messages are processed and how nodes communicate within a Fast DDS domain.
+Integrating `Node` with Executors in the Fast DDS environment facilitates the effective management and operation of multiple nodes. This setup is essential for developing distributed applications that require efficient multitasking and the ability to handle messages from multiple sources in parallel. The use of Executors, specifically the `SingleThreadedExecutor` and `MultiThreadedExecutor`, plays a pivotal role in how messages are processed and how nodes communicate within a Fast DDS domain.
 
 #### SingleThreadedExecutor vs. MultiThreadedExecutor
 
