@@ -44,6 +44,8 @@
 #include "tf2_msgs/msg/TFMessage.h"
 #include "tf2_msgs/msg/TFMessagePubSubTypes.h"
 
+SIGNAL_HANDLER_DEFINE()
+
 class TFListenerNode : public lwrcl::Node
 {
 public:
@@ -286,6 +288,7 @@ public:
 
 int main(int argc, char ** argv)
 {
+  SIGNAL_HANDLER_INIT()
 
   // TODO(tfoote): make anonymous
   std::shared_ptr<TFListenerNode> nh = std::make_shared<TFListenerNode>(0);

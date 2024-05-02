@@ -46,6 +46,7 @@
 #include "lwrcl.hpp"
 
 FAST_DDS_DATA_TYPE(tf2_msgs, msg, TFMessage)
+
 namespace tf2_ros
 {
   class TFListenerNode : public lwrcl::Node

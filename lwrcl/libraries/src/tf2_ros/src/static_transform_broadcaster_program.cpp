@@ -42,6 +42,8 @@
 
 #include "lwrcl.hpp"
 
+SIGNAL_HANDLER_DEFINE()
+
 struct Option
 {
   explicit Option(bool has_arg)
@@ -356,6 +358,7 @@ static void print_usage()
 
 int main(int argc, char ** argv)
 {
+  SIGNAL_HANDLER_INIT()
   std::vector<std::string> args(argv + 1, argv + argc);
   
   bool help = false;

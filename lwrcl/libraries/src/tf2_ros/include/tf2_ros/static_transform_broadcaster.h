@@ -43,6 +43,7 @@
 #include "tf2_msgs/msg/TFMessage.h"
 #include "tf2_msgs/msg/TFMessagePubSubTypes.h"
 
+FAST_DDS_DATA_TYPE(geometry_msgs, msg, TransformStamped)
 FAST_DDS_DATA_TYPE(tf2_msgs, msg, TFMessage)
 namespace tf2_ros
 {

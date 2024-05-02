@@ -50,6 +50,8 @@
 #include "lwrcl.hpp"
 #include <atomic>
 
+SIGNAL_HANDLER_DEFINE()
+
 class echoListener
 {
 public:
@@ -70,6 +72,7 @@ public:
 
 int main(int argc, char **argv)
 {
+  SIGNAL_HANDLER_INIT()
 
   double rate_hz;
   // Allow 2 or 3 command line arguments

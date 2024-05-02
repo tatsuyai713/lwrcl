@@ -8,52 +8,56 @@
 #include <functional>
 #include "lwrcl.hpp" // The main header file for the lwrcl namespace
 
-// Begin namespace for the lwrcl functionality
 namespace lwrcl
 {
   class Node;
-  class HandlerRegistry
+}
+class HandlerRegistry
+{
+public:
+  std::vector<lwrcl::Node *> nodes_;
+  std::mutex registry_mutex;
+
+  void add_node(lwrcl::Node *node)
   {
-  public:
-    std::vector<Node *> nodes_;
-    std::mutex registry_mutex;
+    std::lock_guard<std::mutex> lock(registry_mutex);
+    nodes_.push_back(node);
+  }
 
-    void add_node(Node *node)
-    {
-      std::lock_guard<std::mutex> lock(registry_mutex);
-      nodes_.push_back(node);
-    }
-
-    void remove_node(Node *node)
-    {
-      std::lock_guard<std::mutex> lock(registry_mutex);
-      nodes_.erase(std::remove(nodes_.begin(), nodes_.end(), node), nodes_.end());
-    }
-
-    void notify_all()
-    {
-      std::lock_guard<std::mutex> lock(registry_mutex);
-      for (auto *node : nodes_)
-      {
-        node->stop_spin();
-      }
-    }
-  };
-
-  static HandlerRegistry global_registry;
-
-  // Global flag to control the stopping of the application, e.g., in response to SIGINT
-  std::atomic_bool global_stop_flag{false};
-
-  // Function to handle SIGINT signals for graceful application termination
-  void signal_handler(int signal)
+  void remove_node(lwrcl::Node *node)
   {
-    if (signal == SIGINT || signal == SIGTERM)
+    std::lock_guard<std::mutex> lock(registry_mutex);
+    nodes_.erase(std::remove(nodes_.begin(), nodes_.end(), node), nodes_.end());
+  }
+
+  void notify_all()
+  {
+    std::lock_guard<std::mutex> lock(registry_mutex);
+    for (auto *node : nodes_)
     {
-      global_stop_flag = true;
-      global_registry.notify_all();
+      node->stop_spin();
     }
   }
+};
+
+static HandlerRegistry global_registry;
+
+// Global flag to control the stopping of the application, e.g., in response to SIGINT
+std::atomic_bool global_stop_flag{false};
+
+// Function to handle SIGINT signals for graceful application termination
+void lwrcl_signal_handler(int signal)
+{
+  if (signal == SIGINT || signal == SIGTERM)
+  {
+    global_stop_flag = true;
+    global_registry.notify_all();
+  }
+}
+
+// Begin namespace for the lwrcl functionality
+namespace lwrcl
+{
 
   // Constructor for SingleThreadedExecutor to manage node execution
   SingleThreadedExecutor::SingleThreadedExecutor()
