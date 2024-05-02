@@ -1,4 +1,5 @@
-#pragma once
+#ifndef LWRCL_SUBSCRIBER_HPP_
+#define LWRCL_SUBSCRIBER_HPP_
 
 #include <atomic>
 #include <cstddef>
@@ -165,3 +166,5 @@ namespace lwrcl
   };
 
 } // namespace lwrcl
+
+#endif // LWRCL_SUBSCRIBER_HPP_

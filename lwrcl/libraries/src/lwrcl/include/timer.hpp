@@ -1,5 +1,5 @@
-#ifndef RCL_LIKE_WRAPPER_TIMER_HPP_
-#define RCL_LIKE_WRAPPER_TIMER_HPP_
+#ifndef LWRCL_TIMER_HPP_
+#define LWRCL_TIMER_HPP_
 
 #include <atomic>
 #include <functional>
@@ -99,4 +99,4 @@ namespace lwrcl
 
 } // namespace lwrcl
 
-#endif // RCL_LIKE_WRAPPER_TIMER_HPP_
+#endif // LWRCL_TIMER_HPP_

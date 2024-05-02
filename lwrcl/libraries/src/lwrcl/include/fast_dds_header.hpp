@@ -1,5 +1,5 @@
-#ifndef RCL_LIKE_WRAPPER_FAST_DDS_HEADER_HPP_
-#define RCL_LIKE_WRAPPER_FAST_DDS_HEADER_HPP_
+#ifndef LWRCL_FAST_DDS_HEADER_HPP_
+#define LWRCL_FAST_DDS_HEADER_HPP_
 
 #include <unordered_map>
 
@@ -145,4 +145,4 @@ namespace lwrcl
     }                                                               \
   }
 
-#endif // RCL_LIKE_WRAPPER_FAST_DDS_HEADER_HPP_
+#endif // LWRCL_FAST_DDS_HEADER_HPP_

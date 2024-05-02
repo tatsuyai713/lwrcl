@@ -1,5 +1,5 @@
-#ifndef RCL_LIKE_WRAPPER_SIGNAL_HANDLER_HPP_
-#define RCL_LIKE_WRAPPER_SIGNAL_HANDLER_HPP_
+#ifndef LWRCL_SIGNAL_HANDLER_HPP_
+#define LWRCL_SIGNAL_HANDLER_HPP_
 
 #include <csignal>
 #include <functional>
@@ -13,4 +13,4 @@
     throw std::runtime_error("Failed to set signal handler.");                                                       \
   }
 
-#endif // RCL_LIKE_WRAPPER_SIGNAL_HANDLER_HPP_
+#endif // LWRCL_SIGNAL_HANDLER_HPP_

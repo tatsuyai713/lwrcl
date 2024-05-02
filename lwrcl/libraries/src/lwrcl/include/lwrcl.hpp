@@ -1,4 +1,5 @@
-#pragma once
+#ifndef LWRCL_HPP_
+#define LWRCL_HPP_
 
 #include <functional>
 #include <string>
@@ -196,3 +197,5 @@ namespace lwrcl
     void sleep();
   };
 } // namespace lwrcl
+
+#endif // LWRCL_HPP_

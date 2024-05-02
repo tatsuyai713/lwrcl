@@ -1,5 +1,5 @@
-#ifndef RCL_LIKE_WRAPPER_CHANNEL_HPP_
-#define RCL_LIKE_WRAPPER_CHANNEL_HPP_
+#ifndef LWRCL_CHANNEL_HPP_
+#define LWRCL_CHANNEL_HPP_
 
 #include <condition_variable>
 #include <mutex>
@@ -78,4 +78,4 @@ namespace lwrcl
   };
 } // namespace lwrcl
 
-#endif // RCL_LIKE_WRAPPER_CHANNEL_HPP_
+#endif // LWRCL_CHANNEL_HPP_

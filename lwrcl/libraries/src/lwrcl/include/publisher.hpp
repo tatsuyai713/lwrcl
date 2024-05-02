@@ -1,5 +1,5 @@
-#ifndef RCL_LIKE_WRAPPER_PUBLISHER_HPP_
-#define RCL_LIKE_WRAPPER_PUBLISHER_HPP_
+#ifndef LWRCL_PUBLISHER_HPP_
+#define LWRCL_PUBLISHER_HPP_
 
 #include <atomic>
 #include <string>
@@ -101,4 +101,4 @@ namespace lwrcl
   };
 } // namespace lwrcl
 
-#endif // RCL_LIKE_WRAPPER_PUBLISHER_HPP_
+#endif // LWRCL_PUBLISHER_HPP_
