@@ -14,7 +14,10 @@
 
 using namespace lwrcl;
 
+#ifndef SENSOR_MSGS_MSG_IMAGETYPE_HPP
+#define SENSOR_MSGS_MSG_IMAGETYPE_HPP
 FAST_DDS_DATA_TYPE(sensor_msgs, msg, Image)
+#endif // SENSOR_MSGS_MSG_IMAGETYPE_HPP
 
 class ROSTypeImagePubSubEdge : public Node {
 public:

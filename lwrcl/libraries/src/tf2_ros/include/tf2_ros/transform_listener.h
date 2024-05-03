@@ -45,7 +45,10 @@
 #include "tf2_msgs/msg/TFMessagePubSubTypes.h"
 #include "lwrcl.hpp"
 
+#ifndef TF2_MSGS_MSG_TFMESSAGE_
+#define TF2_MSGS_MSG_TFMESSAGE_
 FAST_DDS_DATA_TYPE(tf2_msgs, msg, TFMessage)
+#endif
 
 namespace tf2_ros
 {

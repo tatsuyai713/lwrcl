@@ -44,8 +44,15 @@
 #include "tf2_msgs/msg/TFMessagePubSubTypes.h"
 
 
+#ifndef GEOMETRY_MSGS_MSG_TRANSFORMSTAMPED_
+#define GEOMETRY_MSGS_MSG_TRANSFORMSTAMPED_
 FAST_DDS_DATA_TYPE(geometry_msgs, msg, TransformStamped)
+#endif
+
+#ifndef TF2_MSGS_MSG_TFMESSAGE_
+#define TF2_MSGS_MSG_TFMESSAGE_
 FAST_DDS_DATA_TYPE(tf2_msgs, msg, TFMessage)
+#endif
 
 namespace tf2_ros
 {

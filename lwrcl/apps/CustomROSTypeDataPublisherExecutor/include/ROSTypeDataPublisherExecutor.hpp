@@ -13,7 +13,10 @@
 
 using namespace lwrcl;
 
+#ifndef ROSTYPEDATA_MSG_CUSTOMMESSAGE_HPP
+#define ROSTYPEDATA_MSG_CUSTOMMESSAGE_HPP
 FAST_DDS_DATA_TYPE(ROSTypeData, msg, CustomMessage)
+#endif // ROSTYPEDATA_MSG_CUSTOMMESSAGE_HPP
 
 class ROSTypeDataPublisherExecutor : public Node {
 public:
