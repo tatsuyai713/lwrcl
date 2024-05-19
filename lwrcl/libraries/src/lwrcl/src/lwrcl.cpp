@@ -316,9 +316,8 @@ namespace lwrcl
     next_time_ += std::chrono::nanoseconds(period_.nanoseconds());
   }
 
-  Node::Node(int domain_id)
+  Node::Node(int domain_id) : clock_(std::make_unique<Clock>())
   {
-    clock_ = std::make_unique<Clock>();
     dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT;
 
     // Create a descriptor for the new transport.
