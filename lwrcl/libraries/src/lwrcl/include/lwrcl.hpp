@@ -24,6 +24,8 @@
 namespace lwrcl
 {
 
+  class Clock;
+
   class Node
   {
   public:
@@ -61,6 +63,7 @@ namespace lwrcl
     virtual void spin_some();
     virtual void stop_spin();
     virtual void shutdown();
+    virtual Clock* get_clock();
 
   private:
     dds::DomainParticipant *participant_;
@@ -68,6 +71,7 @@ namespace lwrcl
     std::forward_list<std::unique_ptr<ISubscriber>> subscription_list_;
     std::forward_list<std::unique_ptr<ITimer>> timer_list_;
     Channel<ChannelCallback *> channel_;
+    std::unique_ptr<Clock> clock_;
   };
 
   // lwrcl state

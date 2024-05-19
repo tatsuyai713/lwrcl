@@ -318,6 +318,7 @@ namespace lwrcl
 
   Node::Node(int domain_id)
   {
+    clock_ = std::make_unique<Clock>();
     dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT;
 
     // Create a descriptor for the new transport.
@@ -392,6 +393,11 @@ namespace lwrcl
   void Node::shutdown()
   {
     channel_.close();
+  }
+
+  Clock* Node::get_clock()
+  {
+    return clock_.get();
   }
 
   bool ok()
