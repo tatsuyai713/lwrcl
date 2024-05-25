@@ -35,7 +35,7 @@ namespace lwrcl
     template <typename T>
     Publisher<T> *create_publisher(MessageType *message_type, const std::string &topic, const dds::TopicQos &qos)
     {
-      auto publisher = std::make_unique<Publisher<T>>(participant_, message_type, std::string("rt/") + topic, qos);
+      auto publisher = std::make_unique<Publisher<T>>(participant_.get(), message_type, std::string("rt/") + topic, qos);
       Publisher<T> *raw_ptr = publisher.get();
       publisher_list_.push_front(std::move(publisher));
       return raw_ptr;
@@ -45,7 +45,7 @@ namespace lwrcl
     Subscriber<T> *create_subscription(MessageType *message_type, const std::string &topic, const dds::TopicQos &qos,
                                        std::function<void(T *)> callback_function)
     {
-      auto subscriber = std::make_unique<Subscriber<T>>(participant_, message_type, std::string("rt/") + topic, qos, callback_function, channel_);
+      auto subscriber = std::make_unique<Subscriber<T>>(participant_.get(), message_type, std::string("rt/") + topic, qos, callback_function, channel_);
       Subscriber<T> *raw_ptr = subscriber.get();
       subscription_list_.push_front(std::move(subscriber));
       return raw_ptr;
@@ -63,10 +63,21 @@ namespace lwrcl
     virtual void spin_some();
     virtual void stop_spin();
     virtual void shutdown();
-    virtual Clock* get_clock();
+    virtual Clock *get_clock();
 
   private:
-    dds::DomainParticipant *participant_;
+    struct DomainParticipantDeleter
+    {
+        void operator()(eprosima::fastdds::dds::DomainParticipant* participant) const
+        {
+            if (participant != nullptr)
+            {
+                eprosima::fastdds::dds::DomainParticipantFactory::get_instance()->delete_participant(participant);
+            }
+        }
+    };
+
+    std::unique_ptr<eprosima::fastdds::dds::DomainParticipant, DomainParticipantDeleter> participant_;
     std::forward_list<std::unique_ptr<IPublisher>> publisher_list_;
     std::forward_list<std::unique_ptr<ISubscriber>> subscription_list_;
     std::forward_list<std::unique_ptr<ITimer>> timer_list_;
