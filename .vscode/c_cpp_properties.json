@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "Ubuntu",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/include/**",
+                "/opt/fast-dds/include/**",
+                "/opt/fast-dds-libs/include/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-arm64"
+        }
+    ],
+    "version": 4
+}

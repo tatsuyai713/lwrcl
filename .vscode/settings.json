@@ -67,6 +67,24 @@
         "cinttypes": "cpp",
         "typeindex": "cpp",
         "typeinfo": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "any": "cpp",
+        "compare": "cpp",
+        "concepts": "cpp",
+        "coroutine": "cpp",
+        "unordered_set": "cpp",
+        "source_location": "cpp",
+        "future": "cpp",
+        "numbers": "cpp",
+        "semaphore": "cpp",
+        "stop_token": "cpp",
+        "valarray": "cpp",
+        "hash_map": "cpp"
+    },
+    "ros.distro": "humble",
+    "[cpp]": { // C++ファイルに適用する設定
+        "editor.tabSize": 2,  // タブの幅を4に設定
+        "editor.insertSpaces": true, // タブキーでタブを挿入（スペースではなく）
+        "editor.detectIndentation": false // ファイルを開いたときの自動インデント検出を無効化
     }
 }

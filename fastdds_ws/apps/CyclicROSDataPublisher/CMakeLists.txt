@@ -51,8 +51,8 @@ endif()
 # endif()
 
 message(STATUS "Configuring CyclicROSDataPublisher...")
-file(GLOB DDS_SHM_ROS_TYPE_DATA_SOURCES_CXX "src/*.cxx")
-file(GLOB DDS_SHM_ROS_TYPE_DATA_SOURCES_CPP "src/*.cpp")
+file(GLOB ROS_TYPE_DATA_SOURCES_CXX "src/*.cxx")
+file(GLOB ROS_TYPE_DATA_SOURCES_CPP "src/*.cpp")
 
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config/config.yaml ${CMAKE_CURRENT_BINARY_DIR}/config/config.yaml  COPYONLY)
@@ -61,7 +61,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config/config.yaml ${CMAKE_CURRENT_BI
 include_directories(
     include
     ${CMAKE_CURRENT_BINARY_DIR})
-add_executable(CyclicROSDataPublisher ${DDS_SHM_ROS_TYPE_DATA_SOURCES_CXX} ${DDS_SHM_ROS_TYPE_DATA_SOURCES_CPP})
+add_executable(CyclicROSDataPublisher ${ROS_TYPE_DATA_SOURCES_CXX} ${ROS_TYPE_DATA_SOURCES_CPP})
 target_compile_definitions(CyclicROSDataPublisher PRIVATE
     $<$<AND:$<NOT:$<BOOL:${WIN32}>>,$<STREQUAL:"${CMAKE_BUILD_TYPE}","Debug">>:__DEBUG>
     $<$<BOOL:${INTERNAL_DEBUG}>:__INTERNALDEBUG> # Internal debug activated.

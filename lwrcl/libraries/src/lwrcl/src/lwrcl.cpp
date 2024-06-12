@@ -334,7 +334,9 @@ namespace lwrcl
     // Increase the receiving buffer size
     participant_qos.transport().listen_socket_buffer_size = 4194304;
 
-    participant_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance()->create_participant(domain_id, participant_qos);
+    auto participant_factory = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
+    participant_ = std::unique_ptr<eprosima::fastdds::dds::DomainParticipant, DomainParticipantDeleter>(
+        participant_factory->create_participant(domain_id, participant_qos));
     if (!participant_)
     {
       throw std::runtime_error("Failed to create domain participant");
@@ -348,7 +350,6 @@ namespace lwrcl
     publisher_list_.clear();
     subscription_list_.clear();
     timer_list_.clear();
-    eprosima::fastdds::dds::DomainParticipantFactory::get_instance()->delete_participant(participant_);
   }
 
   void Node::spin()
