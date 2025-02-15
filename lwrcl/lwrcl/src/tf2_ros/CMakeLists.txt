@@ -1,50 +1,6 @@
 cmake_minimum_required(VERSION 3.16.3)
 project(tf2_ros)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread")
-set(DDS_PATH "/opt/fast-dds/")
-set(LIB_PATH "/opt/fast-dds-libs/")
-set(OPT_PATH "/opt/")
-list(APPEND CMAKE_PREFIX_PATH ${DDS_PATH} ${LIB_PATH})
-list(APPEND CMAKE_SYSTEM_PREFIX_PATH ${DDS_PATH} ${LIB_PATH})
-
-if(NOT fastcdr_FOUND)
-    find_package(fastcdr REQUIRED)
-endif()
-
-if(NOT foonathan_memory_FOUND)
-    find_package(foonathan_memory REQUIRED)
-endif()
-
-if(NOT fastrtps_FOUND)
-    find_package(fastrtps REQUIRED)
-endif()
-
-if(NOT tinyxml2_FOUND)
-    find_package(tinyxml2 REQUIRED)
-endif()
-
-
-set(ROS_DATA_TYPES_INCLUDE_PATH /opt/fast-dds-libs/include)
-include_directories(/opt/fast-dds-libs/include
-                    /opt/fast-dds-libs/include/optionparser)
-link_directories(/opt/fast-dds-libs/lib)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/dds/include)
-set(fastcdr_DIR ${DDS_PATH}/lib/cmake/fastcdr/)
-set(fastrtps_DIR ${DDS_PATH}/share/fastrtps/cmake/)
-set(foonathan_memory_DIR ${DDS_PATH}/lib/foonathan_memory/cmake/)
-set(tinyxml2_DIR ${DDS_PATH}/lib/cmake/tinyxml2/)
-
-
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic -Wnon-virtual-dtor -Woverloaded-virtual)
-endif()
-
 # tf2_ros library
 add_library(${PROJECT_NAME} SHARED
   src/buffer.cpp

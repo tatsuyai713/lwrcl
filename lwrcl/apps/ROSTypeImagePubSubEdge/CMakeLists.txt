@@ -16,18 +16,8 @@ cmake_minimum_required(VERSION 3.16.3)
 
 project(ROSTypeImagePubSubEdge VERSION 1 LANGUAGES CXX)
 
-if(NOT fastrtps_FOUND)
-    find_package(fastrtps REQUIRED)
-endif()
-
 find_package(OpenCV REQUIRED)
 
-
-set(ROS_DATA_TYPES_INCLUDE_PATH /opt/fast-dds-libs/include)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../lwrcl/src/lwrcl/include
-                    /opt/fast-dds-libs/include
-                    /opt/fast-dds-libs/include/optionparser)
-link_directories(/opt/fast-dds-libs/lib)
 file(GLOB_RECURSE Original_IDL_Files
   "${CMAKE_CURRENT_SOURCE_DIR}/*/*.idl"
 )

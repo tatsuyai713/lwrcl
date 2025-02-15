@@ -746,9 +746,9 @@ public:
     }
   }
 
-  rsl_serialized_message_t & get_rsl_serialized_message() { return data_; }
+  rsl_serialized_message_t & get_rcl_serialized_message() { return data_; }
 
-  const rsl_serialized_message_t & get_rsl_serialized_message() const { return data_; }
+  const rsl_serialized_message_t & get_rcl_serialized_message() const { return data_; }
 
   size_t size() const { return data_.length; }
 
@@ -788,20 +788,20 @@ public:
     eprosima::fastcdr::Cdr cdr(fastbuffer);
     uint8_t header[4] = {0x00, 0x01, 0x00, 0x00};
     message->serialize(cdr);
-    const char * buffer = cdr.getBufferPointer();
-    size_t length = cdr.getSerializedDataLength();
+    const char * buffer = cdr.get_buffer_pointer();
+    size_t length = cdr.get_serialized_data_length();
     serialized_message->reserve(length + 4);
-    char * combined_buffer = serialized_message->get_rsl_serialized_message().buffer;
+    char * combined_buffer = serialized_message->get_rcl_serialized_message().buffer;
     memcpy(combined_buffer, header, 4);
     memcpy(combined_buffer + 4, buffer, length);
-    serialized_message->get_rsl_serialized_message().length = length + 4;
+    serialized_message->get_rcl_serialized_message().length = length + 4;
   }
 
   static void deserialize_message(SerializedMessage * serialized_message, T * message)
   {
     eprosima::fastcdr::FastBuffer fastbuffer(
-      reinterpret_cast<char *>(serialized_message->get_rsl_serialized_message().buffer + 4),
-      serialized_message->get_rsl_serialized_message().length - 4);
+      reinterpret_cast<char *>(serialized_message->get_rcl_serialized_message().buffer + 4),
+      serialized_message->get_rcl_serialized_message().length - 4);
     eprosima::fastcdr::Cdr cdr(fastbuffer);
     message->deserialize(cdr);
   }
