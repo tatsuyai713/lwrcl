@@ -53,17 +53,18 @@ index b286805..cb8d847 100644
 + target_include_directories(${PROJECT_NAME} PUBLIC
 +     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include> $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
 diff --git a/src/cpp/utils/SystemInfo.cpp b/src/cpp/utils/SystemInfo.cpp
-index 8aab32d..026262f 100644
+index 8aab32d..1843d09 100644
 --- a/src/cpp/utils/SystemInfo.cpp
 +++ b/src/cpp/utils/SystemInfo.cpp
-@@ -344,6 +344,86 @@ std::mutex SystemInfo::interfaces_mtx_;
+@@ -344,6 +344,78 @@ std::mutex SystemInfo::interfaces_mtx_;
  #include "threading/threading_osx.ipp"
  #include "thread_impl/thread_impl_pthread.ipp"
  #elif defined(_POSIX_SOURCE) || defined(__QNXNTO__) || defined(__ANDROID__)
 +#ifdef __QNXNTO__
++
 +#include <pthread.h>
-+#include <sys/neutrino.h>  // ThreadCtl() はここに定義されている
-+#include <unistd.h>        // sysconf()
++#include <sys/neutrino.h>
++#include <unistd.h>
 +#include <errno.h>
 +#include <stdio.h>
 +
@@ -72,36 +73,31 @@ index 8aab32d..026262f 100644
 +    unsigned num_bits;
 +    uint64_t mask;
 +} qnx_cpu_set_t;
-+
-+// cpu_set_t → qnx_cpu_set_t に置き換え
 +#define cpu_set_t qnx_cpu_set_t
 +
-+#define CPU_ZERO(setptr) \
-+    do {                 \
-+        (setptr)->mask = 0;        \
-+        (setptr)->num_bits = 64;   \
++#define CPU_ZERO(setptr)                           \
++    do {                                           \
++        (setptr)->mask = 0;                        \
++        (setptr)->num_bits = 64;                   \
 +    } while (0)
 +
-+#define CPU_SET(cpu, setptr)                 \
-+    do {                                     \
-+        if ((cpu) < (setptr)->num_bits)      \
-+        {                                    \
-+            (setptr)->mask |= (1ULL << (cpu)); \
-+        }                                    \
++#define CPU_SET(cpu, setptr)                       \
++    do {                                           \
++        if ((cpu) < (setptr)->num_bits)            \
++        {                                          \
++            (setptr)->mask |= (1ULL << (cpu));     \
++        }                                          \
 +    } while (0)
 +
-+// Linux の get_nprocs_conf() 相当
 +static long get_nprocs_conf()
 +{
 +    long n = sysconf(_SC_NPROCESSORS_ONLN);
 +    return (n > 0) ? n : 1;
 +}
 +
-+// QNX 用の簡易実装:
-+// `thread` が自分自身の場合のみ、`cpuset->mask` で指定されたコアに実行を制限
 +int pthread_setaffinity_np(
 +        pthread_t thread,
-+        size_t /*cpusetsize*/,
++        size_t,
 +        const cpu_set_t* cpuset)
 +{
 +    if (cpuset == nullptr)
@@ -110,35 +106,31 @@ index 8aab32d..026262f 100644
 +        return -1;
 +    }
 +
-+    // 今の実装では “自分のスレッド” だけ設定できるものとする
-+    if (!pthread_equal(pthread_self(), thread))
++    if (pthread_equal(pthread_self(), thread))
 +    {
-+        // 他スレッドを設定する場合は追加実装が必要
++        uint64_t runmask = cpuset->mask;
++        if (ThreadCtl(_NTO_TCTL_RUNMASK, &runmask) == -1)
++        {
++            perror("ThreadCtl(_NTO_TCTL_RUNMASK) failed");
++            return -1;
++        }
++        return 0;
++    } else
++    {
 +        errno = ENOTSUP;
 +        return -1;
 +    }
-+
-+    // ThreadCtl に渡す用の単なる runmask (uint64_t) を作る
-+    uint64_t runmask = cpuset->mask;
-+
-+    // ThreadCtl(_NTO_TCTL_RUNMASK, &runmask) で実行可能コアを設定
-+    if (ThreadCtl(_NTO_TCTL_RUNMASK, &runmask) == -1)
-+    {
-+        perror("ThreadCtl(_NTO_TCTL_RUNMASK) failed");
-+        return -1;
-+    }
-+    return 0;
 +}
 +
-+// Linux 固有マクロのダミー定義
 +#ifndef SCHED_BATCH
-+#define SCHED_BATCH (-1)
++#define SCHED_BATCH SCHED_OTHER
 +#endif
 +#ifndef SCHED_IDLE
-+#define SCHED_IDLE (-1)
++#define SCHED_IDLE SCHED_OTHER
 +#endif
 +
 +#endif // __QNXNTO__
++
 +
  #include "threading/threading_pthread.ipp"
  #include "thread_impl/thread_impl_pthread.ipp"
@@ -159,23 +151,11 @@ index e09f891..0c8008a 100644
  #include <sys/time.h>
  #include <sys/types.h>
  
-diff --git a/thirdparty/asio b/thirdparty/asio
---- a/thirdparty/asio
-+++ b/thirdparty/asio
-@@ -1 +1 @@
--Subproject commit b84e6c16b2ea907dbad94206b7510d85aafc0b42
-+Subproject commit b84e6c16b2ea907dbad94206b7510d85aafc0b42-dirty
-diff --git a/thirdparty/fastcdr b/thirdparty/fastcdr
---- a/thirdparty/fastcdr
-+++ b/thirdparty/fastcdr
-@@ -1 +1 @@
--Subproject commit 9f4e60f7ac958e0fbbfe949102de3929cbbc226f
-+Subproject commit 9f4e60f7ac958e0fbbfe949102de3929cbbc226f-dirty
 diff --git a/thirdparty/filewatch/FileWatch.hpp b/thirdparty/filewatch/FileWatch.hpp
-index 8f4b609..50a399b 100644
+index 8f4b609..073fe73 100644
 --- a/thirdparty/filewatch/FileWatch.hpp
 +++ b/thirdparty/filewatch/FileWatch.hpp
-@@ -244,9 +244,11 @@ namespace filewatch {
+@@ -244,17 +244,19 @@ namespace filewatch {
              _running = std::promise<void>();
  #ifdef _WIN32
              SetEvent(_close_event);
@@ -184,11 +164,21 @@ index 8f4b609..50a399b 100644
              inotify_rm_watch(_directory.folder, _directory.watch);
 -#endif // __unix__
 +#elif defined(__QNXNTO__)
-+            // Nothing
 +#endif
              _cv.notify_all();
              _watch_thread.join();
              _callback_thread.join();
+ #ifdef _WIN32
+             CloseHandle(_directory);
+-#elif __unix__
++#elif defined(__unix__) && !defined(__QNXNTO__)
+             close(_directory.folder);
+-#endif // __unix__
++#elif defined(__QNXNTO__)
++#endif
+         }
+ 
+         const PathParts split_directory_and_file(const T& path) const
 @@ -465,6 +467,8 @@ namespace filewatch {
              return S_ISREG(statbuf.st_mode);
          }
@@ -211,7 +201,7 @@ index 8f4b609..50a399b 100644
              const T watch_path = [this, &path]() {
                  if (_watching_single_file)
                  {
-@@ -488,38 +491,68 @@ namespace filewatch {
+@@ -488,38 +491,63 @@ namespace filewatch {
                      return path;
                  }
              }();
@@ -232,25 +222,20 @@ index 8f4b609..50a399b 100644
 +        
 +#elif defined(__QNXNTO__)
 +        
-+        // QNX 用：inotify 非対応のため、ポーリング方式にする
 +        FolderInfo get_directory(const T& path)
 +        {
-+            // inotify_init() などは使用せず、ディレクトリ自体の存在をチェックするだけ
 +            _watching_single_file = is_file(path);
 +        
-+            // QNX 用には FolderInfo の folder フィールドには意味がないので 0 を設定
 +            FolderInfo fi;
 +            fi.folder = 0;
 +            fi.watch = 0;
 +        
-+            // もし監視対象が単一ファイルなら、分離してファイル名を保持
 +            if (_watching_single_file)
 +            {
 +                const auto parsed_path = split_directory_and_file(path);
 +                _filename = parsed_path.filename;
 +            }
 +        
-+            // 監視対象（ディレクトリまたはファイル）の初期状態を記録する
 +            init_last_write_time();
 +        
 +            return fi;
@@ -288,14 +273,13 @@ index 8f4b609..50a399b 100644
                  if (length > 0 && (current_time != last_write_time_ || current_size != last_size_))
                  {
                      int i = 0;
-@@ -561,6 +594,57 @@ namespace filewatch {
+@@ -561,6 +589,47 @@ namespace filewatch {
                  }
              }
          }
 +        
 +#elif defined(__QNXNTO__)
 +        
-+        // QNX 用：ポーリングによる監視実装
 +        void monitor_directory()
 +        {
 +            _running.set_value();
@@ -304,7 +288,6 @@ index 8f4b609..50a399b 100644
 +                struct stat result;
 +                if (stat(_path.c_str(), &result) != 0)
 +                {
-+                    // 監視対象が削除された場合などはエラー扱いとするか、通知する
 +                    std::this_thread::sleep_for(std::chrono::seconds(1));
 +                    continue;
 +                }
@@ -322,15 +305,7 @@ index 8f4b609..50a399b 100644
 +                    last_write_time_ = current_time;
 +                    last_size_ = current_size;
 +                    std::vector<std::pair<T, Event>> parsed_information;
-+                    // ポーリングの場合、単一ファイルなら modified、ディレクトリならすべてを modified とする
-+                    if (_watching_single_file)
-+                    {
-+                        parsed_information.emplace_back(_path, Event::modified);
-+                    }
-+                    else
-+                    {
-+                        parsed_information.emplace_back(_path, Event::modified);
-+                    }
++                    parsed_information.emplace_back(_path, Event::modified);
 +                    //dispatch callbacks
 +                    {
 +                        std::lock_guard<std::mutex> lock(_callback_mutex);
