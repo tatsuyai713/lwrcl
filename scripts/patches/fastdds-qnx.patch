@@ -1,0 +1,348 @@
+diff --git a/build_qnx/common.mk b/build_qnx/common.mk
+index e5bbef9..9a4865e 100644
+--- a/build_qnx/common.mk
++++ b/build_qnx/common.mk
+@@ -52,13 +52,17 @@ CMAKE_ARGS += -DBUILD_SHARED_LIBS=ON \
+              -DCMAKE_INSTALL_LIBDIR=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr/lib \
+              -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+              -DINCLUDE_INSTALL_DIR=$(FAST-DDS_INSTALL_ROOT)/usr/include \
+-             -DLIB_INSTALL_DIR=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr/lib
++             -DLIB_INSTALL_DIR=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr/lib \
++             -DCMAKE_SYSTEM_PREFIX_PATH=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr \
++             -DCMAKE_PREFIX_PATH=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr
+ 
+ FAST-DDS_CMAKE_ARGS = $(CMAKE_ARGS) \
+                      -DQNX_INSTALL_ROOT=$(FAST-DDS_INSTALL_ROOT) \
+                      -DSECURITY=ON \
+                      -DCOMPILE_EXAMPLES=OFF \
+-                     -DEPROSIMA_BUILD_TESTS=OFF
++                     -DEPROSIMA_BUILD_TESTS=OFF \
++                     -Dfastcdr_DIR=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr/lib/cmake/fastcdr \
++                     -Dfoonathan_memory_DIR=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr/lib/foonathan_memory/cmake
+ 
+ CONFIGURE_ASIO = $(ASIO_ROOT)/configure --exec-prefix $(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR) --prefix $(FAST-DDS_INSTALL_ROOT)
+ 
+diff --git a/build_qnx/qnx_patches/fastcdr_qnx.patch b/build_qnx/qnx_patches/fastcdr_qnx.patch
+index b286805..cb8d847 100644
+--- a/build_qnx/qnx_patches/fastcdr_qnx.patch
++++ b/build_qnx/qnx_patches/fastcdr_qnx.patch
+@@ -1,15 +1,15 @@
+ diff --git a/src/cpp/CMakeLists.txt b/src/cpp/CMakeLists.txt
+-index dcbf7ab..9cad45f 100644
++index 7ed0442..f5262d2 100644
+ --- a/src/cpp/CMakeLists.txt
+ +++ b/src/cpp/CMakeLists.txt
+-@@ -63,6 +63,10 @@ elseif(NOT EPROSIMA_INSTALLER)
+- 	$<$<STREQUAL:$<TARGET_PROPERTY:${PROJECT_NAME},TYPE>,SHARED_LIBRARY>:${PROJECT_NAME_UPPER}_DYN_LINK>
+-         )
++@@ -63,6 +63,10 @@ target_compile_definitions(${PROJECT_NAME}
++     $<$<STREQUAL:$<TARGET_PROPERTY:${PROJECT_NAME},TYPE>,SHARED_LIBRARY>:${PROJECT_NAME_UPPER}_DYN_LINK>
++     )
+  
+-+    if(QNX)
+-+        target_compile_definitions(${PROJECT_NAME} PRIVATE _QNX_SOURCE)
+-+    endif()
+++if(QNX)
+++    target_compile_definitions(${PROJECT_NAME} PRIVATE _QNX_SOURCE)
+++endif()
+ +
+-     # Define public headers
+-     target_include_directories(${PROJECT_NAME} PUBLIC
+-         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include> $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
++ # Define public headers
++ target_include_directories(${PROJECT_NAME} PUBLIC
++     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include> $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
+diff --git a/src/cpp/utils/SystemInfo.cpp b/src/cpp/utils/SystemInfo.cpp
+index 8aab32d..026262f 100644
+--- a/src/cpp/utils/SystemInfo.cpp
++++ b/src/cpp/utils/SystemInfo.cpp
+@@ -344,6 +344,86 @@ std::mutex SystemInfo::interfaces_mtx_;
+ #include "threading/threading_osx.ipp"
+ #include "thread_impl/thread_impl_pthread.ipp"
+ #elif defined(_POSIX_SOURCE) || defined(__QNXNTO__) || defined(__ANDROID__)
++#ifdef __QNXNTO__
++#include <pthread.h>
++#include <sys/neutrino.h>  // ThreadCtl() はここに定義されている
++#include <unistd.h>        // sysconf()
++#include <errno.h>
++#include <stdio.h>
++
++typedef struct
++{
++    unsigned num_bits;
++    uint64_t mask;
++} qnx_cpu_set_t;
++
++// cpu_set_t → qnx_cpu_set_t に置き換え
++#define cpu_set_t qnx_cpu_set_t
++
++#define CPU_ZERO(setptr) \
++    do {                 \
++        (setptr)->mask = 0;        \
++        (setptr)->num_bits = 64;   \
++    } while (0)
++
++#define CPU_SET(cpu, setptr)                 \
++    do {                                     \
++        if ((cpu) < (setptr)->num_bits)      \
++        {                                    \
++            (setptr)->mask |= (1ULL << (cpu)); \
++        }                                    \
++    } while (0)
++
++// Linux の get_nprocs_conf() 相当
++static long get_nprocs_conf()
++{
++    long n = sysconf(_SC_NPROCESSORS_ONLN);
++    return (n > 0) ? n : 1;
++}
++
++// QNX 用の簡易実装:
++// `thread` が自分自身の場合のみ、`cpuset->mask` で指定されたコアに実行を制限
++int pthread_setaffinity_np(
++        pthread_t thread,
++        size_t /*cpusetsize*/,
++        const cpu_set_t* cpuset)
++{
++    if (cpuset == nullptr)
++    {
++        errno = EINVAL;
++        return -1;
++    }
++
++    // 今の実装では “自分のスレッド” だけ設定できるものとする
++    if (!pthread_equal(pthread_self(), thread))
++    {
++        // 他スレッドを設定する場合は追加実装が必要
++        errno = ENOTSUP;
++        return -1;
++    }
++
++    // ThreadCtl に渡す用の単なる runmask (uint64_t) を作る
++    uint64_t runmask = cpuset->mask;
++
++    // ThreadCtl(_NTO_TCTL_RUNMASK, &runmask) で実行可能コアを設定
++    if (ThreadCtl(_NTO_TCTL_RUNMASK, &runmask) == -1)
++    {
++        perror("ThreadCtl(_NTO_TCTL_RUNMASK) failed");
++        return -1;
++    }
++    return 0;
++}
++
++// Linux 固有マクロのダミー定義
++#ifndef SCHED_BATCH
++#define SCHED_BATCH (-1)
++#endif
++#ifndef SCHED_IDLE
++#define SCHED_IDLE (-1)
++#endif
++
++#endif // __QNXNTO__
++
+ #include "threading/threading_pthread.ipp"
+ #include "thread_impl/thread_impl_pthread.ipp"
+ #else
+diff --git a/src/cpp/utils/threading/threading_pthread.ipp b/src/cpp/utils/threading/threading_pthread.ipp
+index e09f891..0c8008a 100644
+--- a/src/cpp/utils/threading/threading_pthread.ipp
++++ b/src/cpp/utils/threading/threading_pthread.ipp
+@@ -19,7 +19,11 @@
+ 
+ #include <pthread.h>
+ #include <sys/resource.h>
++#if defined(__linux__)
+ #include <sys/sysinfo.h>
++#elif defined(__QNXNTO__)
++#include <hw/sysinfo.h>
++#endif
+ #include <sys/time.h>
+ #include <sys/types.h>
+ 
+diff --git a/thirdparty/asio b/thirdparty/asio
+--- a/thirdparty/asio
++++ b/thirdparty/asio
+@@ -1 +1 @@
+-Subproject commit b84e6c16b2ea907dbad94206b7510d85aafc0b42
++Subproject commit b84e6c16b2ea907dbad94206b7510d85aafc0b42-dirty
+diff --git a/thirdparty/fastcdr b/thirdparty/fastcdr
+--- a/thirdparty/fastcdr
++++ b/thirdparty/fastcdr
+@@ -1 +1 @@
+-Subproject commit 9f4e60f7ac958e0fbbfe949102de3929cbbc226f
++Subproject commit 9f4e60f7ac958e0fbbfe949102de3929cbbc226f-dirty
+diff --git a/thirdparty/filewatch/FileWatch.hpp b/thirdparty/filewatch/FileWatch.hpp
+index 8f4b609..50a399b 100644
+--- a/thirdparty/filewatch/FileWatch.hpp
++++ b/thirdparty/filewatch/FileWatch.hpp
+@@ -244,9 +244,11 @@ namespace filewatch {
+             _running = std::promise<void>();
+ #ifdef _WIN32
+             SetEvent(_close_event);
+-#elif __unix__
++#elif defined(__unix__) && !defined(__QNXNTO__)
+             inotify_rm_watch(_directory.folder, _directory.watch);
+-#endif // __unix__
++#elif defined(__QNXNTO__)
++            // Nothing
++#endif
+             _cv.notify_all();
+             _watch_thread.join();
+             _callback_thread.join();
+@@ -465,6 +467,8 @@ namespace filewatch {
+             return S_ISREG(statbuf.st_mode);
+         }
+ 
++#if defined(__unix__) && !defined(__QNXNTO__)
++
+         FolderInfo get_directory(const T& path)
+         {
+             const auto folder = inotify_init();
+@@ -472,10 +476,9 @@ namespace filewatch {
+             {
+                 throw std::system_error(errno, std::system_category());
+             }
+-            //const auto listen_filters = _listen_filters;
+-
++        
+             _watching_single_file = is_file(path);
+-
++        
+             const T watch_path = [this, &path]() {
+                 if (_watching_single_file)
+                 {
+@@ -488,38 +491,68 @@ namespace filewatch {
+                     return path;
+                 }
+             }();
+-
++        
+             const auto watch = inotify_add_watch(folder, watch_path.c_str(), IN_MODIFY | IN_CREATE | IN_DELETE );
+             if (watch < 0)
+             {
+                 throw std::system_error(errno, std::system_category());
+             }
+-
++        
+             init_last_write_time();
+-
++        
+             return { folder, watch };
+         }
++        
++#elif defined(__QNXNTO__)
++        
++        // QNX 用：inotify 非対応のため、ポーリング方式にする
++        FolderInfo get_directory(const T& path)
++        {
++            // inotify_init() などは使用せず、ディレクトリ自体の存在をチェックするだけ
++            _watching_single_file = is_file(path);
++        
++            // QNX 用には FolderInfo の folder フィールドには意味がないので 0 を設定
++            FolderInfo fi;
++            fi.folder = 0;
++            fi.watch = 0;
++        
++            // もし監視対象が単一ファイルなら、分離してファイル名を保持
++            if (_watching_single_file)
++            {
++                const auto parsed_path = split_directory_and_file(path);
++                _filename = parsed_path.filename;
++            }
++        
++            // 監視対象（ディレクトリまたはファイル）の初期状態を記録する
++            init_last_write_time();
++        
++            return fi;
++        }
++        
++#endif // __unix__ / __QNXNTO__        
++
++#if defined(__unix__) && !defined(__QNXNTO__)
+ 
+         void monitor_directory()
+         {
+             std::vector<char> buffer(_buffer_size);
+-
++        
+             _running.set_value();
+             while (_destory == false)
+             {
+                 const auto length = read(_directory.folder, static_cast<void*>(buffer.data()), buffer.size());
+-
++        
+                 struct stat result;
+                 stat(_path.c_str(), &result);
+-
++        
+                 using clock = std::chrono::system_clock;
+                 using duration = clock::duration;
+                 std::chrono::time_point<clock> current_time;
+                 current_time += std::chrono::duration_cast<duration>(std::chrono::seconds(result.st_mtim.tv_sec));
+                 current_time += std::chrono::duration_cast<duration>(std::chrono::nanoseconds(result.st_mtim.tv_nsec));
+-
++        
+                 unsigned long current_size = result.st_size;
+-
++        
+                 if (length > 0 && (current_time != last_write_time_ || current_size != last_size_))
+                 {
+                     int i = 0;
+@@ -561,6 +594,57 @@ namespace filewatch {
+                 }
+             }
+         }
++        
++#elif defined(__QNXNTO__)
++        
++        // QNX 用：ポーリングによる監視実装
++        void monitor_directory()
++        {
++            _running.set_value();
++            while (_destory == false)
++            {
++                struct stat result;
++                if (stat(_path.c_str(), &result) != 0)
++                {
++                    // 監視対象が削除された場合などはエラー扱いとするか、通知する
++                    std::this_thread::sleep_for(std::chrono::seconds(1));
++                    continue;
++                }
++        
++                using clock = std::chrono::system_clock;
++                using duration = clock::duration;
++                std::chrono::time_point<clock> current_time;
++                current_time += std::chrono::duration_cast<duration>(std::chrono::seconds(result.st_mtim.tv_sec));
++                current_time += std::chrono::duration_cast<duration>(std::chrono::nanoseconds(result.st_mtim.tv_nsec));
++        
++                unsigned long current_size = result.st_size;
++        
++                if (current_time != last_write_time_ || current_size != last_size_)
++                {
++                    last_write_time_ = current_time;
++                    last_size_ = current_size;
++                    std::vector<std::pair<T, Event>> parsed_information;
++                    // ポーリングの場合、単一ファイルなら modified、ディレクトリならすべてを modified とする
++                    if (_watching_single_file)
++                    {
++                        parsed_information.emplace_back(_path, Event::modified);
++                    }
++                    else
++                    {
++                        parsed_information.emplace_back(_path, Event::modified);
++                    }
++                    //dispatch callbacks
++                    {
++                        std::lock_guard<std::mutex> lock(_callback_mutex);
++                        _callback_information.insert(_callback_information.end(), parsed_information.begin(), parsed_information.end());
++                    }
++                    _cv.notify_all();
++                }
++                std::this_thread::sleep_for(std::chrono::seconds(1)); // 1秒間隔でポーリング
++            }
++        }
++        
++#endif // __unix__ / __QNXNTO__
+ #endif // __unix__
+ 
+         void callback_thread()
