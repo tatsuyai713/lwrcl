@@ -44,6 +44,7 @@
 #include <fastrtps/transport/UDPv6TransportDescriptor.h>
 #include <fastdds/rtps/transport/shared_mem/SharedMemTransportDescriptor.h>
 #include <fastrtps/types/TypesBase.h>
+#include <fastdds/dds/core/condition/GuardCondition.hpp>
 
 namespace lwrcl
 {

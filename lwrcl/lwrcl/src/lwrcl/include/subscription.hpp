@@ -1,19 +1,20 @@
-#include <iostream> // 追加
-
 #ifndef LWRCL_SUBSCRIBER_HPP_
 #define LWRCL_SUBSCRIBER_HPP_
 
 #include <atomic>
 #include <cstddef>
+#include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
-#include <mutex>
 
 #include "fast_dds_header.hpp"
 #include "qos.hpp"
 #include "channel.hpp"
+
+#define MAX_POLLABLE_BUFFER_SIZE 100
 
 namespace lwrcl
 {
@@ -31,8 +32,7 @@ namespace lwrcl
   class WaitResult
   {
   public:
-    explicit WaitResult(WaitResultKind k)
-        : kind_(k) {}
+    explicit WaitResult(WaitResultKind k) : kind_(k) {}
     WaitResultKind kind() const { return kind_; }
 
   private:
@@ -47,84 +47,91 @@ namespace lwrcl
   class SubscriberCallback : public ChannelCallback
   {
   public:
-    SubscriberCallback(std::function<void(std::shared_ptr<T>)> callback_function, std::vector<std::shared_ptr<T>> *message_buffer, std::mutex *lwrcl_subscriber_mutex_ptr)
-        : callback_function_(callback_function), message_buffer_(message_buffer), lwrcl_subscriber_mutex_ptr_(lwrcl_subscriber_mutex_ptr) {}
+    SubscriberCallback(
+        std::function<void(std::shared_ptr<T>)> callback_function,
+        std::vector<std::shared_ptr<T>> *message_buffer, std::mutex &lwrcl_subscriber_mutex)
+        : callback_function_(callback_function),
+          message_buffer_(message_buffer),
+          lwrcl_subscriber_mutex_(lwrcl_subscriber_mutex)
+    {
+    }
 
     ~SubscriberCallback() = default;
 
     void invoke() override
     {
+      std::lock_guard<std::mutex> lock(lwrcl_subscriber_mutex_);
       try
       {
-        std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_ptr_);
         if (!message_buffer_->empty())
         {
           callback_function_(message_buffer_->front());
           message_buffer_->erase(message_buffer_->begin());
         }
-        else
-        {
-          std::cerr << "Error: Vector is empty" << std::endl;
-        }
       }
       catch (const std::exception &e)
       {
-        std::cerr << "Exception during callback invocation: " << e.what() << std::endl;
+        throw std::runtime_error("Error: Exception during callback invocation");
       }
       catch (...)
       {
-        std::cerr << "Unknown exception during callback invocation." << std::endl;
+        throw std::runtime_error("Error: Unknown exception during callback invocation");
       }
     }
 
   private:
     std::function<void(std::shared_ptr<T>)> callback_function_;
     std::vector<std::shared_ptr<T>> *message_buffer_;
-    mutable std::mutex *lwrcl_subscriber_mutex_ptr_;
+    std::mutex &lwrcl_subscriber_mutex_;
   };
 
   template <typename T>
   class SubscriberWaitSet
   {
   public:
-    SubscriberWaitSet(std::function<void(std::shared_ptr<T>)> callback_function, Channel<ChannelCallback *>::SharedPtr channel)
-        : callback_function_(callback_function), channel_(channel)
+    SubscriberWaitSet(
+        std::function<void(std::shared_ptr<T>)> callback_function,
+        Channel<ChannelCallback *>::SharedPtr channel)
+        : callback_function_(callback_function),
+          channel_(channel),
+          reader_(nullptr),
+          subscription_callback_(std::make_unique<SubscriberCallback<T>>(
+              callback_function_, &message_ptr_buffer_, lwrcl_subscriber_mutex_))
     {
-      subscription_callback_ = std::make_unique<SubscriberCallback<T>>(callback_function_, &message_ptr_buffer_, &lwrcl_subscriber_mutex_);
     }
 
-    ~SubscriberWaitSet()
-    {
-      stop();
-    }
+    ~SubscriberWaitSet() { stop(); }
 
-    void start(eprosima::fastdds::dds::DataReader *reader)
+    void ready(eprosima::fastdds::dds::DataReader *reader)
     {
       reader_ = reader;
       stop_flag_.store(false);
 
-      auto &status_cond = reader_->get_statuscondition();
+      status_cond_ = &reader_->get_statuscondition();
 
-      status_cond.set_enabled_statuses(eprosima::fastdds::dds::StatusMask::data_available());
+      eprosima::fastdds::dds::StatusMask subscription_matched_mask =
+          eprosima::fastdds::dds::StatusMask::subscription_matched();
+      eprosima::fastdds::dds::StatusMask data_available_mask =
+          eprosima::fastdds::dds::StatusMask::data_available();
+
+      eprosima::fastdds::dds::StatusMask status_mask = data_available_mask;
+      status_mask |= subscription_matched_mask;
+      status_cond_->set_enabled_statuses(status_mask);
 
       // Attach the StatusCondition to the WaitSet
-      wait_set_.attach_condition(status_cond);
-
-      waitset_thread_ = std::thread(&SubscriberWaitSet::run, this);
+      wait_set_.attach_condition(*status_cond_);
+      wait_set_.attach_condition(terminate_condition_);
     }
+    void start() { waitset_thread_ = std::thread(&SubscriberWaitSet::run, this); }
 
     void stop()
     {
       stop_flag_.store(true);
+      terminate_condition_.set_trigger_value(true);
       if (waitset_thread_.joinable())
       {
         waitset_thread_.join();
       }
-    }
-
-    int32_t get_publisher_count()
-    {
-      return count_.load();
     }
 
   public:
@@ -142,7 +149,7 @@ namespace lwrcl
       return true;
     }
 
-    bool has_message() const
+    bool has_message()
     {
       std::lock_guard<std::mutex> lock(lwrcl_subscriber_mutex_);
       return !pollable_buffer_.empty();
@@ -151,46 +158,69 @@ namespace lwrcl
   private:
     void run()
     {
-
       while (!stop_flag_.load())
       {
         eprosima::fastdds::dds::ConditionSeq active_conditions;
         eprosima::fastrtps::Duration_t timeout{1, 0}; // Wait for 1 second
 
-        if (wait_set_.wait(active_conditions, timeout) == ReturnCode_t::RETCODE_OK)
+        ReturnCode_t ret_code = wait_set_.wait(active_conditions, timeout);
+        if (ret_code != ReturnCode_t::RETCODE_OK)
         {
-          // printf("Data available : Time %ld\n", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-          for (auto condition : active_conditions)
+          continue;
+        }
+
+        if (stop_flag_.load())
+        {
+          return;
+        }
+
+        for (auto condition : active_conditions)
+        {
+          eprosima::fastdds::dds::StatusCondition *status_cond =
+              dynamic_cast<eprosima::fastdds::dds::StatusCondition *>(condition);
+          if (status_cond_ == status_cond)
           {
-
-            eprosima::fastdds::dds::StatusCondition *status_cond = dynamic_cast<eprosima::fastdds::dds::StatusCondition *>(condition);
-            if (nullptr != status_cond)
+            eprosima::fastdds::dds::Entity *entity = status_cond->get_entity();
+            if (entity == nullptr)
             {
-              eprosima::fastdds::dds::Entity *entity = status_cond->get_entity();
-              eprosima::fastdds::dds::StatusMask changed_statuses = entity->get_status_changes();
+              continue;
+            }
 
-              if (changed_statuses.is_active(eprosima::fastdds::dds::StatusMask::data_available()))
+            eprosima::fastdds::dds::StatusMask changed_statuses = entity->get_status_changes();
+
+            if (changed_statuses.is_active(eprosima::fastdds::dds::StatusMask::subscription_matched()))
+            {
+              eprosima::fastdds::dds::SubscriptionMatchedStatus match_status;
+              ReturnCode_t ret = reader_->get_subscription_matched_status(match_status);
+              if (ret == ReturnCode_t::RETCODE_OK)
               {
-
-                while (reader_->take_next_sample(&data_, &info_) == ReturnCode_t::RETCODE_OK)
+                printf("Subscriber matched\n");
+              }
+            }
+            if (changed_statuses.is_active(eprosima::fastdds::dds::StatusMask::data_available()))
+            {
+              std::lock_guard<std::mutex> lock(lwrcl_subscriber_mutex_);
+              while (reader_->take_next_sample(&data_, &info_) == ReturnCode_t::RETCODE_OK)
+              {
+                if (info_.valid_data)
                 {
-                  if (info_.valid_data)
+                  auto data_ptr = std::shared_ptr<T>(new T(data_), [](T *ptr)
+                                                     { delete ptr; });
+                  message_ptr_buffer_.emplace_back(data_ptr);
+                  channel_->produce(subscription_callback_.get());
+                  lwrcl::MessageInfo new_info;
+                  new_info.source_timestamp = std::chrono::system_clock::now();
+                  new_info.from_intra_process = false;
+                  pollable_buffer_.emplace_back(data_ptr, new_info);
+                  if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
                   {
-                    std::lock_guard<std::mutex> lock(lwrcl_subscriber_mutex_);
-                    auto data_ptr = std::shared_ptr<T>(new T(data_), [](T *ptr)
-                                                       { delete ptr; });
-                    message_ptr_buffer_.emplace_back(data_ptr);
-                    channel_->produce(subscription_callback_.get());
-                    lwrcl::MessageInfo new_info;
-                    new_info.source_timestamp = std::chrono::system_clock::now();
-                    new_info.from_intra_process = false;
-                    pollable_buffer_.emplace_back(data_ptr, new_info);
+                    pollable_buffer_.erase(pollable_buffer_.begin());
                   }
-                  else
-                  {
-                    std::cerr << "Error: Invalid data" << std::endl;
-                    break;
-                  }
+                }
+                else
+                {
+                  printf("Error: Invalid data\n");
+                  break;
                 }
               }
             }
@@ -199,19 +229,20 @@ namespace lwrcl
       }
     }
 
-    std::function<void(std::shared_ptr<T>)> callback_function_;
+    std::function<void(std::shared_ptr<T>)>
+        callback_function_;
     Channel<ChannelCallback *>::SharedPtr channel_;
+    eprosima::fastdds::dds::DataReader *reader_;
     std::vector<std::shared_ptr<T>> message_ptr_buffer_;
     std::unique_ptr<SubscriberCallback<T>> subscription_callback_;
-    eprosima::fastdds::dds::SampleInfo sample_info_;
-    eprosima::fastdds::dds::DataReader *reader_ = nullptr;
     std::atomic<bool> stop_flag_{false};
     std::thread waitset_thread_;
-    std::atomic<int32_t> count_{0};
     eprosima::fastdds::dds::WaitSet wait_set_;
+    eprosima::fastdds::dds::GuardCondition terminate_condition_;
+    eprosima::fastdds::dds::StatusCondition *status_cond_{nullptr};
     T data_;
     eprosima::fastdds::dds::SampleInfo info_;
-    mutable std::mutex lwrcl_subscriber_mutex_;
+    std::mutex lwrcl_subscriber_mutex_;
     std::vector<std::pair<std::shared_ptr<T>, lwrcl::MessageInfo>> pollable_buffer_;
   };
 
@@ -219,7 +250,6 @@ namespace lwrcl
   {
   public:
     virtual ~ISubscription() = default;
-    virtual int32_t get_publisher_count() = 0;
     virtual void stop() = 0;
   };
 
@@ -227,10 +257,15 @@ namespace lwrcl
   class Subscription : public ISubscription, public std::enable_shared_from_this<Subscription<T>>
   {
   public:
-    Subscription(eprosima::fastdds::dds::DomainParticipant *participant, const std::string &topic,
-                 const QoS &qos, std::function<void(std::shared_ptr<T>)> callback_function,
-                 Channel<ChannelCallback *>::SharedPtr channel)
-        : participant_(participant), waitset_(callback_function, channel), topic_(nullptr), subscriber_(nullptr), reader_(nullptr)
+    Subscription(
+        eprosima::fastdds::dds::DomainParticipant *participant, const std::string &topic_name,
+        const QoS &qos, std::function<void(std::shared_ptr<T>)> callback_function,
+        Channel<ChannelCallback *>::SharedPtr channel)
+        : participant_(participant),
+          waitset_(callback_function, channel),
+          topic_(nullptr),
+          subscriber_(nullptr),
+          reader_(nullptr)
     {
       using ParentType = typename ParentTypeTraits<T>::Type;
       message_type_ = lwrcl::MessageType(new ParentType());
@@ -240,12 +275,22 @@ namespace lwrcl
         throw std::runtime_error("Failed to register message type");
       }
 
-      eprosima::fastdds::dds::Topic *retrieved_topic = dynamic_cast<eprosima::fastdds::dds::Topic *>(participant->lookup_topicdescription(topic));
+      std::string type_name = message_type_.get_type_support().get_type_name();
+      subscriber_ = participant_->create_subscriber(eprosima::fastdds::dds::SUBSCRIBER_QOS_DEFAULT);
+      if (!subscriber_)
+      {
+        throw std::runtime_error("Failed to create subscriber");
+      }
+
+      eprosima::fastdds::dds::Topic *retrieved_topic =
+          dynamic_cast<eprosima::fastdds::dds::Topic *>(participant->lookup_topicdescription(topic_name));
       if (retrieved_topic == nullptr)
       {
-        topic_ = participant_->create_topic(topic, message_type_.get_type_support().get_type_name(), topic_qos);
+        topic_ = participant_->create_topic(
+            topic_name, type_name, topic_qos);
         if (!topic_)
         {
+          participant_->delete_subscriber(subscriber_);
           throw std::runtime_error("Failed to create topic");
         }
         topic_owned_ = true;
@@ -256,14 +301,10 @@ namespace lwrcl
         topic_owned_ = false;
       }
 
-      subscriber_ = participant_->create_subscriber(eprosima::fastdds::dds::SUBSCRIBER_QOS_DEFAULT);
-      if (!subscriber_)
-      {
-        participant_->delete_topic(topic_);
-        throw std::runtime_error("Failed to create subscriber");
-      }
-      eprosima::fastdds::dds::DataReaderQos reader_qos = eprosima::fastdds::dds::DATAREADER_QOS_DEFAULT;
-      reader_qos.endpoint().history_memory_policy = eprosima::fastrtps::rtps::PREALLOCATED_WITH_REALLOC_MEMORY_MODE;
+      eprosima::fastdds::dds::DataReaderQos reader_qos =
+          eprosima::fastdds::dds::DATAREADER_QOS_DEFAULT;
+      reader_qos.endpoint().history_memory_policy =
+          eprosima::fastrtps::rtps::PREALLOCATED_WITH_REALLOC_MEMORY_MODE;
       reader_qos.history().depth = qos.get_depth();
       if (qos.get_history() == QoS::HistoryPolicy::KEEP_ALL)
       {
@@ -292,15 +333,16 @@ namespace lwrcl
       reader_qos.data_sharing().automatic();
       reader_qos.properties().properties().emplace_back("fastdds.intraprocess_delivery", "true");
 
-      reader_ = subscriber_->create_datareader(topic_, reader_qos, nullptr);
-      if (!reader_)
-      {
-        participant_->delete_subscriber(subscriber_);
-        participant_->delete_topic(topic_);
-        throw std::runtime_error("Failed to create datareader");
-      }
+    reader_ = subscriber_->create_datareader(topic_, reader_qos, nullptr, eprosima::fastdds::dds::StatusMask::all());
+    if (!reader_)
+    {
+      participant_->delete_subscriber(subscriber_);
+      participant_->delete_topic(topic_);
+      throw std::runtime_error("Failed to create datareader");
+    }
 
-      waitset_.start(reader_);
+    waitset_.ready(reader_);
+    waitset_.start();
     }
 
     ~Subscription()
@@ -320,26 +362,27 @@ namespace lwrcl
       }
     }
 
-    int32_t get_publisher_count()
-    {
-      return waitset_.get_publisher_count();
-    }
     using SharedPtr = std::shared_ptr<Subscription<T>>;
 
-    void stop()
-    {
-      waitset_.stop();
-    }
+    void stop() { waitset_.stop(); }
 
   public:
-    bool take(T &out_msg, lwrcl::MessageInfo &info)
-    {
-      return waitset_.take(out_msg, info);
-    }
+    bool take(T &out_msg, lwrcl::MessageInfo &info) { return waitset_.take(out_msg, info); }
 
-    bool has_message() const
+    bool has_message() { return waitset_.has_message(); }
+
+    int32_t get_publisher_count() const
     {
-      return waitset_.has_message();
+      if (!reader_)
+      {
+        return 0;
+      }
+      eprosima::fastdds::dds::SubscriptionMatchedStatus matched_status;
+      if (reader_->get_subscription_matched_status(matched_status) == ReturnCode_t::RETCODE_OK)
+      {
+        return matched_status.current_count;
+      }
+      return 0;
     }
 
   private:
@@ -351,7 +394,7 @@ namespace lwrcl
     lwrcl::MessageType message_type_;
     bool topic_owned_;
   };
-  
+
   class WaitSet
   {
   public:
@@ -360,29 +403,27 @@ namespace lwrcl
     template <typename T>
     WaitSet(std::initializer_list<std::shared_ptr<Subscription<T>>> init_list)
     {
-      for (auto & sub : init_list) {
+      for (auto &sub : init_list)
+      {
         add_subscription<T>(sub);
       }
     }
 
-template <typename T>
+    template <typename T>
     void add_subscription(std::shared_ptr<Subscription<T>> sub)
     {
       SubscriptionHolder holder;
-      holder.has_message = [sub]() -> bool {
-        return sub->has_message();
-      };
-      holder.take = [sub](void * data_ptr, MessageInfo & info) -> bool {
-        T* typed_ptr = static_cast<T*>(data_ptr);
+      holder.has_message = [sub]() -> bool
+      { return sub->has_message(); };
+      holder.take = [sub](void *data_ptr, MessageInfo &info) -> bool
+      {
+        T *typed_ptr = static_cast<T *>(data_ptr);
         return sub->take(*typed_ptr, info);
       };
       subs_.push_back(holder);
     }
 
-    WaitResult wait()
-    {
-      return wait_for(std::chrono::nanoseconds(-1));
-    }
+    WaitResult wait() { return wait_for(std::chrono::nanoseconds(-1)); }
 
     template <typename Rep, typename Period>
     WaitResult wait(std::chrono::duration<Rep, Period> timeout)
@@ -419,10 +460,7 @@ template <typename T>
       return WaitResult(WaitResultKind::Error);
     }
 
-    const std::vector<SubscriptionHolder> &get_subscriptions() const
-    {
-      return subs_;
-    }
+    const std::vector<SubscriptionHolder> &get_subscriptions() const { return subs_; }
 
   private:
     std::vector<SubscriptionHolder> subs_;
