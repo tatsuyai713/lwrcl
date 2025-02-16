@@ -604,7 +604,7 @@ Node::Node(int domain_id)
   
   factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
   
-  factory_->load_XML_profiles_file("/opt/fast-dds/fastdds.xml");
+  factory_->load_XML_profiles_file("./fastdds.xml");
 
   participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(
     factory_->create_participant(domain_id, participant_qos), DomainParticipantDeleter());
@@ -641,7 +641,7 @@ Node::Node(int domain_id, const std::string & name)
   // eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
   factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
 
-  factory_->load_XML_profiles_file("/opt/fast-dds/fastdds.xml");
+  factory_->load_XML_profiles_file("./fastdds.xml");
 
   participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(
     factory_->create_participant(domain_id, participant_qos), DomainParticipantDeleter());
@@ -680,7 +680,7 @@ Node::Node(const std::string & name)
   
   factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
   
-  factory_->load_XML_profiles_file("/opt/fast-dds/fastdds.xml");
+  factory_->load_XML_profiles_file("./fastdds.xml");
 
   participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(
     factory_->create_participant(domain_id, participant_qos), DomainParticipantDeleter());

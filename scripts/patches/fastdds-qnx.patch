@@ -1,5 +1,20 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 7526fca..82d6622 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -295,6 +295,10 @@ if(SECURITY AND QNX)
+     set(OPENSSL_LIBRARIES ssl crypto)
+ endif()
+ 
++if(QNX)
++    link_libraries(fsnotify)
++endif()
++
+ option(SQLITE3_SUPPORT "Activate SQLITE3 support" ON)
+ 
+ ###############################################################################
 diff --git a/build_qnx/common.mk b/build_qnx/common.mk
-index cb9d6b9..abfd47c 100644
+index e5bbef9..45120da 100644
 --- a/build_qnx/common.mk
 +++ b/build_qnx/common.mk
 @@ -52,13 +52,17 @@ CMAKE_ARGS += -DBUILD_SHARED_LIBS=ON \
@@ -8,18 +23,18 @@ index cb9d6b9..abfd47c 100644
               -DINCLUDE_INSTALL_DIR=$(FAST-DDS_INSTALL_ROOT)/usr/include \
 -             -DLIB_INSTALL_DIR=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr/lib
 +             -DLIB_INSTALL_DIR=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr/lib \
-+             -DCMAKE_SYSTEM_PREFIX_PATH=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr \
-+             -DCMAKE_PREFIX_PATH=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr
++			 -DCMAKE_SYSTEM_PREFIX_PATH=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr \
++			 -DCMAKE_PREFIX_PATH=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr
  
  FAST-DDS_CMAKE_ARGS = $(CMAKE_ARGS) \
                       -DQNX_INSTALL_ROOT=$(FAST-DDS_INSTALL_ROOT) \
                       -DSECURITY=ON \
--                     -DCOMPILE_EXAMPLES=ON \
--                     -DEPROSIMA_BUILD_TESTS=ON
-+                     -DCOMPILE_EXAMPLES=OFF \
+                      -DCOMPILE_EXAMPLES=OFF \
+-                     -DEPROSIMA_BUILD_TESTS=OFF
 +                     -DEPROSIMA_BUILD_TESTS=OFF \
-+                     -Dfastcdr_DIR=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr/lib/cmake/fastcdr \
-+                     -Dfoonathan_memory_DIR=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr/lib/foonathan_memory/cmake
++					 -Dfastcdr_DIR=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr/lib/cmake/fastcdr \
++					 -Dfoonathan_memory_DIR=$(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR)/usr/lib/foonathan_memory/cmake
  
  CONFIGURE_ASIO = $(ASIO_ROOT)/configure --exec-prefix $(FAST-DDS_INSTALL_ROOT)/$(CPUVARDIR) --prefix $(FAST-DDS_INSTALL_ROOT)
-
+ 
+ 

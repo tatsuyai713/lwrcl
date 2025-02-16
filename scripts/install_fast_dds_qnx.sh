@@ -1,7 +1,7 @@
 #!/bin/bash
 
 QNX_PATH="qnx800"
-fast_dds_version="2.11.3"
+fast_dds_version="2.11.2"
 foonathan_memory_vendor_version="1.3.1"
 googletest_version="1.13.0"
 
@@ -31,7 +31,7 @@ sudo rm -rf ${FAST_DDS_WORK_DIR}
 mkdir ${FAST_DDS_WORK_DIR}
 
 cd ${FAST_DDS_WORK_DIR}
-git clone https://github.com/qnx/Fast-DDS.git -b qnx-sdp8-master --depth 1
+git clone https://github.com/eProsima/Fast-DDS.git -b v$fast_dds_version --depth 1
 cd Fast-DDS
 WORKSPACE=$PWD
 echo "Patch Fast-DDS"
