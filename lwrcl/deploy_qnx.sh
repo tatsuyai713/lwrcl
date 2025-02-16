@@ -36,15 +36,15 @@ done
 find "$destination_folder" -type f -o -type l > /tmp/temp_file_list.txt
 
 execution_file=$(basename "$executable_path")
-echo "cd /data/home/qnxuser/qnx" > ./deploy_vp_batchfile
-echo "mkdir $execution_file" >> ./deploy_vp_batchfile
-echo "cd $execution_file" >> ./deploy_vp_batchfile
-echo "put $executable_path" >> ./deploy_vp_batchfile
+echo "cd /data/home/qnxuser/qnx" > ./deploy_qnx_batchfile
+echo "mkdir $execution_file" >> ./deploy_qnx_batchfile
+echo "cd $execution_file" >> ./deploy_qnx_batchfile
+echo "put $executable_path" >> ./deploy_qnx_batchfile
 
 # 一時ファイルを読み込み、各ファイルの前に "put " を追加して最終的なファイルに書き出す
 while read -r line; do
     echo "put $line"
-done < /tmp/temp_file_list.txt >> ./deploy_vp_batchfile
+done < /tmp/temp_file_list.txt >> ./deploy_qnx_batchfile
 
 # 一時ファイルを削除
 rm /tmp/temp_file_list.txt
@@ -54,11 +54,11 @@ config_dir="$folder_path/config"
 # config フォルダが存在するかどうかを確認
 if [ -d "$config_dir" ]; then
   find "$config_dir" -type f -o -type l > /tmp/temp_config_list.txt
-  echo "mkdir config" >> ./deploy_vp_batchfile
-  echo "cd config" >> ./deploy_vp_batchfile
+  echo "mkdir config" >> ./deploy_qnx_batchfile
+  echo "cd config" >> ./deploy_qnx_batchfile
   while read -r line; do
     echo "put $line"
-  done < /tmp/temp_config_list.txt >> ./deploy_vp_batchfile
+  done < /tmp/temp_config_list.txt >> ./deploy_qnx_batchfile
   rm /tmp/temp_config_list.txt
 fi
 
@@ -68,4 +68,4 @@ sshpass -p "$SSH_PASSWORD" ssh qnxuser@$QNX_IP "mkdir -p /data/home/qnxuser/qnx"
 sshpass -p "$SSH_PASSWORD" ssh qnxuser@$QNX_IP "rm -rf /data/home/qnxuser/qnx"
 sshpass -p "$SSH_PASSWORD" ssh qnxuser@$QNX_IP "mkdir -p /data/home/qnxuser/qnx"
 
-sshpass -p "$SSH_PASSWORD" sftp -oBatchMode=no -b ./deploy_vp_batchfile qnxuser@$QNX_IP:/data/home/qnxuser/qnx/
+sshpass -p "$SSH_PASSWORD" sftp -oBatchMode=no -b ./deploy_qnx_batchfile qnxuser@$QNX_IP:/data/home/qnxuser/qnx/

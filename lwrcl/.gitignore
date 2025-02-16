@@ -3,4 +3,4 @@ build_qnx
 .vscode
 .DS_Store
 deploy_files
-deploy_vp_batchfile
+deploy_qnx_batchfile
