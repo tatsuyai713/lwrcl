@@ -16,17 +16,6 @@ cmake_minimum_required(VERSION 3.16.3)
 
 project(CustomROSTypeDataPublisher VERSION 1 LANGUAGES CXX)
 
-
-if(NOT fastrtps_FOUND)
-    find_package(fastrtps REQUIRED)
-endif()
-
-set(ROS_DATA_TYPES_INCLUDE_PATH /opt/fast-dds-libs/include)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../lwrcl/src/lwrcl/include
-                    /opt/fast-dds-libs/include
-                    /opt/fast-dds-libs/include/optionparser)
-link_directories(/opt/fast-dds-libs/lib)
-
 file(GLOB_RECURSE Original_IDL_Files
   "${CMAKE_CURRENT_SOURCE_DIR}/*/*.idl"
 )
@@ -57,7 +46,7 @@ file(GLOB ROS_TYPE_DATA_PUBLISHER_SOURCES_CPP "src/*.cpp")
 add_custom_command(
     OUTPUT update_headers_done
     COMMAND ${CMAKE_COMMAND} -E echo "Running update_headers.sh"
-    COMMAND ${CMAKE_COMMAND} -E env bash /opt/fast-dds-libs/bin/update_headers.sh
+    COMMAND ${CMAKE_COMMAND} -E env bash ${ROS_DATA_TYPES_INCLUDE_PATH}/../bin/update_headers.sh
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Updating header files"
     VERBATIM
