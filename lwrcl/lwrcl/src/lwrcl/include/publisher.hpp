@@ -34,7 +34,7 @@ namespace lwrcl
               const QoS &qos)
         : participant_(participant), topic_(nullptr), publisher_(nullptr), writer_(nullptr)
     {
-      lwrcl::dds::TopicQos topic_qos = lwrcl::dds::TOPIC_QOS_DEFAULT;
+      lwrcl::dds::TopicQos topic_qos = lwrcl::dds::TOPIC_QOS_DEFAULT();
 
       using ParentType = typename ParentTypeTraits<T>::Type;
       message_type_ = lwrcl::MessageType(new ParentType());
@@ -46,7 +46,7 @@ namespace lwrcl
 
       std::string type_name = message_type_.get_type_support().get_type_name();
 
-      publisher_ = participant_->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
+      publisher_ = participant_->create_publisher(dds::PUBLISHER_QOS_DEFAULT());
       if (!publisher_)
       {
         throw std::runtime_error("Failed to create publisher");
@@ -68,7 +68,7 @@ namespace lwrcl
         topic_owned_ = false;
       }
 
-      dds::DataWriterQos writer_qos = dds::DATAWRITER_QOS_DEFAULT;
+      dds::DataWriterQos writer_qos = dds::DATAWRITER_QOS_DEFAULT();
       writer_qos.endpoint().history_memory_policy = rtps::PREALLOCATED_WITH_REALLOC_MEMORY_MODE;
       // writer_qos.data_sharing().automatic();
       writer_qos.history().depth = qos.get_depth();

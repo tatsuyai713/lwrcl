@@ -55,27 +55,49 @@ namespace lwrcl
     using DomainParticipantListener = eprosima::fastdds::dds::DomainParticipantListener;
     using DomainParticipantQos = eprosima::fastdds::dds::DomainParticipantQos;
     using SharedMemTransportDescriptor = eprosima::fastdds::rtps::SharedMemTransportDescriptor;
-    static const DomainParticipantQos PARTICIPANT_QOS_DEFAULT =
-        eprosima::fastdds::dds::PARTICIPANT_QOS_DEFAULT;
+
+    inline const DomainParticipantQos &PARTICIPANT_QOS_DEFAULT()
+    {
+      static const DomainParticipantQos qos = eprosima::fastdds::dds::PARTICIPANT_QOS_DEFAULT;
+      return qos;
+    }
 
     using DataReader = eprosima::fastdds::dds::DataReader;
     using DataReaderListener = eprosima::fastdds::dds::DataReaderListener;
     using DataReaderQos = eprosima::fastdds::dds::DataReaderQos;
-    static const DataReaderQos DATAREADER_QOS_DEFAULT = eprosima::fastdds::dds::DATAREADER_QOS_DEFAULT;
+    inline const DataReaderQos &DATAREADER_QOS_DEFAULT()
+    {
+      static const DataReaderQos qos = eprosima::fastdds::dds::DATAREADER_QOS_DEFAULT;
+      return qos;
+    }
+
     using DataWriter = eprosima::fastdds::dds::DataWriter;
     using DataWriterListener = eprosima::fastdds::dds::DataWriterListener;
     using DataWriterQos = eprosima::fastdds::dds::DataWriterQos;
-    static const DataWriterQos DATAWRITER_QOS_DEFAULT = eprosima::fastdds::dds::DATAWRITER_QOS_DEFAULT;
+    inline const DataWriterQos &DATAWRITER_QOS_DEFAULT()
+    {
+      static const DataWriterQos qos = eprosima::fastdds::dds::DATAWRITER_QOS_DEFAULT;
+      return qos;
+    }
+
     using Publisher = eprosima::fastdds::dds::Publisher;
     using PublisherQos = eprosima::fastdds::dds::PublisherQos;
-    static const PublisherQos PUBLISHER_QOS_DEFAULT = eprosima::fastdds::dds::PUBLISHER_QOS_DEFAULT;
+    inline const PublisherQos &PUBLISHER_QOS_DEFAULT()
+    {
+      static const PublisherQos qos = eprosima::fastdds::dds::PUBLISHER_QOS_DEFAULT;
+      return qos;
+    }
+
     using PublicationMatchedStatus = eprosima::fastdds::dds::PublicationMatchedStatus;
     using Subscriber = eprosima::fastdds::dds::Subscriber;
-
     using SubscriberQos = eprosima::fastdds::dds::SubscriberQos;
-    static const SubscriberQos SUBSCRIBER_QOS_DEFAULT = eprosima::fastdds::dds::SUBSCRIBER_QOS_DEFAULT;
-    using SubscriptionMatchedStatus = eprosima::fastdds::dds::SubscriptionMatchedStatus;
+    inline const SubscriberQos &SUBSCRIBER_QOS_DEFAULT()
+    {
+      static const SubscriberQos qos = eprosima::fastdds::dds::SUBSCRIBER_QOS_DEFAULT;
+      return qos;
+    }
 
+    using SubscriptionMatchedStatus = eprosima::fastdds::dds::SubscriptionMatchedStatus;
     using SampleInfo = eprosima::fastdds::dds::SampleInfo;
     using StatusMask = eprosima::fastdds::dds::StatusMask;
 
@@ -85,25 +107,41 @@ namespace lwrcl
     using TopicDataType = eprosima::fastdds::dds::TopicDataType;
     using TopicDescription = eprosima::fastdds::dds::TopicDescription;
     using TopicQos = eprosima::fastdds::dds::TopicQos;
-    static const TopicQos TOPIC_QOS_DEFAULT = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
+    inline const TopicQos &TOPIC_QOS_DEFAULT()
+    {
+      static const TopicQos qos = eprosima::fastdds::dds::TOPIC_QOS_DEFAULT;
+      return qos;
+    }
 
     using DomainId_t = eprosima::fastdds::dds::DomainId_t;
     using RetrunCode_t = eprosima::fastrtps::types::ReturnCode_t;
 
     using DurabilityQosPolicyKind_t = eprosima::fastdds::dds::DurabilityQosPolicyKind_t;
-    static const DurabilityQosPolicyKind_t VOLATILE_DURABILITY_QOS =
-        eprosima::fastdds::dds::VOLATILE_DURABILITY_QOS;
-    static const DurabilityQosPolicyKind_t TRANSIENT_LOCAL_DURABILITY_QOS =
-        eprosima::fastdds::dds::TRANSIENT_LOCAL_DURABILITY_QOS;
-    static const DurabilityQosPolicyKind_t TRANSIENT_DURABILITY_QOS =
-        eprosima::fastdds::dds::TRANSIENT_DURABILITY_QOS;
-    static const DurabilityQosPolicyKind_t PERSISTENT_DURABILITY_QOS =
-        eprosima::fastdds::dds::PERSISTENT_DURABILITY_QOS;
+    inline DurabilityQosPolicyKind_t VOLATILE_DURABILITY_QOS()
+    {
+      return eprosima::fastdds::dds::VOLATILE_DURABILITY_QOS;
+    }
+    inline DurabilityQosPolicyKind_t TRANSIENT_LOCAL_DURABILITY_QOS()
+    {
+      return eprosima::fastdds::dds::TRANSIENT_LOCAL_DURABILITY_QOS;
+    }
+    inline DurabilityQosPolicyKind_t TRANSIENT_DURABILITY_QOS()
+    {
+      return eprosima::fastdds::dds::TRANSIENT_DURABILITY_QOS;
+    }
+    inline DurabilityQosPolicyKind_t PERSISTENT_DURABILITY_QOS()
+    {
+      return eprosima::fastdds::dds::PERSISTENT_DURABILITY_QOS;
+    }
     using ReliabilityQosPolicyKind = eprosima::fastdds::dds::ReliabilityQosPolicyKind;
-    static const ReliabilityQosPolicyKind BEST_EFFORT_RELIABILITY_QOS =
-        eprosima::fastdds::dds::BEST_EFFORT_RELIABILITY_QOS;
-    static const ReliabilityQosPolicyKind RELIABLE_RELIABILITY_QOS =
-        eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS;
+    inline ReliabilityQosPolicyKind BEST_EFFORT_RELIABILITY_QOS()
+    {
+      return eprosima::fastdds::dds::BEST_EFFORT_RELIABILITY_QOS;
+    }
+    inline ReliabilityQosPolicyKind RELIABLE_RELIABILITY_QOS()
+    {
+      return eprosima::fastdds::dds::RELIABLE_RELIABILITY_QOS;
+    }
   }
 
   namespace rtps

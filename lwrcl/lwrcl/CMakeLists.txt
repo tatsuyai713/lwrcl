@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16.3)
-project(libraries)
+project(lwrcl)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -29,7 +29,8 @@ endif()
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
     set(ROS_DATA_TYPES_INCLUDE_PATH /opt/qnx/fast-dds-libs/include)
-    include_directories(/opt/qnx/fast-dds-libs/include
+    include_directories(/opt/qnx/fast-dds/usr/include/
+                        /opt/qnx/fast-dds-libs/include
                         /opt/qnx/fast-dds-libs/include/optionparser)
     link_directories(/opt/qnx/fast-dds-libs/lib)
 

@@ -584,7 +584,7 @@ Node::Node(int domain_id)
   name_("lwrcl_default_node"),
   stop_flag_(false)
 {
-  dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT;
+  dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
 
   // Create a descriptor for the new transport.
   auto udp_transport = std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>();
@@ -622,7 +622,7 @@ Node::Node(int domain_id, const std::string & name)
   name_(name),
   stop_flag_(false)
 {
-  dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT;
+  dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
 
   // Create a descriptor for the new transport.
   auto udp_transport = std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>();
@@ -660,7 +660,7 @@ Node::Node(const std::string & name)
   stop_flag_(false)
 {
   int domain_id = 0;  // Default domain ID
-  dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT;
+  dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
 
   // Create a descriptor for the new transport.
   auto udp_transport = std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>();
