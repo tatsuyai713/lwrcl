@@ -788,8 +788,8 @@ public:
     eprosima::fastcdr::Cdr cdr(fastbuffer);
     uint8_t header[4] = {0x00, 0x01, 0x00, 0x00};
     message->serialize(cdr);
-    const char * buffer = cdr.get_buffer_pointer();
-    size_t length = cdr.get_serialized_data_length();
+    const char * buffer = cdr.getBufferPointer();
+    size_t length = cdr.getSerializedDataLength();
     serialized_message->reserve(length + 4);
     char * combined_buffer = serialized_message->get_rcl_serialized_message().buffer;
     memcpy(combined_buffer, header, 4);

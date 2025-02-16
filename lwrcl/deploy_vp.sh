@@ -64,6 +64,8 @@ fi
 
 SSH_PASSWORD="qnxuser"
 
-sshpass -p "$SSH_PASSWORD" ssh qnxuser@$QNX_IP "/system/bin/mkdir -p /data/home/qnxuser/qnx"
+sshpass -p "$SSH_PASSWORD" ssh qnxuser@$QNX_IP "mkdir -p /data/home/qnxuser/qnx"
+sshpass -p "$SSH_PASSWORD" ssh qnxuser@$QNX_IP "rm -rf /data/home/qnxuser/qnx"
+sshpass -p "$SSH_PASSWORD" ssh qnxuser@$QNX_IP "mkdir -p /data/home/qnxuser/qnx"
 
 sshpass -p "$SSH_PASSWORD" sftp -oBatchMode=no -b ./deploy_vp_batchfile qnxuser@$QNX_IP:/data/home/qnxuser/qnx/
