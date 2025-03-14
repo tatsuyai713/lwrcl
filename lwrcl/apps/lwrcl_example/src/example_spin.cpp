@@ -11,6 +11,8 @@ void myCallbackFunction(sensor_msgs::msg::Image::SharedPtr message)
   }
   // Print the received image data
   std::cout << "Received Image data: ";
+  std::cout << "Sec: " << message->header().stamp().sec() << ", ";
+  std::cout << "Nanosec: " << message->header().stamp().nanosec() << ", ";
   std::cout << "Width: " << message->width() << ", ";
   std::cout << "Height: " << message->height() << ", ";
   std::cout << "Encoding: " << message->encoding() << std::endl;
@@ -71,7 +73,7 @@ int main(int argc, char *argv[])
     pub_message.header().frame_id() = "TEST";
     pub_message.height() = 100;
     pub_message.width() = 200;
-    pub_message.encoding() = "H263";
+    pub_message.encoding() = "H265";
     pub_message.is_bigendian() = false;
     pub_message.step() = 1;
     pub_message.data() = {0, 0, 0, 0, 0, 0};

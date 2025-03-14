@@ -1,5 +1,3 @@
-#include <iostream> // 追加
-
 #ifndef LWRCL_SUBSCRIBER_HPP_
 #define LWRCL_SUBSCRIBER_HPP_
 
@@ -9,6 +7,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <iostream>
 #include <mutex>
 
 #include "fast_dds_header.hpp"
@@ -17,6 +16,8 @@
 
 namespace lwrcl
 {
+
+  extern std::atomic<bool> global_stop_flag;
   struct MessageInfo
   {
     std::chrono::system_clock::time_point source_timestamp;
@@ -43,11 +44,29 @@ namespace lwrcl
     std::function<bool()> has_message;
     std::function<bool(void *, MessageInfo &)> take;
   };
+
+  #define LWRCL_SUBSCRIBE_BUFFER_SIZE 10
+  template <typename T>
+  class SubscribeDataBuffer
+  {
+  public:
+    SubscribeDataBuffer()
+    {
+      data_wp = 0;
+      data_rp = 0;
+    }
+    ~SubscribeDataBuffer() = default;
+
+    T data_buffer[LWRCL_SUBSCRIBE_BUFFER_SIZE];
+    int data_wp;
+    int data_rp;
+  };
+
   template <typename T>
   class SubscriberCallback : public ChannelCallback
   {
   public:
-    SubscriberCallback(std::function<void(std::shared_ptr<T>)> callback_function, std::vector<std::shared_ptr<T>> *message_buffer, std::mutex *lwrcl_subscriber_mutex_ptr)
+    SubscriberCallback(std::function<void(std::shared_ptr<T>)> callback_function, SubscribeDataBuffer<T> * message_buffer, std::mutex *lwrcl_subscriber_mutex_ptr)
         : callback_function_(callback_function), message_buffer_(message_buffer), lwrcl_subscriber_mutex_ptr_(lwrcl_subscriber_mutex_ptr) {}
 
     ~SubscriberCallback() = default;
@@ -57,10 +76,11 @@ namespace lwrcl
       try
       {
         std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_ptr_);
-        if (!message_buffer_->empty())
-        {
-          callback_function_(message_buffer_->front());
-          message_buffer_->erase(message_buffer_->begin());
+        if(message_buffer_->data_rp != message_buffer_->data_wp) {
+          auto message_ptr = std::shared_ptr<T>(&message_buffer_->data_buffer[message_buffer_->data_rp], [](T *) {});
+          callback_function_(message_ptr);
+          message_buffer_->data_rp++;
+          message_buffer_->data_rp %= LWRCL_SUBSCRIBE_BUFFER_SIZE;
         }
         else
         {
@@ -79,7 +99,7 @@ namespace lwrcl
 
   private:
     std::function<void(std::shared_ptr<T>)> callback_function_;
-    std::vector<std::shared_ptr<T>> *message_buffer_;
+    SubscribeDataBuffer<T> * message_buffer_;
     mutable std::mutex *lwrcl_subscriber_mutex_ptr_;
   };
 
@@ -90,7 +110,7 @@ namespace lwrcl
     SubscriberWaitSet(std::function<void(std::shared_ptr<T>)> callback_function, Channel<ChannelCallback *>::SharedPtr channel)
         : callback_function_(callback_function), channel_(channel)
     {
-      subscription_callback_ = std::make_unique<SubscriberCallback<T>>(callback_function_, &message_ptr_buffer_, &lwrcl_subscriber_mutex_);
+      subscription_callback_ = std::make_unique<SubscriberCallback<T>>(callback_function_, &message_buffer_, &lwrcl_subscriber_mutex_);
     }
 
     ~SubscriberWaitSet()
@@ -139,6 +159,8 @@ namespace lwrcl
       out_msg = *(front.first);
       info = front.second;
       pollable_buffer_.erase(pollable_buffer_.begin());
+      message_buffer_.data_rp++;
+      message_buffer_.data_rp %= LWRCL_SUBSCRIBE_BUFFER_SIZE;
       return true;
     }
 
@@ -169,18 +191,29 @@ namespace lwrcl
               eprosima::fastdds::dds::Entity *entity = status_cond->get_entity();
               eprosima::fastdds::dds::StatusMask changed_statuses = entity->get_status_changes();
 
-              if (changed_statuses.is_active(eprosima::fastdds::dds::StatusMask::data_available()))
+              if (changed_statuses.is_active(eprosima::fastdds::dds::StatusMask::subscription_matched())) {
+                eprosima::fastdds::dds::SubscriptionMatchedStatus status;
+                if (reader_->get_subscription_matched_status(status) == ReturnCode_t::RETCODE_OK)
+                {
+                  count_.store(status.total_count);
+                }
+
+              } else if (changed_statuses.is_active(eprosima::fastdds::dds::StatusMask::data_available()))
               {
 
-                while (reader_->take_next_sample(&data_, &info_) == ReturnCode_t::RETCODE_OK)
+                while (reader_->take_next_sample(&message_buffer_.data_buffer[message_buffer_.data_wp], &info_) == ReturnCode_t::RETCODE_OK)
                 {
                   if (info_.valid_data)
                   {
                     std::lock_guard<std::mutex> lock(lwrcl_subscriber_mutex_);
-                    auto data_ptr = std::shared_ptr<T>(new T(data_), [](T *ptr)
-                                                       { delete ptr; });
-                    message_ptr_buffer_.emplace_back(data_ptr);
+                    if((message_buffer_.data_wp + 1) % LWRCL_SUBSCRIBE_BUFFER_SIZE == message_buffer_.data_rp) {
+                      std::cerr << "Error: Data Lost" << std::endl;
+                      continue;
+                    }
+                    message_buffer_.data_wp++;
+                    message_buffer_.data_wp %= LWRCL_SUBSCRIBE_BUFFER_SIZE;
                     channel_->produce(subscription_callback_.get());
+                    auto data_ptr = &message_buffer_.data_buffer[message_buffer_.data_wp];
                     lwrcl::MessageInfo new_info;
                     new_info.source_timestamp = std::chrono::system_clock::now();
                     new_info.from_intra_process = false;
@@ -201,7 +234,7 @@ namespace lwrcl
 
     std::function<void(std::shared_ptr<T>)> callback_function_;
     Channel<ChannelCallback *>::SharedPtr channel_;
-    std::vector<std::shared_ptr<T>> message_ptr_buffer_;
+    SubscribeDataBuffer<T> message_buffer_;
     std::unique_ptr<SubscriberCallback<T>> subscription_callback_;
     eprosima::fastdds::dds::SampleInfo sample_info_;
     eprosima::fastdds::dds::DataReader *reader_ = nullptr;
@@ -212,7 +245,7 @@ namespace lwrcl
     T data_;
     eprosima::fastdds::dds::SampleInfo info_;
     mutable std::mutex lwrcl_subscriber_mutex_;
-    std::vector<std::pair<std::shared_ptr<T>, lwrcl::MessageInfo>> pollable_buffer_;
+    std::vector<std::pair<T*, lwrcl::MessageInfo>> pollable_buffer_;
   };
 
   class ISubscription
@@ -395,7 +428,7 @@ template <typename T>
     WaitResult wait_for(std::chrono::nanoseconds timeout)
     {
       auto start = std::chrono::steady_clock::now();
-      while (true)
+      while (global_stop_flag.load() == false)
       {
         for (auto &holder : subs_)
         {

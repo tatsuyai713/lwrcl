@@ -27,10 +27,13 @@ void myTimerFunction(sensor_msgs::msg::Image::SharedPtr my_message, rclcpp::Publ
   my_message->header().frame_id() = "TEST";
   my_message->height() = 100;
   my_message->width() = 200;
-  my_message->encoding() = "H263";
+  my_message->encoding() = "H265";
   my_message->is_bigendian() = false;
   my_message->step() = 1;
   my_message->data() = {0, 0, 0, 0, 0, 0};
+
+  std::cout << "Publishing Image data: Sec: " << my_message->header().stamp().sec() << ", Nsec: " << my_message->header().stamp().nanosec() << std::endl;
+  std::cout << "Height: " << my_message->height() << ", Width: " << my_message->width() << ", Encoding: " << my_message->encoding() << std::endl;
 
   // Publish the message
   publisher_ptr->publish(my_message);

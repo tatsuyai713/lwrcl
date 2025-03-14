@@ -127,7 +127,7 @@ namespace lwrcl
       writer_->write(message.get());
     }
 
-    void publish(T message) const
+    void publish(T & message) const
     {
       writer_->write(&message);
     }

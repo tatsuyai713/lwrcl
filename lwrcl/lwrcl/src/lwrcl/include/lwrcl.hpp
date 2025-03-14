@@ -4,7 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <csignal>
-#include <cstdarg> // For variable arguments handling
+#include <cstdarg>
 #include <cstring>
 #include <forward_list>
 #include <functional>

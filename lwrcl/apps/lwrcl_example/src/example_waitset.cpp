@@ -61,14 +61,14 @@ int main(int argc, char * argv[])
     pub_message.header().frame_id() = "TEST";
     pub_message.height() = 100;
     pub_message.width() = 200;
-    pub_message.encoding() = "H263";
+    pub_message.encoding() = "H265";
     pub_message.is_bigendian() = false;
     pub_message.step() = 1;
     pub_message.data() = {0, 0, 0, 0, 0, 0};
 
     publisher_ptr->publish(pub_message);
 
-    auto wait_result = wait_set.wait(std::chrono::seconds(2)); 
+    auto wait_result = wait_set.wait(std::chrono::seconds(100)); 
     if (wait_result.kind() == rclcpp::WaitResultKind::Ready) {
       sensor_msgs::msg::Image received_msg;
       rclcpp::MessageInfo info;
