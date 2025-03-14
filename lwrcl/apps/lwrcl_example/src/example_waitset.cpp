@@ -68,7 +68,7 @@ int main(int argc, char * argv[])
 
     publisher_ptr->publish(pub_message);
 
-    auto wait_result = wait_set.wait(std::chrono::seconds(100)); 
+    auto wait_result = wait_set.wait(std::chrono::seconds(1)); 
     if (wait_result.kind() == rclcpp::WaitResultKind::Ready) {
       sensor_msgs::msg::Image received_msg;
       rclcpp::MessageInfo info;
