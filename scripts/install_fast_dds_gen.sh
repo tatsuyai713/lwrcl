@@ -1,7 +1,7 @@
 #!/bin/bash
 
 gradle_version="7.6.3"
-fast_dds_gen_version="3.3.0"
+fast_dds_gen_version="2.5.2"
 
 FAST_DDS_WORK_DIR=./dds_build
 WORKSPACE=$PWD

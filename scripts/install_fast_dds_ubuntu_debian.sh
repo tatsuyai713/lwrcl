@@ -1,9 +1,9 @@
 #!/bin/bash
 
-fast_dds_version="2.14.2"
+fast_dds_version="2.11.2"
 foonathan_memory_vendor_version="1.3.1"
 googletest_version="1.13.0"
-fast_dds_gen_version="3.3.0"
+fast_dds_gen_version="3.3.1"
 
 FAST_DDS_WORK_DIR=./dds_build
 

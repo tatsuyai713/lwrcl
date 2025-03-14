@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.16.3)
 project("apps")
 
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 if( ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64" )
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 else()
@@ -23,14 +27,29 @@ if(NOT tinyxml2_FOUND)
     find_package(tinyxml2 REQUIRED)
 endif()
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
+    set(ROS_DATA_TYPES_INCLUDE_PATH /opt/qnx/fast-dds-libs/include)
+    include_directories(/opt/qnx/fast-dds-libs/include
+                        /opt/qnx/fast-dds-libs/include/optionparser)
+    link_directories(/opt/qnx/fast-dds-libs/lib)
+
+else()
+    set(ROS_DATA_TYPES_INCLUDE_PATH /opt/fast-dds-libs/include)
+    include_directories(/opt/fast-dds-libs/include
+                        /opt/fast-dds-libs/include/optionparser)
+    link_directories(/opt/fast-dds-libs/lib)
+
+endif()
 
 add_subdirectory(lwrcl_example)
-add_subdirectory(ROSTypeImagePubSub)
+
+if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
+else()
 add_subdirectory(ROSTypeImagePubSubEdge)
 add_subdirectory(ROSTypeImagePubSubMono)
 add_subdirectory(ROSTypeImagePubSubExecutor)
+endif()
+
+add_subdirectory(ROSTypeImagePubSub)
 add_subdirectory(CustomROSTypeDataPublisher)
 

@@ -30,11 +30,11 @@ namespace lwrcl
   class Publisher : public IPublisher, public std::enable_shared_from_this<Publisher<T>>
   {
   public:
-    Publisher(dds::DomainParticipant *participant, const std::string &topic,
+    Publisher(dds::DomainParticipant *participant, const std::string &topic_name,
               const QoS &qos)
         : participant_(participant), topic_(nullptr), publisher_(nullptr), writer_(nullptr)
     {
-      lwrcl::dds::TopicQos topic_qos = lwrcl::dds::TOPIC_QOS_DEFAULT;
+      lwrcl::dds::TopicQos topic_qos = lwrcl::dds::TOPIC_QOS_DEFAULT();
 
       using ParentType = typename ParentTypeTraits<T>::Type;
       message_type_ = lwrcl::MessageType(new ParentType());
@@ -44,12 +44,20 @@ namespace lwrcl
         throw std::runtime_error("Failed to register message type");
       }
 
-      dds::Topic *retrieved_topic = dynamic_cast<eprosima::fastdds::dds::Topic *>(participant->lookup_topicdescription(topic));
+      std::string type_name = message_type_.get_type_support().get_type_name();
+
+      publisher_ = participant_->create_publisher(dds::PUBLISHER_QOS_DEFAULT());
+      if (!publisher_)
+      {
+        throw std::runtime_error("Failed to create publisher");
+      }
+      dds::Topic *retrieved_topic = dynamic_cast<eprosima::fastdds::dds::Topic *>(participant->lookup_topicdescription(topic_name));
       if (retrieved_topic == nullptr)
       {
-        topic_ = participant_->create_topic(topic, message_type_.get_type_support().get_type_name(), topic_qos);
+        topic_ = participant_->create_topic(topic_name, type_name, topic_qos);
         if (!topic_)
         {
+          participant_->delete_publisher(publisher_);  // Cleanup on failure
           throw std::runtime_error("Failed to create topic");
         }
         topic_owned_ = true;
@@ -60,13 +68,7 @@ namespace lwrcl
         topic_owned_ = false;
       }
 
-      publisher_ = participant_->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
-      if (!publisher_)
-      {
-        participant_->delete_topic(topic_); // Cleanup on failure
-        throw std::runtime_error("Failed to create publisher");
-      }
-      dds::DataWriterQos writer_qos = dds::DATAWRITER_QOS_DEFAULT;
+      dds::DataWriterQos writer_qos = dds::DATAWRITER_QOS_DEFAULT();
       writer_qos.endpoint().history_memory_policy = rtps::PREALLOCATED_WITH_REALLOC_MEMORY_MODE;
       // writer_qos.data_sharing().automatic();
       writer_qos.history().depth = qos.get_depth();
@@ -97,7 +99,7 @@ namespace lwrcl
       writer_qos.data_sharing().automatic();
       // writer_qos.data_sharing().on("shared_directory");
       writer_qos.properties().properties().emplace_back("fastdds.intraprocess_delivery", "true");
-      writer_ = publisher_->create_datawriter(topic_, writer_qos, &listener_);
+      writer_ = publisher_->create_datawriter(topic_, writer_qos, &listener_, eprosima::fastdds::dds::StatusMask::all());
       if (!writer_)
       {
         participant_->delete_publisher(publisher_); // Cleanup on failure

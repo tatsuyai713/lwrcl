@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16.3)
-project(libraries)
+project(lwrcl)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,10 +27,20 @@ if(NOT tinyxml2_FOUND)
     find_package(tinyxml2 REQUIRED)
 endif()
 
-set(ROS_DATA_TYPES_INCLUDE_PATH /opt/fast-dds-libs/include)
-include_directories(/opt/fast-dds-libs/include
-                    /opt/fast-dds-libs/include/optionparser)
-link_directories(/opt/fast-dds-libs/lib)
+if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
+    set(ROS_DATA_TYPES_INCLUDE_PATH /opt/qnx/fast-dds-libs/include)
+    include_directories(/opt/qnx/fast-dds/usr/include/
+                        /opt/qnx/fast-dds-libs/include
+                        /opt/qnx/fast-dds-libs/include/optionparser)
+    link_directories(/opt/qnx/fast-dds-libs/lib)
+
+else()
+    set(ROS_DATA_TYPES_INCLUDE_PATH /opt/fast-dds-libs/include)
+    include_directories(/opt/fast-dds-libs/include
+                        /opt/fast-dds-libs/include/optionparser)
+    link_directories(/opt/fast-dds-libs/lib)
+
+endif()
 
 add_subdirectory(src/tf2)
 add_subdirectory(src/tf2_ros)
