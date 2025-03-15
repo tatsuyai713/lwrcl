@@ -1,4 +1,4 @@
-# LWRCL (LightWeight Rclcpp Compatible Library) 
+# LWRCL (LightWeight Rclcpp Compatible Library)  with QNX 8.0 support
 
 This repository provides build scripts and samples for Fast DDS, designed to be compatible with ROS 2 topics. It serves as a bridge for developers looking to integrate Fast DDS with ROS 2 ecosystems, ensuring seamless communication and interoperability between systems using these technologies.
 
