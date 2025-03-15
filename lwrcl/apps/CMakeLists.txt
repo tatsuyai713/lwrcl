@@ -52,4 +52,4 @@ endif()
 
 add_subdirectory(ROSTypeImagePubSub)
 add_subdirectory(CustomROSTypeDataPublisher)
-
+add_subdirectory(HelloWorldExample)

@@ -587,20 +587,20 @@ Node::Node(int domain_id)
   dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
 
   // Create a descriptor for the new transport.
-  auto udp_transport = std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>();
-  udp_transport->sendBufferSize = 4194304;
-  udp_transport->receiveBufferSize = 4194304;
-  udp_transport->non_blocking_send = true;
+  // auto udp_transport = std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>();
+  // udp_transport->sendBufferSize = 4194304;
+  // udp_transport->receiveBufferSize = 4194304;
+  // udp_transport->non_blocking_send = true;
 
-  // Link the Transport Layer to the Participant.
-  participant_qos.transport().user_transports.emplace_back(udp_transport);
+  // // Link the Transport Layer to the Participant.
+  // participant_qos.transport().user_transports.emplace_back(udp_transport);
 
-  // Increase the sending buffer size
-  participant_qos.transport().send_socket_buffer_size = 4194304;
-  // Increase the receiving buffer size
-  participant_qos.transport().listen_socket_buffer_size = 4194304;
+  // // Increase the sending buffer size
+  // participant_qos.transport().send_socket_buffer_size = 4194304;
+  // // Increase the receiving buffer size
+  // participant_qos.transport().listen_socket_buffer_size = 4194304;
 
-  // eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
+  eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
   
   factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
   
@@ -625,20 +625,21 @@ Node::Node(int domain_id, const std::string & name)
   dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
 
   // Create a descriptor for the new transport.
-  auto udp_transport = std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>();
-  udp_transport->sendBufferSize = 4194304;
-  udp_transport->receiveBufferSize = 4194304;
-  udp_transport->non_blocking_send = true;
+  // auto udp_transport = std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>();
+  // udp_transport->sendBufferSize = 4194304;
+  // udp_transport->receiveBufferSize = 4194304;
+  // udp_transport->non_blocking_send = true;
 
-  // Link the Transport Layer to the Participant.
-  participant_qos.transport().user_transports.emplace_back(udp_transport);
+  // // Link the Transport Layer to the Participant.
+  // participant_qos.transport().user_transports.emplace_back(udp_transport);
 
-  // Increase the sending buffer size
-  participant_qos.transport().send_socket_buffer_size = 4194304;
-  // Increase the receiving buffer size
-  participant_qos.transport().listen_socket_buffer_size = 4194304;
+  // // Increase the sending buffer size
+  // participant_qos.transport().send_socket_buffer_size = 4194304;
+  // // Increase the receiving buffer size
+  // participant_qos.transport().listen_socket_buffer_size = 4194304;
 
-  // eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
+  eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
+  
   factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
 
   factory_->load_XML_profiles_file("./fastdds.xml");
@@ -663,20 +664,20 @@ Node::Node(const std::string & name)
   dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
 
   // Create a descriptor for the new transport.
-  auto udp_transport = std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>();
-  udp_transport->sendBufferSize = 4194304;
-  udp_transport->receiveBufferSize = 4194304;
-  udp_transport->non_blocking_send = true;
+  // auto udp_transport = std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>();
+  // udp_transport->sendBufferSize = 4194304;
+  // udp_transport->receiveBufferSize = 4194304;
+  // udp_transport->non_blocking_send = true;
 
-  // Link the Transport Layer to the Participant.
-  participant_qos.transport().user_transports.emplace_back(udp_transport);
+  // // Link the Transport Layer to the Participant.
+  // participant_qos.transport().user_transports.emplace_back(udp_transport);
 
-  // Increase the sending buffer size
-  participant_qos.transport().send_socket_buffer_size = 4194304;
-  // Increase the receiving buffer size
-  participant_qos.transport().listen_socket_buffer_size = 4194304;
+  // // Increase the sending buffer size
+  // participant_qos.transport().send_socket_buffer_size = 4194304;
+  // // Increase the receiving buffer size
+  // participant_qos.transport().listen_socket_buffer_size = 4194304;
 
-  // eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
+  eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
   
   factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
   
