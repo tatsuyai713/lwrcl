@@ -8,7 +8,7 @@ And also, this library enables to implement ROS 2 compatible applications with F
 
 ## Features
 
-- **Fast DDS Build Scripts:** Simplify the process of installing and setting up Fast DDS on Ubuntu/Debian systems.
+- **Fast DDS Build Scripts:** Simplify the process of installing and setting up Fast DDS on Ubuntu/Debian and QNX systems.
 - **ROS 2 Compatible Topics:** Includes samples that demonstrate how to publish and subscribe to ROS 2 topics using Fast DDS, facilitating integration into existing ROS 2 projects.
 - **ROS Compatible Libraries:** Offers support for building and installing libraries crucial for ROS compatibility, such as yaml-cpp, ROS data types, and tf2.
 - **lwrcl:** Please read `lwrcl/README.md`.
