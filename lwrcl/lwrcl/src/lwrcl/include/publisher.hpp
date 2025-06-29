@@ -1,11 +1,14 @@
 #ifndef LWRCL_PUBLISHER_HPP_
 #define LWRCL_PUBLISHER_HPP_
 
-#include <atomic>
+#include <memory>
+#include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "fast_dds_header.hpp"
 #include "qos.hpp"
+
 namespace lwrcl
 {
 
@@ -24,15 +27,28 @@ namespace lwrcl
   {
   public:
     virtual ~IPublisher() = default;
+
+    IPublisher(const IPublisher &) = delete;
+    IPublisher &operator=(const IPublisher &) = delete;
+    IPublisher(IPublisher &&) = default;
+    IPublisher &operator=(IPublisher &&) = default;
     virtual int32_t get_subscriber_count() = 0;
+
+  protected:
+    IPublisher() = default;
   };
+
   template <typename T>
   class Publisher : public IPublisher, public std::enable_shared_from_this<Publisher<T>>
   {
   public:
-    Publisher(dds::DomainParticipant *participant, const std::string &topic_name,
-              const QoS &qos)
-        : participant_(participant), topic_(nullptr), publisher_(nullptr), writer_(nullptr)
+    Publisher(dds::DomainParticipant *participant, const std::string &topic_name, const QoS &qos)
+        : IPublisher(),
+          std::enable_shared_from_this<Publisher<T>>(),
+          participant_(participant),
+          topic_(nullptr),
+          publisher_(nullptr),
+          writer_(nullptr)
     {
       lwrcl::dds::TopicQos topic_qos = lwrcl::dds::TOPIC_QOS_DEFAULT();
 
@@ -57,7 +73,7 @@ namespace lwrcl
         topic_ = participant_->create_topic(topic_name, type_name, topic_qos);
         if (!topic_)
         {
-          participant_->delete_publisher(publisher_);  // Cleanup on failure
+          participant_->delete_publisher(publisher_); // Cleanup on failure
           throw std::runtime_error("Failed to create topic");
         }
         topic_owned_ = true;
@@ -70,7 +86,7 @@ namespace lwrcl
 
       dds::DataWriterQos writer_qos = dds::DATAWRITER_QOS_DEFAULT();
       writer_qos.endpoint().history_memory_policy = rtps::PREALLOCATED_WITH_REALLOC_MEMORY_MODE;
-      // writer_qos.data_sharing().automatic();
+
       writer_qos.history().depth = qos.get_depth();
       if (qos.get_history() == QoS::HistoryPolicy::KEEP_ALL)
       {
@@ -97,7 +113,6 @@ namespace lwrcl
         writer_qos.durability().kind = eprosima::fastdds::dds::TRANSIENT_LOCAL_DURABILITY_QOS;
       }
       writer_qos.data_sharing().automatic();
-      // writer_qos.data_sharing().on("shared_directory");
       writer_qos.properties().properties().emplace_back("fastdds.intraprocess_delivery", "true");
       writer_ = publisher_->create_datawriter(topic_, writer_qos, &listener_, eprosima::fastdds::dds::StatusMask::all());
       if (!writer_)
@@ -124,12 +139,17 @@ namespace lwrcl
       }
     }
 
+    Publisher(const Publisher &) = delete;
+    Publisher &operator=(const Publisher &) = delete;
+    Publisher(Publisher &&) = default;
+    Publisher &operator=(Publisher &&) = default;
+
     void publish(std::shared_ptr<T> message) const
     {
       writer_->write(message.get());
     }
 
-    void publish(T & message) const
+    void publish(T &message) const
     {
       writer_->write(&message);
     }

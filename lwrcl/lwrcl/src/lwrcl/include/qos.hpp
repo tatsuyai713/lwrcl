@@ -28,6 +28,27 @@ enum class RMWQoSDurabilityPolicy
 // Custom QoS profile structure
 struct RMWQoSProfile
 {
+  RMWQoSProfile()
+      : depth(10), history(RMWQoSHistoryPolicy::KEEP_LAST), reliability(RMWQoSReliabilityPolicy::RELIABLE), durability(RMWQoSDurabilityPolicy::VOLATILE)
+  {
+  }
+
+  RMWQoSProfile(
+      size_t depth,
+      RMWQoSHistoryPolicy history,
+      RMWQoSReliabilityPolicy reliability,
+      RMWQoSDurabilityPolicy durability)
+      : depth(depth), history(history), reliability(reliability), durability(durability)
+  {
+  }
+
+  RMWQoSProfile(const RMWQoSProfile &) = default;
+  RMWQoSProfile &operator=(const RMWQoSProfile &) = default;
+  RMWQoSProfile(RMWQoSProfile &&) = default;
+  RMWQoSProfile &operator=(RMWQoSProfile &&) = default;
+
+  ~RMWQoSProfile() = default;
+
   size_t depth;
   RMWQoSHistoryPolicy history;
   RMWQoSReliabilityPolicy reliability;
@@ -41,7 +62,16 @@ namespace lwrcl
   {
   public:
     QoSInitialization(RMWQoSHistoryPolicy history, size_t depth)
-        : history_(history), depth_(depth) {}
+        : history_(history), depth_(depth)
+    {
+    }
+
+    QoSInitialization(const QoSInitialization &) = default;
+    QoSInitialization &operator=(const QoSInitialization &) = default;
+    QoSInitialization(QoSInitialization &&) = default;
+    QoSInitialization &operator=(QoSInitialization &&) = default;
+
+    ~QoSInitialization() = default;
 
     RMWQoSHistoryPolicy history_;
     size_t depth_;
@@ -69,11 +99,13 @@ namespace lwrcl
     };
 
     // Default constructor
-    QoS(size_t depth = 10)
+    explicit QoS(size_t depth = 10)
         : depth_(depth),
           history_(HistoryPolicy::KEEP_LAST),
           reliability_(ReliabilityPolicy::RELIABLE),
-          durability_(DurabilityPolicy::VOLATILE) {}
+          durability_(DurabilityPolicy::VOLATILE)
+    {
+    }
 
     // Constructor with HistoryPolicy and custom profile
     QoS(HistoryPolicy history, const RMWQoSProfile &custom_profile)
@@ -87,6 +119,13 @@ namespace lwrcl
           history_(qos.history_ == RMWQoSHistoryPolicy::KEEP_LAST ? HistoryPolicy::KEEP_LAST : HistoryPolicy::KEEP_ALL),
           reliability_(custom_profile.reliability == RMWQoSReliabilityPolicy::BEST_EFFORT ? ReliabilityPolicy::BEST_EFFORT : ReliabilityPolicy::RELIABLE),
           durability_(custom_profile.durability == RMWQoSDurabilityPolicy::VOLATILE ? DurabilityPolicy::VOLATILE : DurabilityPolicy::TRANSIENT_LOCAL) {}
+
+    QoS(const QoS &) = default;
+    QoS &operator=(const QoS &) = default;
+    QoS(QoS &&) = default;
+    QoS &operator=(QoS &&) = default;
+
+    ~QoS() = default;
 
     // Set HistoryPolicy to KEEP_LAST
     QoS &keep_last(size_t depth)
@@ -183,7 +222,6 @@ namespace lwrcl
     DurabilityPolicy durability_;
   };
 
-  extern const RMWQoSProfile rmw_qos_profile_default;
   extern const RMWQoSProfile rmw_qos_profile_default;
   extern const RMWQoSProfile rmw_qos_profile_sensor_data;
   extern const RMWQoSProfile rmw_qos_profile_parameters;

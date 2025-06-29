@@ -2,10 +2,11 @@
 #define LWRCL_TIMER_HPP_
 
 #include <atomic>
-#include <functional>
-#include <iostream>
-#include <thread>
 #include <chrono>
+#include <functional>
+#include <memory>
+#include <string>
+#include <thread>
 
 #include "fast_dds_header.hpp"
 #include "channel.hpp"
@@ -17,10 +18,17 @@ namespace lwrcl
   class TimerCallback : public ChannelCallback
   {
   public:
-    TimerCallback(std::function<void()> callback_function)
-        : callback_function_(callback_function) {}
+    explicit TimerCallback(std::function<void()> callback_function)
+        : callback_function_(callback_function)
+    {
+    }
 
     ~TimerCallback() = default;
+
+    TimerCallback(const TimerCallback &) = delete;
+    TimerCallback &operator=(const TimerCallback &) = delete;
+    TimerCallback(TimerCallback &&) = default;
+    TimerCallback &operator=(TimerCallback &&) = default;
 
     void invoke() override
     {
@@ -48,22 +56,42 @@ namespace lwrcl
     virtual ~ITimerBase() = default;
     virtual void start() = 0;
     virtual void stop() = 0;
+
+    ITimerBase(const ITimerBase &) = delete;
+    ITimerBase &operator=(const ITimerBase &) = delete;
+    ITimerBase(ITimerBase &&) = default;
+    ITimerBase &operator=(ITimerBase &&) = default;
+
+  protected:
+    ITimerBase() = default;
   };
 
   class TimerBase : public ITimerBase, public std::enable_shared_from_this<TimerBase>
   {
   public:
-    TimerBase(Duration period, std::function<void()> callback_function, Channel<ChannelCallback *>::SharedPtr channel, Clock::ClockType clock_type)
-        : clock_type_(clock_type), period_(period), channel_(channel), stop_flag_(false)
+    using SharedPtr = std::shared_ptr<TimerBase>;
+
+    TimerBase(
+      Duration period, std::function<void()> callback_function,
+      typename Channel<ChannelCallback *>::SharedPtr channel, Clock::ClockType clock_type)
+        : ITimerBase(),
+          std::enable_shared_from_this<TimerBase>(),
+          clock_type_(clock_type),
+          period_(period),
+          timer_callback_(std::make_unique<TimerCallback>(callback_function)),
+          worker_(),
+          channel_(channel),
+          stop_flag_(false)
     {
-      timer_callback_ = std::make_unique<TimerCallback>(callback_function);
       start();
     }
 
-    ~TimerBase()
-    {
-      stop();
-    }
+    ~TimerBase() { stop(); }
+
+    TimerBase(const TimerBase &) = delete;
+    TimerBase &operator=(const TimerBase &) = delete;
+    TimerBase(TimerBase &&) = default;
+    TimerBase &operator=(TimerBase &&) = default;
 
     void start() override
     {
@@ -73,35 +101,39 @@ namespace lwrcl
 
     void stop() override
     {
-      stop_flag_ = true;
+      stop_flag_.store(true);
       if (worker_.joinable())
       {
         worker_.join(); // Wait for the worker thread to finish
       }
     }
 
-    using SharedPtr = std::shared_ptr<TimerBase>;
-
   private:
     void run_system_time()
     {
       auto next_execution_time = std::chrono::system_clock::now() + std::chrono::nanoseconds(period_.nanoseconds());
-      while (!stop_flag_)
+      while (!stop_flag_.load())
       {
         std::this_thread::sleep_until(next_execution_time);
-        channel_->produce(timer_callback_.get());
-        next_execution_time += std::chrono::nanoseconds(period_.nanoseconds()); // Schedule next execution
+        if (!stop_flag_.load())
+        {
+          channel_->produce(timer_callback_.get());
+          next_execution_time += std::chrono::nanoseconds(period_.nanoseconds()); // Schedule next execution
+        }
       }
     }
 
     void run_steady_time()
     {
       auto next_execution_time = std::chrono::steady_clock::now() + std::chrono::nanoseconds(period_.nanoseconds());
-      while (!stop_flag_)
+      while (!stop_flag_.load())
       {
         std::this_thread::sleep_until(next_execution_time);
-        channel_->produce(timer_callback_.get());
-        next_execution_time += std::chrono::nanoseconds(period_.nanoseconds()); // Schedule next execution
+        if (!stop_flag_.load())
+        {
+          channel_->produce(timer_callback_.get());
+          next_execution_time += std::chrono::nanoseconds(period_.nanoseconds()); // Schedule next execution
+        }
       }
     }
 
@@ -121,8 +153,8 @@ namespace lwrcl
     Duration period_;
     std::unique_ptr<TimerCallback> timer_callback_;
     std::thread worker_;
-    Channel<ChannelCallback *>::SharedPtr channel_;
-    bool stop_flag_;
+    typename Channel<ChannelCallback *>::SharedPtr channel_;
+    std::atomic<bool> stop_flag_;
   };
 
 } // namespace lwrcl

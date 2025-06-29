@@ -1,9 +1,12 @@
 #ifndef LWRCL_CHANNEL_HPP_
 #define LWRCL_CHANNEL_HPP_
 
+#include <chrono>
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <queue>
+#include <utility>
 
 namespace lwrcl
 {
@@ -13,6 +16,14 @@ namespace lwrcl
   public:
     virtual ~ChannelCallback() = default;
     virtual void invoke() = 0;
+
+    ChannelCallback(const ChannelCallback &) = delete;
+    ChannelCallback &operator=(const ChannelCallback &) = delete;
+    ChannelCallback(ChannelCallback &&) = default;
+    ChannelCallback &operator=(ChannelCallback &&) = default;
+
+  protected:
+    ChannelCallback() = default;
   };
 
   template <class T>
@@ -20,8 +31,16 @@ namespace lwrcl
   {
   public:
     using SharedPtr = std::shared_ptr<Channel<T>>;
-    Channel() = default;
+
+    Channel() : queue_(), closed_(false), mtx_(), cv_() {}
+
     ~Channel() = default;
+
+    Channel(const Channel &) = delete;
+    Channel &operator=(const Channel &) = delete;
+    Channel(Channel &&) = default;
+    Channel &operator=(Channel &&) = default;
+
     void produce(T &&x)
     {
       std::lock_guard<std::mutex> lock{mtx_};
@@ -35,15 +54,11 @@ namespace lwrcl
     bool consume(T &x)
     {
       std::unique_lock<std::mutex> lock{mtx_};
-      // cv_.wait(lock, [this]
-      //          { return !queue_.empty() || closed_; });
-
       if (!cv_.wait_for(lock, std::chrono::milliseconds(100), [this]
                         { return !queue_.empty() || closed_; }))
       {
         return false;
       }
-
       if (closed_ && queue_.empty())
       {
         return false;
@@ -61,7 +76,6 @@ namespace lwrcl
       {
         return false;
       }
-
       x = std::move(queue_.front());
       queue_.pop();
       return true;
@@ -82,7 +96,7 @@ namespace lwrcl
 
   private:
     std::queue<T> queue_;
-    bool closed_ = false;
+    bool closed_;
     std::mutex mtx_;
     std::condition_variable cv_;
   };
