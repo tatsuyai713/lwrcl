@@ -12,7 +12,8 @@ wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | 
 sudo apt-add-repository "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main"
 
 sudo apt update
-sudo apt install -y gcc g++ make cmake automake autoconf unzip git vim openssl gcc make cmake curl tar wget p11-kit
+sudo apt install -y gcc g++ make cmake automake autoconf unzip git vim openssl gcc make cmake=3.31.8* cmake-data=3.31.8* curl tar wget p11-kit
+sudo apt-mark hold cmake cmake-data
 
 p11-kit list-modules
 
