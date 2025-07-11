@@ -936,7 +936,7 @@ namespace lwrcl
   };
 
   template <typename T>
-  class Serializarion
+  class Serialization
   {
   public:
     static void serialize_message(T *message, SerializedMessage *serialized_message)
