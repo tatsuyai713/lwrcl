@@ -818,13 +818,13 @@ namespace lwrcl
           break;
         }
       }
+      std::this_thread::sleep_for(std::chrono::microseconds(10));
     }
 
     if (global_stop_flag.load() == true)
     {
       shutdown();
     }
-    std::this_thread::sleep_for(std::chrono::microseconds(10));
   }
 
   void Node::stop_spin() { stop_flag_ = true; }
