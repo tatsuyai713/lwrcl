@@ -14,13 +14,13 @@ ROSTypeDataPublisher::ROSTypeDataPublisher(const std::string &node_name)
   init();
 }
 
-ROSTypeDataPublisher::ROSTypeDataPublisher(std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant)
+ROSTypeDataPublisher::ROSTypeDataPublisher(std::shared_ptr<rclcpp::DomainParticipant> participant)
     : Node(participant), topic_name_("default_topic"), interval_ms_(1000)
 {
   init();
 }
 
-ROSTypeDataPublisher::ROSTypeDataPublisher(std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant, const std::string &node_name)
+ROSTypeDataPublisher::ROSTypeDataPublisher(std::shared_ptr<rclcpp::DomainParticipant> participant, const std::string &node_name)
     : Node(participant, node_name), topic_name_("default_topic"), interval_ms_(1000)
 {
   init();

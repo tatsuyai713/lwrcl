@@ -40,6 +40,8 @@ namespace lwrcl
   template <typename T>
   class Client;
 
+  using DomainParticipant = eprosima::fastdds::dds::DomainParticipant;
+
   // lwrcl functions
   bool ok(void);
   void spin(std::shared_ptr<lwrcl::Node> node);

@@ -14,7 +14,7 @@ class ROSTypeImagePubSub : public Node
 public:
   ROSTypeImagePubSub(uint16_t domain_number);
   ROSTypeImagePubSub(std::string node_name);
-  ROSTypeImagePubSub(std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant);
+  ROSTypeImagePubSub(std::shared_ptr<rclcpp::DomainParticipant> participant);
   virtual ~ROSTypeImagePubSub();
 
   // Override init and run methods from Node

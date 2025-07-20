@@ -3,6 +3,7 @@
 #include "lwrcl.hpp"
 
 namespace rclcpp {
+    using DomainParticipant = lwrcl::DomainParticipant;
     using Clock = lwrcl::Clock;
     using Node = lwrcl::Node;
     namespace executors {
