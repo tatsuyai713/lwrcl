@@ -114,7 +114,7 @@ namespace lwrcl
     }
 
     using DomainId_t = eprosima::fastdds::dds::DomainId_t;
-    using RetrunCode_t = eprosima::fastrtps::types::ReturnCode_t;
+    using ReturnCode_t = eprosima::fastrtps::types::ReturnCode_t;
 
     using DurabilityQosPolicyKind_t = eprosima::fastdds::dds::DurabilityQosPolicyKind_t;
     inline DurabilityQosPolicyKind_t VOLATILE_DURABILITY_QOS()
