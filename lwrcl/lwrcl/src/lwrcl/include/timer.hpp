@@ -73,12 +73,12 @@ namespace lwrcl
 
     TimerBase(
       Duration period, std::function<void()> callback_function,
-      typename Channel<ChannelCallback *>::SharedPtr channel, Clock::ClockType clock_type)
+      CallbackChannel::SharedPtr channel, Clock::ClockType clock_type)
         : ITimerBase(),
           std::enable_shared_from_this<TimerBase>(),
           clock_type_(clock_type),
           period_(period),
-          timer_callback_(std::make_unique<TimerCallback>(callback_function)),
+          timer_callback_(std::make_shared<TimerCallback>(callback_function)),
           worker_(),
           channel_(channel),
           stop_flag_(false)
@@ -117,7 +117,7 @@ namespace lwrcl
         std::this_thread::sleep_until(next_execution_time);
         if (!stop_flag_.load())
         {
-          channel_->produce(timer_callback_.get());
+          channel_->produce(timer_callback_);
           next_execution_time += std::chrono::nanoseconds(period_.nanoseconds()); // Schedule next execution
         }
       }
@@ -131,7 +131,7 @@ namespace lwrcl
         std::this_thread::sleep_until(next_execution_time);
         if (!stop_flag_.load())
         {
-          channel_->produce(timer_callback_.get());
+          channel_->produce(timer_callback_);
           next_execution_time += std::chrono::nanoseconds(period_.nanoseconds()); // Schedule next execution
         }
       }
@@ -151,9 +151,9 @@ namespace lwrcl
 
     Clock::ClockType clock_type_;
     Duration period_;
-    std::unique_ptr<TimerCallback> timer_callback_;
+    std::shared_ptr<TimerCallback> timer_callback_;
     std::thread worker_;
-    typename Channel<ChannelCallback *>::SharedPtr channel_;
+    CallbackChannel::SharedPtr channel_;
     std::atomic<bool> stop_flag_;
   };
 

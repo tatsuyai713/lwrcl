@@ -583,31 +583,33 @@ namespace lwrcl
   }
   Clock::ClockType Clock::get_clock_type() const { return type_; }
 
-  // Rate implementation
-  Rate::Rate(const Duration &period) 
-  : period_(period),
-    next_time_(std::chrono::system_clock::now() + std::chrono::nanoseconds(period.nanoseconds()))
+  // Rate implementation (system_clock to follow ROS time)
+  Rate::Rate(const Duration &period)
+      : period_(period)
+      , next_time_(
+            std::chrono::system_clock::now()
+            + std::chrono::duration_cast<std::chrono::system_clock::duration>(
+                std::chrono::nanoseconds(period.nanoseconds())))
   {
   }
 
   void Rate::sleep()
   {
-    auto now = std::chrono::system_clock::now();
+    using sys_clock = std::chrono::system_clock;
+    using sys_dur   = sys_clock::duration;
+
+    const sys_dur period_d =
+        std::chrono::duration_cast<sys_dur>(std::chrono::nanoseconds(period_.nanoseconds()));
+
+    auto now = sys_clock::now();
     if (now >= next_time_)
     {
-      auto periods_missed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - next_time_) /
-                                std::chrono::nanoseconds(period_.nanoseconds()) +
-                            1;
-      auto duration_to_add =
-          std::chrono::nanoseconds(static_cast<long long>(periods_missed) * period_.nanoseconds());
-      auto next_time_temp = next_time_ + duration_to_add;
-      next_time_ = std::chrono::time_point_cast<std::chrono::system_clock::duration>(next_time_temp);
+      const auto behind = now - next_time_;
+      const auto periods_missed = behind / period_d + sys_dur::rep(1);
+      next_time_ += periods_missed * period_d;
     }
     std::this_thread::sleep_until(next_time_);
-
-    auto duration_to_add = std::chrono::nanoseconds(period_.nanoseconds());
-    auto next_time_temp = next_time_ + duration_to_add;
-    next_time_ = std::chrono::time_point_cast<std::chrono::system_clock::duration>(next_time_temp);
+    next_time_ += period_d;
   }
 
   WallRate::WallRate(const Duration &period)
@@ -633,7 +635,7 @@ namespace lwrcl
   Node::Node(int domain_id)
       : factory_(nullptr),
         participant_(nullptr),
-        channel_(std::make_shared<Channel<ChannelCallback *>>()),
+        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_("lwrcl_default_node"),
         stop_flag_(false),
@@ -662,7 +664,7 @@ namespace lwrcl
   Node::Node(int domain_id, const std::string &name)
       : factory_(nullptr),
         participant_(nullptr),
-        channel_(std::make_shared<Channel<ChannelCallback *>>()),
+        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         stop_flag_(false),
@@ -690,7 +692,7 @@ namespace lwrcl
   Node::Node(const std::string &name)
       : factory_(nullptr),
         participant_(nullptr),
-        channel_(std::make_shared<Channel<ChannelCallback *>>()),
+        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         stop_flag_(false),
@@ -719,7 +721,7 @@ namespace lwrcl
   Node::Node(std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant)
       : factory_(nullptr),
         participant_(participant),
-        channel_(std::make_shared<Channel<ChannelCallback *>>()),
+        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_("lwrcl_default_node"),
         stop_flag_(false),
@@ -738,7 +740,7 @@ namespace lwrcl
       std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant, const std::string &name)
       : factory_(nullptr),
         participant_(participant),
-        channel_(std::make_shared<Channel<ChannelCallback *>>()),
+        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         stop_flag_(false),
@@ -806,7 +808,7 @@ namespace lwrcl
     stop_flag_ = false;
     while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
     {
-      ChannelCallback *callback;
+      CallbackPtr callback;
       while (channel_->consume(callback) && global_stop_flag.load() == false && stop_flag_ == false)
       {
         if (callback)
@@ -837,7 +839,7 @@ namespace lwrcl
     {
       event_processed = false;
 
-      ChannelCallback *callback;
+      CallbackPtr callback;
       while (channel_->consume_nowait(callback))
       {
         callback->invoke();

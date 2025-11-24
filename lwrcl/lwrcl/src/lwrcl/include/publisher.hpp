@@ -144,7 +144,7 @@ namespace lwrcl
     Publisher(Publisher &&) = default;
     Publisher &operator=(Publisher &&) = default;
 
-    void publish(std::shared_ptr<T> message) const
+    void publish(const std::shared_ptr<T> &message) const
     {
       writer_->write(message.get());
     }
@@ -152,6 +152,11 @@ namespace lwrcl
     void publish(T &message) const
     {
       writer_->write(&message);
+    }
+
+    void publish(const T &message) const
+    {
+      writer_->write(const_cast<T *>(&message));
     }
 
     int32_t get_subscriber_count()

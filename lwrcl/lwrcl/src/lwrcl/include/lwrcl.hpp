@@ -16,6 +16,7 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#include <cstring>  // for memcpy/memset used by SerializedMessage/Serialization
 
 #include <fastcdr/Cdr.h>
 #include <fastcdr/FastBuffer.h>
@@ -345,7 +346,7 @@ namespace lwrcl
     // Member variables
     eprosima::fastdds::dds::DomainParticipantFactory *factory_;
     std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant_;
-    typename Channel<ChannelCallback *>::SharedPtr channel_;
+    CallbackChannel::SharedPtr channel_;
     Clock::SharedPtr clock_;
     std::string name_;
     bool stop_flag_;
@@ -502,7 +503,7 @@ namespace lwrcl
         eprosima::fastdds::dds::DomainParticipant *participant, const std::string &service_name,
         std::function<void(std::shared_ptr<typename T::Request>, std::shared_ptr<typename T::Response>)>
             callback_function,
-        std::shared_ptr<Channel<ChannelCallback *>> channel)
+        CallbackChannel::SharedPtr channel)
         : IService(),
           std::enable_shared_from_this<Service<T>>(),
           participant_(participant),
@@ -558,7 +559,7 @@ namespace lwrcl
     std::shared_ptr<Subscription<typename T::Request>> subscription_;
     std::string request_topic_name_;
     std::string response_topic_name_;
-    Channel<ChannelCallback *>::SharedPtr channel_;
+    CallbackChannel::SharedPtr channel_;
   };
 
   class IClient
@@ -629,14 +630,13 @@ namespace lwrcl
 
     Client(
         eprosima::fastdds::dds::DomainParticipant *participant, const std::string &service_name,
-        std::shared_ptr<Channel<ChannelCallback *>> channel)
+        CallbackChannel::SharedPtr channel)
         : IClient(),
           std::enable_shared_from_this<Client<T>>(),
           participant_(participant),
           service_name_(service_name),
           channel_(channel),
           response_(nullptr),
-          response_callback_function_(nullptr),
           publisher_(nullptr),
           subscription_(nullptr),
           request_topic_name_(service_name_ + "_Request"),
@@ -667,14 +667,23 @@ namespace lwrcl
 
     void handle_response(std::shared_ptr<typename T::Response> response)
     {
-      if (response_callback_function_)
+      std::shared_ptr<std::promise<std::shared_ptr<typename T::Response>>> promise;
       {
-        response_callback_function_(response);
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!response_promises_.empty())
+        {
+          promise = response_promises_.front();
+          response_promises_.pop();
+        }
+        response_ = response;
+        response_received_ = true;
       }
-      std::lock_guard<std::mutex> lock(mutex_);
-      response_ = response;
-      response_received_ = true;
       cv_.notify_one();
+
+      if (promise)
+      {
+        promise->set_value(response);
+      }
     }
 
     void stop() override
@@ -690,10 +699,10 @@ namespace lwrcl
       auto promise = std::make_shared<std::promise<std::shared_ptr<typename T::Response>>>();
       auto future = promise->get_future().share();
 
-      response_callback_function_ = [promise](std::shared_ptr<void> response) mutable
       {
-        promise->set_value(std::static_pointer_cast<typename T::Response>(response));
-      };
+        std::lock_guard<std::mutex> lock(mutex_);
+        response_promises_.push(promise);
+      }
 
       publisher_->publish(request);
 
@@ -723,9 +732,9 @@ namespace lwrcl
   private:
     eprosima::fastdds::dds::DomainParticipant *participant_;
     std::string service_name_;
-    Channel<ChannelCallback *>::SharedPtr channel_;
+    CallbackChannel::SharedPtr channel_;
     std::shared_ptr<typename T::Response> response_;
-    std::function<void(std::shared_ptr<typename T::Response>)> response_callback_function_;
+    std::queue<std::shared_ptr<std::promise<std::shared_ptr<typename T::Response>>>> response_promises_;
     std::shared_ptr<Publisher<typename T::Request>> publisher_;
     std::shared_ptr<Subscription<typename T::Response>> subscription_;
     std::string request_topic_name_;
@@ -888,7 +897,7 @@ namespace lwrcl
 
     void set_buffer(char *buffer, size_t length)
     {
-      if (data_.buffer != nullptr)
+      if (data_.buffer != nullptr && is_own_buffer_)
       {
         delete[] data_.buffer;
       }
@@ -908,12 +917,12 @@ namespace lwrcl
         char *new_buffer = new char[new_capacity];
         if (data_.buffer != nullptr && is_own_buffer_)
         {
-          memcpy(new_buffer, data_.buffer, data_.length);
+          std::memcpy(new_buffer, data_.buffer, data_.length);
           delete[] data_.buffer;
         }
         else
         {
-          memset(new_buffer, 0, new_capacity);
+          std::memset(new_buffer, 0, new_capacity);
         }
         data_.buffer = new_buffer;
         data_.length = new_capacity;
@@ -923,13 +932,12 @@ namespace lwrcl
 
     lwrcl_serialized_message_t release_lwrcl_serialized_message()
     {
-      if (data_.buffer != nullptr && is_own_buffer_)
-      {
-        delete[] data_.buffer;
-      }
+      // Hand ownership to the caller without freeing; mirror rclcpp semantics.
+      lwrcl_serialized_message_t out = data_;
       data_.buffer = nullptr;
       data_.length = 0;
-      return data_;
+      is_own_buffer_ = false;
+      return out;
     }
 
   private:

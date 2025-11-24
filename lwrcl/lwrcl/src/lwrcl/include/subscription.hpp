@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "fast_dds_header.hpp"
@@ -50,7 +51,7 @@ namespace lwrcl
   public:
     SubscriberCallback(
         std::function<void(std::shared_ptr<T>)> callback_function, std::shared_ptr<T> message_ptr,
-        std::mutex &lwrcl_subscriber_mutex)
+        std::shared_ptr<std::mutex> lwrcl_subscriber_mutex)
         : callback_function_(callback_function),
           message_ptr_(message_ptr),
           lwrcl_subscriber_mutex_(lwrcl_subscriber_mutex)
@@ -68,8 +69,9 @@ namespace lwrcl
 
     void invoke() override
     {
-      std::lock_guard<std::mutex> lock(lwrcl_subscriber_mutex_);
-    try {
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+      try
+      {
         callback_function_(message_ptr_);
       }
       catch (const std::exception &e)
@@ -85,7 +87,7 @@ namespace lwrcl
   private:
     std::function<void(std::shared_ptr<T>)> callback_function_;
     std::shared_ptr<T> message_ptr_;
-    std::mutex &lwrcl_subscriber_mutex_;
+    std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
   };
 
   template <typename T>
@@ -94,7 +96,7 @@ namespace lwrcl
   public:
     SubscriberWaitSet(
         std::function<void(std::shared_ptr<T>)> callback_function,
-        typename Channel<ChannelCallback *>::SharedPtr channel)
+        CallbackChannel::SharedPtr channel)
         : callback_function_(callback_function),
           channel_(channel),
           reader_(nullptr),
@@ -104,8 +106,7 @@ namespace lwrcl
           terminate_condition_(),
           status_cond_(nullptr),
           message_ptr_(std::make_shared<T>()),
-          subscription_callback_(std::make_unique<SubscriberCallback<T>>(
-              callback_function_, message_ptr_, lwrcl_subscriber_mutex_)),
+          lwrcl_subscriber_mutex_(std::make_shared<std::mutex>()),
           pollable_buffer_(),
           count_(0)
     {
@@ -156,31 +157,40 @@ namespace lwrcl
       return count_.load();
     }
 
-    bool take(T &out_msg, lwrcl::MessageInfo &info)
+    bool take(std::shared_ptr<T> &out_msg, lwrcl::MessageInfo &info)
     {
-      std::lock_guard<std::mutex> lock(lwrcl_subscriber_mutex_);
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
       if (pollable_buffer_.empty())
       {
         return false;
       }
-      auto &front = pollable_buffer_.front();
-      out_msg = *(front.first);
-      info = front.second;
+      auto front = std::move(pollable_buffer_.front());
       pollable_buffer_.erase(pollable_buffer_.begin());
+      out_msg = std::move(front.first);
+      info = front.second;
+      return true;
+    }
+
+    bool take(T &out_msg, lwrcl::MessageInfo &info)
+    {
+      std::shared_ptr<T> msg_ptr;
+      if (!take(msg_ptr, info))
+      {
+        return false;
+      }
+      out_msg = *(msg_ptr);
       return true;
     }
 
     bool has_message()
     {
-      std::lock_guard<std::mutex> lock(lwrcl_subscriber_mutex_);
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
       return !pollable_buffer_.empty();
     }
   private:
     void run()
     {
       eprosima::fastdds::dds::ConditionSeq active_conditions;
-      eprosima::fastdds::dds::StatusMask prev_changed_status;
-
       eprosima::fastdds::dds::Entity *entity = nullptr;
       eprosima::fastdds::dds::StatusCondition *status_cond = nullptr;
       eprosima::fastrtps::Duration_t timeout{1, 0}; // Wait for 1 second
@@ -221,25 +231,24 @@ namespace lwrcl
               ret_code = reader_->get_subscription_matched_status(match_status);
               if (ret_code == ReturnCode_t::RETCODE_OK)
               {
-                count_.store(match_status.total_count);
+                count_.store(match_status.current_count);
               }
             }
 
-            if (prev_changed_status != changed_statuses)
+            if (changed_statuses.is_active(eprosima::fastdds::dds::StatusMask::data_available()))
             {
-              prev_changed_status = changed_statuses;
-            }
-            else if (changed_statuses.is_active(eprosima::fastdds::dds::StatusMask::data_available()))
-            {
-              std::lock_guard<std::mutex> lock(lwrcl_subscriber_mutex_);
+              std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
               while (reader_->take_next_sample(message_ptr_.get(), &info_) == ReturnCode_t::RETCODE_OK)
               {
                 if (info_.valid_data)
                 {
-                  channel_->produce(subscription_callback_.get());
+                  auto message_copy = std::move(message_ptr_);
+                  message_ptr_ = std::make_shared<T>(); // fresh buffer for the next sample
+                  channel_->produce(std::make_shared<SubscriberCallback<T>>(
+                      callback_function_, message_copy, lwrcl_subscriber_mutex_));
                   new_info.source_timestamp = std::chrono::system_clock::now();
                   new_info.from_intra_process = false;
-                  pollable_buffer_.emplace_back(message_ptr_.get(), new_info);
+                  pollable_buffer_.emplace_back(message_copy, new_info);
                   if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
                   {
                     pollable_buffer_.erase(pollable_buffer_.begin());
@@ -258,7 +267,7 @@ namespace lwrcl
     }
 
     std::function<void(std::shared_ptr<T>)> callback_function_;
-    typename Channel<ChannelCallback *>::SharedPtr channel_;
+    CallbackChannel::SharedPtr channel_;
     eprosima::fastdds::dds::DataReader *reader_;
     std::atomic<bool> stop_flag_;
     std::thread waitset_thread_;
@@ -266,11 +275,9 @@ namespace lwrcl
     eprosima::fastdds::dds::GuardCondition terminate_condition_;
     eprosima::fastdds::dds::StatusCondition *status_cond_;
     std::shared_ptr<T> message_ptr_;
-
-    std::unique_ptr<SubscriberCallback<T>> subscription_callback_;
+    std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
     eprosima::fastdds::dds::SampleInfo info_;
-    std::mutex lwrcl_subscriber_mutex_;
-    std::vector<std::pair<T *, lwrcl::MessageInfo>> pollable_buffer_;
+    std::vector<std::pair<std::shared_ptr<T>, lwrcl::MessageInfo>> pollable_buffer_;
     std::atomic<int32_t> count_{0};
   };
 
@@ -290,7 +297,7 @@ namespace lwrcl
     Subscription(
         eprosima::fastdds::dds::DomainParticipant *participant, const std::string &topic_name,
         const QoS &qos, std::function<void(std::shared_ptr<T>)> callback_function,
-        Channel<ChannelCallback *>::SharedPtr channel)
+        CallbackChannel::SharedPtr channel)
         : participant_(participant),
           waitset_(callback_function, channel),
           topic_(nullptr),
@@ -397,13 +404,11 @@ namespace lwrcl
     Subscription(Subscription &&) = default;
     Subscription &operator=(Subscription &&) = default;
 
-    int32_t get_publisher_count()
-    {
-      return waitset_.get_publisher_count();
-    }
+    int32_t get_publisher_count() { return const_cast<const Subscription *>(this)->get_publisher_count(); }
 
     void stop() override { waitset_.stop(); }
 
+    bool take(std::shared_ptr<T> &out_msg, lwrcl::MessageInfo &info) { return waitset_.take(out_msg, info); }
     bool take(T &out_msg, lwrcl::MessageInfo &info) { return waitset_.take(out_msg, info); }
 
     bool has_message() { return waitset_.has_message(); }

@@ -100,6 +100,10 @@ namespace lwrcl
     std::mutex mtx_;
     std::condition_variable cv_;
   };
+
+  // Convenience alias for channels carrying callbacks.
+  using CallbackPtr = std::shared_ptr<ChannelCallback>;
+  using CallbackChannel = Channel<CallbackPtr>;
 } // namespace lwrcl
 
 #endif // LWRCL_CHANNEL_HPP_
