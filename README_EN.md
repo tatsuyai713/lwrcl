@@ -1,28 +1,28 @@
 # LWRCL (LightWeight Rclcpp Compatible Library) Fast DDS
 
-**ROS 2 互換の軽量通信ライブラリ - QNX 8.0 サポート対応**
+**Lightweight ROS 2 Compatible Communication Library - QNX 8.0 Supported**
 
-このライブラリは、ROS 2 の rclcpp と同様の API を提供しつつ、大幅に軽量化された DDS 通信ライブラリです。Fast DDS をバックエンドとして使用し、組み込みシステムやリソース制約のある環境でも ROS 2 エコシステムとシームレスに通信できます。
+This library provides a significantly lighter DDS communication library with an API similar to ROS 2's rclcpp. Using Fast DDS as the backend, it enables seamless communication with the ROS 2 ecosystem even in embedded systems and resource-constrained environments.
 
-> **Note**: Cyclone DDS 版は [lwrcl-cyclonedds](https://github.com/tatsuyai713/lwrcl-cyclonedds) リポジトリをご参照ください。
+> **Note**: For the Cyclone DDS version, please refer to the [lwrcl-cyclonedds](https://github.com/tatsuyai713/lwrcl-cyclonedds) repository.
 
 ---
 
-## 🎯 lwrcl vs rclcpp 比較表
+## 🎯 lwrcl vs rclcpp Comparison
 
-| 項目 | lwrcl (Fast DDS) | rclcpp (ROS 2) | 改善率 |
-|------|------------------|----------------|--------|
-| **コア行数** | ~5,100行 | ~50,000-80,000行 | **90-94% 削減** |
-| **ソースファイル数** | 11ファイル | 180+ファイル | **94% 削減** |
-| **依存パッケージ数** | 2パッケージ | 10+パッケージ | **80% 削減** |
-| **ライブラリサイズ** | ~3.7 MB | 数百 MB | **大幅削減** |
-| **ビルド時間** | 数分 | 数時間 | **大幅短縮** |
-| **インストールサイズ** | 数十 MB | 数 GB | **大幅削減** |
+| Item | lwrcl (Fast DDS) | rclcpp (ROS 2) | Improvement |
+|------|------------------|----------------|-------------|
+| **Core Lines of Code** | ~5,100 lines | ~50,000-80,000 lines | **90-94% reduction** |
+| **Source Files** | 11 files | 180+ files | **94% reduction** |
+| **Dependency Packages** | 2 packages | 10+ packages | **80% reduction** |
+| **Library Size** | ~3.7 MB | Hundreds of MB | **Significant reduction** |
+| **Build Time** | Minutes | Hours | **Significant reduction** |
+| **Install Size** | Tens of MB | Several GB | **Significant reduction** |
 
-### 機能対応表
+### Feature Support Matrix
 
-| 機能 | lwrcl (Fast DDS) | rclcpp |
-|------|:----------------:|:------:|
+| Feature | lwrcl (Fast DDS) | rclcpp |
+|---------|:----------------:|:------:|
 | **Node** | ✅ | ✅ |
 | **Publisher / Subscription** | ✅ | ✅ |
 | **Service / Client** | ✅ | ✅ |
@@ -30,51 +30,51 @@
 | **Executor (Single / Multi-threaded)** | ✅ | ✅ |
 | **QoS (Reliability, Durability, History)** | ✅ | ✅ |
 | **QoS (Deadline, Lifespan, Liveliness)** | ✅ | ✅ |
-| **QoS プリセット (SensorDataQoS, BestEffortQoS など)** | ✅ | ✅ |
+| **QoS Presets (SensorDataQoS, BestEffortQoS, etc.)** | ✅ | ✅ |
 | **Parameter (declare, get, set)** | ✅ | ✅ |
 | **Parameter File (YAML)** | ✅ | ✅ |
 | **Zero Copy (Loaned Messages)** | ✅ | ✅ |
 | **WaitSet** | ✅ | ✅ |
-| **Namespace サポート** | ✅ | ✅ |
+| **Namespace Support** | ✅ | ✅ |
 | **Time / Duration / Clock / Rate** | ✅ | ✅ |
 | **Logging (DEBUG, INFO, WARN, ERROR)** | ✅ | ✅ |
 | **Serialization / Deserialization** | ✅ | ✅ |
 | **tf2 / tf2_ros** | ✅ | ✅ |
-| **rclcpp 互換 API** | ✅ | - |
+| **rclcpp Compatible API** | ✅ | - |
 | **Lifecycle Node** | ❌ | ✅ |
 | **Action** | ❌ | ✅ |
 | **Component** | ❌ | ✅ |
 | **Topic Statistics** | ❌ | ✅ |
-| **Intra-process 通信** | ✅ (DDS依存) | ✅ |
+| **Intra-process Communication** | ✅ (DDS dependent) | ✅ |
 
 ---
 
-## 🚀 主な特徴
+## 🚀 Key Features
 
-### 1. ROS 2 との完全互換通信
-- ROS 2 ノードと直接トピック/サービス通信が可能
-- 特別な設定なしでシームレスに連携
+### 1. Full ROS 2 Communication Compatibility
+- Direct topic/service communication with ROS 2 nodes
+- Seamless integration without special configuration
 
-### 2. rclcpp 互換 API
-- `rclcpp` 名前空間を使用して既存の ROS 2 コードを最小限の変更で移植可能
-- `RCLCPP_INFO`, `RCLCPP_WARN` などのマクロも対応
+### 2. rclcpp Compatible API
+- Use the `rclcpp` namespace to port existing ROS 2 code with minimal changes
+- Macros like `RCLCPP_INFO`, `RCLCPP_WARN` are also supported
 
-### 3. 軽量・高速
-- 依存関係を最小限に抑えた設計
-- 組み込みデバイス（Raspberry Pi など）でも動作
+### 3. Lightweight & Fast
+- Designed with minimal dependencies
+- Runs on embedded devices (e.g., Raspberry Pi)
 
-### 4. マルチプラットフォーム
+### 4. Multi-platform Support
 - **Linux** (Ubuntu/Debian)
-- **QNX 8.0** (リアルタイムOS)
+- **QNX 8.0** (Real-time OS)
 
-### 5. 高度な DDS 機能
-- Zero Copy (Loaned Messages) による高性能通信
-- 詳細な QoS 設定 (Deadline, Lifespan, Liveliness)
-- WaitSet によるイベント駆動型プログラミング
+### 5. Advanced DDS Features
+- High-performance communication via Zero Copy (Loaned Messages)
+- Detailed QoS settings (Deadline, Lifespan, Liveliness)
+- Event-driven programming with WaitSet
 
 ---
 
-## 📦 依存関係
+## 📦 Dependencies
 
 | lwrcl | rclcpp (ROS 2) |
 |-------|----------------|
@@ -82,29 +82,29 @@
 | yaml-cpp | rosidl_runtime, rosidl_typesupport |
 | | rcutils, rcl_yaml_param_parser |
 | | libstatistics_collector, tracing |
-| **2 パッケージ** | **10+ パッケージ** |
+| **2 packages** | **10+ packages** |
 
 ---
 
-## 🛠️ インストール方法
+## 🛠️ Installation
 
-### 1. ROS 2 環境の無効化
+### 1. Disable ROS 2 Environment
 
-`~/.bashrc` から ROS 2 の環境設定を削除してください：
+Remove or comment out the ROS 2 environment setup in `~/.bashrc`:
 
 ```bash
-# 以下の行をコメントアウトまたは削除
+# Comment out or remove the following line
 # source /opt/ros/humble/setup.bash
 ```
 
-### 2. リポジトリのクローン
+### 2. Clone the Repository
 
 ```bash
 git clone --recursive https://github.com/tatsuyai713/lwrcl.git
 cd lwrcl
 ```
 
-### 3. Fast DDS のインストール
+### 3. Install Fast DDS
 
 ```bash
 cd scripts
@@ -112,110 +112,110 @@ cd scripts
 source ~/.bashrc
 ```
 
-### 4. サポートライブラリのビルド・インストール
+### 4. Build and Install Support Libraries
 
 ```bash
 cd ../lwrcl
 ./build_libraries.sh install
 ```
 
-### 5. ROS データ型のビルド・インストール
+### 5. Build and Install ROS Data Types
 
 ```bash
 ./build_data_types.sh install
 ```
 
-### 6. LWRCL のビルド・インストール
+### 6. Build and Install LWRCL
 
 ```bash
 ./build_lwrcl.sh install
 ```
 
-### 7. サンプルアプリケーションのビルド
+### 7. Build Sample Applications
 
 ```bash
 ./build_apps.sh install
 ```
 
-コンパイルされたアプリケーションは `apps/install` フォルダに格納されます。
+Compiled applications will be placed in the `apps/install` folder.
 
 ---
 
-## 📁 リポジトリ構成
+## 📁 Repository Structure
 
 ```
 lwrcl/
-├── lwrcl/                    # Fast DDS 版 LWRCL
-│   ├── lwrcl/               # コアライブラリ（lwrcl, tf2, tf2_ros）
-│   ├── apps/                # サンプルアプリケーション
-│   ├── data_types/          # ROS 2 互換データ型
-│   └── libraries/           # サポートライブラリ
-├── lwrcl-cyclonedds/        # Cyclone DDS 版（サブモジュール）
-└── scripts/                 # Fast DDS インストールスクリプト
+├── lwrcl/                    # Fast DDS version of LWRCL
+│   ├── lwrcl/               # Core library (lwrcl, tf2, tf2_ros)
+│   ├── apps/                # Sample applications
+│   ├── data_types/          # ROS 2 compatible data types
+│   └── libraries/           # Support libraries
+├── lwrcl-cyclonedds/        # Cyclone DDS version (submodule)
+└── scripts/                 # Fast DDS installation scripts
 ```
 
 ---
 
-## 📖 API リファレンス
+## 📖 API Reference
 
-### Node の作成と管理
+### Node Creation and Management
 
 ```cpp
 #include "rclcpp/rclcpp.hpp"
 
-// 初期化
+// Initialization
 rclcpp::init(argc, argv);
 
-// ノード作成
+// Create node
 auto node = rclcpp::Node::make_shared("my_node");
 auto node_with_ns = rclcpp::Node::make_shared("my_node", "/my_namespace");
 
-// ノード情報取得
+// Get node info
 std::string name = node->get_name();
 std::string ns = node->get_namespace();
 std::string fqn = node->get_fully_qualified_name();
 
-// スピン
+// Spin
 rclcpp::spin(node);
 rclcpp::spin_some(node);
 
-// シャットダウン
+// Shutdown
 rclcpp::shutdown();
 ```
 
 ### Publisher
 
 ```cpp
-// 作成
+// Create
 auto pub = node->create_publisher<std_msgs::msg::String>("topic", 10);
 auto pub_qos = node->create_publisher<std_msgs::msg::String>("topic", rclcpp::SensorDataQoS());
 
-// 通常のパブリッシュ
+// Normal publish
 auto msg = std::make_shared<std_msgs::msg::String>();
 msg->data() = "Hello";
 pub->publish(msg);
 
-// Zero Copy パブリッシュ
+// Zero Copy publish
 auto loaned_msg = pub->borrow_loaned_message();
 loaned_msg->data() = "Zero Copy Hello";
 pub->publish(std::move(loaned_msg));
 
-// 購読者数の取得
+// Get subscriber count
 int32_t count = pub->get_subscriber_count();
 ```
 
 ### Subscription
 
 ```cpp
-// コールバック関数
+// Callback function
 void callback(std_msgs::msg::String::SharedPtr msg) {
     RCLCPP_INFO(node->get_logger(), "Received: %s", msg->data().c_str());
 }
 
-// 作成
+// Create
 auto sub = node->create_subscription<std_msgs::msg::String>("topic", 10, callback);
 
-// ラムダ式でも可
+// Lambda expression also works
 auto sub2 = node->create_subscription<std_msgs::msg::String>(
     "topic", 10,
     [](const std_msgs::msg::String& msg) {
@@ -223,14 +223,14 @@ auto sub2 = node->create_subscription<std_msgs::msg::String>(
     }
 );
 
-// 発行者数の取得
+// Get publisher count
 int32_t count = sub->get_publisher_count();
 ```
 
 ### Service / Client
 
 ```cpp
-// サービスサーバー
+// Service server
 auto service = node->create_service<example_interfaces::srv::AddTwoInts>(
     "add_two_ints",
     [](std::shared_ptr<example_interfaces::srv::AddTwoInts::Request> request,
@@ -239,10 +239,10 @@ auto service = node->create_service<example_interfaces::srv::AddTwoInts>(
     }
 );
 
-// サービスクライアント
+// Service client
 auto client = node->create_client<example_interfaces::srv::AddTwoInts>("add_two_ints");
 
-// サービス待機
+// Wait for service
 if (client->wait_for_service(std::chrono::seconds(5))) {
     auto request = std::make_shared<example_interfaces::srv::AddTwoInts::Request>();
     request->a() = 1;
@@ -255,28 +255,28 @@ if (client->wait_for_service(std::chrono::seconds(5))) {
 ### Timer
 
 ```cpp
-// システムクロックタイマー
+// System clock timer
 auto timer = node->create_timer(
     std::chrono::milliseconds(100),
     []() { std::cout << "Timer callback" << std::endl; }
 );
 
-// ウォールタイマー（モノトニッククロック）
+// Wall timer (monotonic clock)
 auto wall_timer = node->create_wall_timer(
     std::chrono::seconds(1),
     []() { std::cout << "Wall timer callback" << std::endl; }
 );
 ```
 
-### QoS 設定
+### QoS Configuration
 
 ```cpp
-// プリセット QoS
+// Preset QoS
 auto pub1 = node->create_publisher<T>("topic", rclcpp::SensorDataQoS());
 auto pub2 = node->create_publisher<T>("topic", rclcpp::BestEffortQoS());
 auto pub3 = node->create_publisher<T>("topic", rclcpp::ReliableQoS());
 
-// カスタム QoS
+// Custom QoS
 rclcpp::QoS qos(10);
 qos.reliability(rclcpp::QoS::ReliabilityPolicy::RELIABLE);
 qos.durability(rclcpp::QoS::DurabilityPolicy::TRANSIENT_LOCAL);
@@ -297,7 +297,7 @@ while (rclcpp::ok()) {
         MyMessage msg;
         rclcpp::MessageInfo info;
         if (subscription->take(msg, info)) {
-            // メッセージ処理
+            // Process message
         }
     } else if (result.kind() == rclcpp::WaitResultKind::Timeout) {
         RCLCPP_WARN(node->get_logger(), "Timeout");
@@ -308,31 +308,31 @@ while (rclcpp::ok()) {
 ### Parameter
 
 ```cpp
-// パラメータ宣言
+// Declare parameter
 node->declare_parameter("my_param", 42);
 node->declare_parameter("my_string", "default_value");
 
-// パラメータ取得
+// Get parameter
 int value;
 node->get_parameter("my_param", value);
 
 std::string str_value;
 node->get_parameter("my_string", str_value);
 
-// 配列パラメータ
+// Array parameter
 node->declare_parameter("my_array", std::vector<double>{1.0, 2.0, 3.0});
 ```
 
 ### Executor
 
 ```cpp
-// シングルスレッド Executor
+// Single-threaded Executor
 rclcpp::executors::SingleThreadedExecutor executor;
 executor.add_node(node1);
 executor.add_node(node2);
 executor.spin();
 
-// マルチスレッド Executor
+// Multi-threaded Executor
 rclcpp::executors::MultiThreadedExecutor mt_executor;
 mt_executor.add_node(node1);
 mt_executor.add_node(node2);
@@ -353,7 +353,7 @@ double sec = duration.seconds();
 // Rate
 rclcpp::Rate rate(rclcpp::Duration(std::chrono::milliseconds(100)));
 while (rclcpp::ok()) {
-    // 処理
+    // Processing
     rate.sleep();
 }
 
@@ -373,35 +373,35 @@ RCLCPP_ERROR(logger, "Error: %s", error_msg.c_str());
 
 ---
 
-## 📁 サンプルアプリケーション
+## 📁 Sample Applications
 
-| サンプル | 説明 |
-|---------|------|
-| `example_class_pub` | クラスベースの Publisher |
-| `example_class_sub` | クラスベースの Subscriber |
-| `example_class_pubsub_executor` | Executor を使用した Pub/Sub |
-| `example_namespace` | Namespace の使用例 |
-| `example_qos_presets` | QoS プリセットの使用例 |
-| `example_service_server` | Service サーバー |
-| `example_service_client` | Service クライアント |
-| `example_timer` | Timer の使用例 |
-| `example_timer_control` | Timer の制御 |
-| `example_spin` | spin/spin_some の使用例 |
-| `example_waitset` | WaitSet の使用例 |
+| Sample | Description |
+|--------|-------------|
+| `example_class_pub` | Class-based Publisher |
+| `example_class_sub` | Class-based Subscriber |
+| `example_class_pubsub_executor` | Pub/Sub with Executor |
+| `example_namespace` | Namespace usage example |
+| `example_qos_presets` | QoS presets usage example |
+| `example_service_server` | Service server |
+| `example_service_client` | Service client |
+| `example_timer` | Timer usage example |
+| `example_timer_control` | Timer control |
+| `example_spin` | spin/spin_some usage example |
+| `example_waitset` | WaitSet usage example |
 | `example_zero_copy_pub` | Zero Copy Publisher |
 | `example_zero_copy_sub` | Zero Copy Subscriber |
 
 ---
 
-## 🔗 含まれるオープンソースプロジェクト
+## 🔗 Included Open Source Projects
 
-- [ROS Data Types](https://github.com/rticommunity/ros-data-types) - ROS 2 互換データ型
-- [yaml-cpp](https://github.com/jbeder/yaml-cpp) - YAML パーサー
-- [Fast-DDS](https://github.com/eProsima/Fast-DDS) - DDS 実装
-- [geometry2](https://github.com/ros2/geometry2) - tf2/tf2_ros (座標変換ライブラリ)
+- [ROS Data Types](https://github.com/rticommunity/ros-data-types) - ROS 2 compatible data types
+- [yaml-cpp](https://github.com/jbeder/yaml-cpp) - YAML parser
+- [Fast-DDS](https://github.com/eProsima/Fast-DDS) - DDS implementation
+- [geometry2](https://github.com/ros2/geometry2) - tf2/tf2_ros (coordinate transformation library)
 
 ---
 
-## 📄 ライセンス
+## 📄 License
 
-このプロジェクトはオープンソースライセンスの下で提供されています。詳細は [LICENSE](LICENSE) ファイルをご参照ください。
+This project is provided under an open source license. Please refer to the [LICENSE](LICENSE) file for details.
