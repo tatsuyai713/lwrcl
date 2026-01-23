@@ -14,7 +14,7 @@ fi
 
 cd apps
 CURRENT=`pwd`
-mkdir build
+mkdir -p build
 cd build
 DDS_PATH=/opt/fast-dds
 LIB_PATH=/opt/fast-dds-libs
@@ -37,6 +37,6 @@ make -j4
 
 if [ ! $OPT_NUM -ne 1 ]; then
 	if [ "install" = $OPT ]; then
-    sudo make install
+    sudo cmake --install . --prefix ${CURRENT}/install
 	fi
 fi

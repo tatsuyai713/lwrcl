@@ -638,6 +638,8 @@ namespace lwrcl
         channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_("lwrcl_default_node"),
+        namespace_(""),
+        node_options_(),
         stop_flag_(false),
         participant_owned_(true),
         closed_(false),
@@ -667,6 +669,68 @@ namespace lwrcl
         channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
+        namespace_(""),
+        node_options_(),
+        stop_flag_(false),
+        participant_owned_(true),
+        closed_(false),
+        parameters_()
+  {
+    dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
+
+    eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
+
+    factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
+
+    factory_->load_XML_profiles_file("./fastdds.xml");
+
+    participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(
+        factory_->create_participant(domain_id, participant_qos), DomainParticipantDeleter());
+    if (!participant_)
+    {
+      throw std::runtime_error("Failed to create domain participant");
+      return;
+    }
+  }
+
+  Node::Node(int domain_id, const std::string &name, const std::string &ns)
+      : factory_(nullptr),
+        participant_(nullptr),
+        channel_(std::make_shared<CallbackChannel>()),
+        clock_(std::make_unique<Clock>()),
+        name_(name),
+        namespace_(ns),
+        node_options_(),
+        stop_flag_(false),
+        participant_owned_(true),
+        closed_(false),
+        parameters_()
+  {
+    dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
+
+    eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
+
+    factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
+
+    factory_->load_XML_profiles_file("./fastdds.xml");
+
+    participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(
+        factory_->create_participant(domain_id, participant_qos), DomainParticipantDeleter());
+    if (!participant_)
+    {
+      throw std::runtime_error("Failed to create domain participant");
+      return;
+    }
+  }
+
+  Node::Node(int domain_id, const std::string &name, const std::string &ns, const NodeOptions &options)
+      : factory_(nullptr),
+        participant_(nullptr),
+        channel_(std::make_shared<CallbackChannel>()),
+        clock_(std::make_unique<Clock>()),
+        name_(name),
+        namespace_(ns),
+        node_options_(options),
         stop_flag_(false),
         participant_owned_(true),
         closed_(false),
@@ -695,6 +759,70 @@ namespace lwrcl
         channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
+        namespace_(""),
+        node_options_(),
+        stop_flag_(false),
+        participant_owned_(true),
+        closed_(false),
+        parameters_()
+  {
+    int domain_id = 0; // Default domain ID
+    dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
+
+    eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
+
+    factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
+
+    factory_->load_XML_profiles_file("./fastdds.xml");
+
+    participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(
+        factory_->create_participant(domain_id, participant_qos), DomainParticipantDeleter());
+    if (!participant_)
+    {
+      throw std::runtime_error("Failed to create domain participant");
+      return;
+    }
+  }
+
+  Node::Node(const std::string &name, const std::string &ns)
+      : factory_(nullptr),
+        participant_(nullptr),
+        channel_(std::make_shared<CallbackChannel>()),
+        clock_(std::make_unique<Clock>()),
+        name_(name),
+        namespace_(ns),
+        node_options_(),
+        stop_flag_(false),
+        participant_owned_(true),
+        closed_(false),
+        parameters_()
+  {
+    int domain_id = 0; // Default domain ID
+    dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
+
+    eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Info);
+
+    factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
+
+    factory_->load_XML_profiles_file("./fastdds.xml");
+
+    participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(
+        factory_->create_participant(domain_id, participant_qos), DomainParticipantDeleter());
+    if (!participant_)
+    {
+      throw std::runtime_error("Failed to create domain participant");
+      return;
+    }
+  }
+
+  Node::Node(const std::string &name, const std::string &ns, const NodeOptions &options)
+      : factory_(nullptr),
+        participant_(nullptr),
+        channel_(std::make_shared<CallbackChannel>()),
+        clock_(std::make_unique<Clock>()),
+        name_(name),
+        namespace_(ns),
+        node_options_(options),
         stop_flag_(false),
         participant_owned_(true),
         closed_(false),
@@ -724,6 +852,8 @@ namespace lwrcl
         channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_("lwrcl_default_node"),
+        namespace_(""),
+        node_options_(),
         stop_flag_(false),
         participant_owned_(false),
         closed_(false),
@@ -743,6 +873,30 @@ namespace lwrcl
         channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
+        namespace_(""),
+        node_options_(),
+        stop_flag_(false),
+        participant_owned_(false),
+        closed_(false),
+        parameters_()
+  {
+    if (!participant_)
+    {
+      throw std::runtime_error("Failed to create domain participant");
+      return;
+    }
+  }
+
+  Node::Node(
+      std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant, 
+      const std::string &name, const std::string &ns)
+      : factory_(nullptr),
+        participant_(participant),
+        channel_(std::make_shared<CallbackChannel>()),
+        clock_(std::make_unique<Clock>()),
+        name_(name),
+        namespace_(ns),
+        node_options_(),
         stop_flag_(false),
         participant_owned_(false),
         closed_(false),
@@ -771,9 +925,37 @@ namespace lwrcl
     return node;
   }
 
+  std::shared_ptr<Node> Node::make_shared(int domain_id, const std::string &name, const std::string &ns)
+  {
+    auto node = std::shared_ptr<Node>(new Node(domain_id, name, ns), [](Node *node)
+                                      { delete node; });
+    return node;
+  }
+
+  std::shared_ptr<Node> Node::make_shared(int domain_id, const std::string &name, const std::string &ns, const NodeOptions &options)
+  {
+    auto node = std::shared_ptr<Node>(new Node(domain_id, name, ns, options), [](Node *node)
+                                      { delete node; });
+    return node;
+  }
+
   std::shared_ptr<Node> Node::make_shared(const std::string &name)
   {
     auto node = std::shared_ptr<Node>(new Node(name), [](Node *node)
+                                      { delete node; });
+    return node;
+  }
+
+  std::shared_ptr<Node> Node::make_shared(const std::string &name, const std::string &ns)
+  {
+    auto node = std::shared_ptr<Node>(new Node(name, ns), [](Node *node)
+                                      { delete node; });
+    return node;
+  }
+
+  std::shared_ptr<Node> Node::make_shared(const std::string &name, const std::string &ns, const NodeOptions &options)
+  {
+    auto node = std::shared_ptr<Node>(new Node(name, ns, options), [](Node *node)
                                       { delete node; });
     return node;
   }
@@ -794,12 +976,42 @@ namespace lwrcl
     return node;
   }
 
+  std::shared_ptr<Node> Node::make_shared(
+      std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant, const std::string &name, const std::string &ns)
+  {
+    auto node = std::shared_ptr<Node>(new Node(participant, name, ns), [](Node *node)
+                                      { delete node; });
+    return node;
+  }
+
   std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> Node::get_participant() const
   {
     return participant_;
   }
 
   std::string Node::get_name() const { return name_; }
+
+  std::string Node::get_namespace() const { return namespace_; }
+
+  std::string Node::get_fully_qualified_name() const 
+  { 
+    if (namespace_.empty() || namespace_ == "/")
+    {
+      return "/" + name_;
+    }
+    std::string ns = namespace_;
+    if (ns.front() != '/')
+    {
+      ns = "/" + ns;
+    }
+    if (ns.back() == '/')
+    {
+      return ns + name_;
+    }
+    return ns + "/" + name_;
+  }
+
+  const Node::NodeOptions &Node::get_node_options() const { return node_options_; }
 
   Logger Node::get_logger() const { return Logger(name_); }
 

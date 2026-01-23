@@ -175,18 +175,44 @@ namespace lwrcl
   public:
     using SharedPtr = std::shared_ptr<Node>;
 
+    // Node Options structure
+    struct NodeOptions
+    {
+      bool use_intra_process_comms = false;
+      bool start_parameter_services = true;
+      bool start_parameter_event_publisher = true;
+      bool allow_undeclared_parameters = false;
+      bool automatically_declare_parameters_from_overrides = false;
+
+      NodeOptions &set_use_intra_process_comms(bool value)
+      {
+        use_intra_process_comms = value;
+        return *this;
+      }
+
+      NodeOptions &set_allow_undeclared_parameters(bool value)
+      {
+        allow_undeclared_parameters = value;
+        return *this;
+      }
+    };
+
     // Getters
     std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> get_participant() const;
     std::string get_name() const;
+    std::string get_namespace() const;
+    std::string get_fully_qualified_name() const;
     Logger get_logger() const;
+    const NodeOptions &get_node_options() const;
 
     // Create publisher, subscription, service, client, timer
     template <typename T>
     std::shared_ptr<Publisher<T>> create_publisher(const std::string &topic, const uint16_t &depth)
     {
       QoS qos(depth);
+      std::string full_topic = resolve_topic_name(topic);
       auto publisher =
-          std::make_shared<Publisher<T>>(participant_.get(), std::string("rt/") + topic, qos);
+          std::make_shared<Publisher<T>>(participant_.get(), full_topic, qos);
       publisher_list_.push_front(publisher);
       return publisher;
     }
@@ -194,8 +220,9 @@ namespace lwrcl
     template <typename T>
     std::shared_ptr<Publisher<T>> create_publisher(const std::string &topic, const QoS &qos)
     {
+      std::string full_topic = resolve_topic_name(topic);
       auto publisher =
-          std::make_shared<Publisher<T>>(participant_.get(), std::string("rt/") + topic, qos);
+          std::make_shared<Publisher<T>>(participant_.get(), full_topic, qos);
       publisher_list_.push_front(publisher);
       return publisher;
     }
@@ -206,8 +233,9 @@ namespace lwrcl
         std::function<void(std::shared_ptr<T>)> callback_function)
     {
       QoS qos(depth);
+      std::string full_topic = resolve_topic_name(topic);
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), std::string("rt/") + topic, qos, callback_function, channel_);
+          participant_.get(), full_topic, qos, callback_function, channel_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -217,11 +245,49 @@ namespace lwrcl
         const std::string &topic, const QoS &qos,
         std::function<void(std::shared_ptr<T>)> callback_function)
     {
+      std::string full_topic = resolve_topic_name(topic);
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), std::string("rt/") + topic, qos, callback_function, channel_);
+          participant_.get(), full_topic, qos, callback_function, channel_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
+
+    // Overloads for const reference callback (rclcpp compatible)
+    template <typename T>
+    std::shared_ptr<Subscription<T>> create_subscription(
+        const std::string &topic, const uint16_t &depth,
+        std::function<void(const T &)> callback_function)
+    {
+      QoS qos(depth);
+      std::string full_topic = resolve_topic_name(topic);
+      // Wrap const ref callback to shared_ptr callback
+      auto wrapped_callback = [callback_function](std::shared_ptr<T> msg) {
+        callback_function(*msg);
+      };
+      auto subscription = std::make_shared<Subscription<T>>(
+          participant_.get(), full_topic, qos, wrapped_callback, channel_);
+      subscription_list_.push_front(subscription);
+      return subscription;
+    }
+
+    template <typename T>
+    std::shared_ptr<Subscription<T>> create_subscription(
+        const std::string &topic, const QoS &qos,
+        std::function<void(const T &)> callback_function)
+    {
+      std::string full_topic = resolve_topic_name(topic);
+      // Wrap const ref callback to shared_ptr callback
+      auto wrapped_callback = [callback_function](std::shared_ptr<T> msg) {
+        callback_function(*msg);
+      };
+      auto subscription = std::make_shared<Subscription<T>>(
+          participant_.get(), full_topic, qos, wrapped_callback, channel_);
+      subscription_list_.push_front(subscription);
+      return subscription;
+    }
+
+    // Note: unique_ptr callback is not supported as a separate overload
+    // due to ambiguity issues with std::bind. Use shared_ptr or const ref callbacks instead.
 
     template <typename T>
     std::shared_ptr<Service<T>> create_service(
@@ -271,12 +337,19 @@ namespace lwrcl
     // Create node
     static std::shared_ptr<Node> make_shared(int domain_id);
     static std::shared_ptr<Node> make_shared(int domain_id, const std::string &name);
+    static std::shared_ptr<Node> make_shared(int domain_id, const std::string &name, const std::string &ns);
+    static std::shared_ptr<Node> make_shared(int domain_id, const std::string &name, const std::string &ns, const NodeOptions &options);
     static std::shared_ptr<Node> make_shared(const std::string &name);
+    static std::shared_ptr<Node> make_shared(const std::string &name, const std::string &ns);
+    static std::shared_ptr<Node> make_shared(const std::string &name, const std::string &ns, const NodeOptions &options);
     static std::shared_ptr<Node> make_shared(
         std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant);
     static std::shared_ptr<Node> make_shared(
         std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant,
         const std::string &name);
+    static std::shared_ptr<Node> make_shared(
+        std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant,
+        const std::string &name, const std::string &ns);
 
     // Friend functions
     friend void lwrcl::spin(std::shared_ptr<Node> node);
@@ -291,6 +364,9 @@ namespace lwrcl
     Node(
         std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant,
         const std::string &name);
+    Node(
+        std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant,
+        const std::string &name, const std::string &ns);
     // Destructor
     virtual ~Node();
     Node(const Node &) = delete;
@@ -327,7 +403,11 @@ namespace lwrcl
     // Protected constructor
     Node(int domain_id);
     Node(int domain_id, const std::string &name);
+    Node(int domain_id, const std::string &name, const std::string &ns);
+    Node(int domain_id, const std::string &name, const std::string &ns, const NodeOptions &options);
     Node(const std::string &name);
+    Node(const std::string &name, const std::string &ns);
+    Node(const std::string &name, const std::string &ns, const NodeOptions &options);
 
   private:
     // Deleter for DomainParticipant
@@ -349,6 +429,8 @@ namespace lwrcl
     CallbackChannel::SharedPtr channel_;
     Clock::SharedPtr clock_;
     std::string name_;
+    std::string namespace_;
+    NodeOptions node_options_;
     bool stop_flag_;
     bool participant_owned_;
 
@@ -358,6 +440,37 @@ namespace lwrcl
     std::forward_list<std::shared_ptr<IService>> service_list_;
     std::forward_list<std::shared_ptr<IClient>> client_list_;
     Parameters parameters_;
+
+    // Helper to compute the topic prefix
+    std::string get_topic_prefix() const
+    {
+      if (namespace_.empty() || namespace_ == "/")
+      {
+        return "rt/";
+      }
+      std::string ns = namespace_;
+      if (ns.front() == '/')
+      {
+        ns = ns.substr(1);
+      }
+      if (!ns.empty() && ns.back() != '/')
+      {
+        ns += '/';
+      }
+      return "rt/" + ns;
+    }
+
+    // Helper to resolve topic name (handles absolute vs relative topics)
+    std::string resolve_topic_name(const std::string &topic) const
+    {
+      // If topic starts with '/', it's absolute - use it directly with "rt" prefix
+      if (!topic.empty() && topic[0] == '/')
+      {
+        return "rt" + topic;
+      }
+      // Otherwise, it's relative - prepend namespace
+      return get_topic_prefix() + topic;
+    }
   };
 
   // Executor classes

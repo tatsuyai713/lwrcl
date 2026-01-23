@@ -21,7 +21,7 @@ if [ ! $OPT_NUM -ne 1 ]; then
 fi
 
 cd data_types
-mkdir build_qnx
+mkdir -p build_qnx
 cd build_qnx
 
 DDS_PATH=/opt/qnx/fast-dds/aarch64le/usr
@@ -46,7 +46,7 @@ make -j4
 
 if [ ! $OPT_NUM -ne 1 ]; then
 	if [ "install" = $OPT ]; then
-    sudo make install
+    sudo cmake --install . --prefix $INSTALL_PATH
 	fi
 
 fi

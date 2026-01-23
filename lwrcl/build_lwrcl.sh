@@ -13,13 +13,12 @@ if [ ! $OPT_NUM -ne 1 ]; then
 fi
 
 cd lwrcl
-mkdir build
+mkdir -p build
 cd build
 DDS_PATH=/opt/fast-dds
 INSTALL_PATH=/opt/fast-dds-libs
 sudo mkdir -p $INSTALL_PATH
 
-sudo rm $INSTALL_PATH/include/lwrcl.hpp
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$DDS_PATH/lib
 
 cmake ..  -DCMAKE_BUILD_TYPE=Debug \
@@ -36,7 +35,7 @@ make -j4
 
 if [ ! $OPT_NUM -ne 1 ]; then
 	if [ "install" = $OPT ]; then
-    sudo make install
+    sudo cmake --install . --prefix $INSTALL_PATH
     sudo cp ../src/lwrcl/fastdds.xml $DDS_PATH/
 	fi
 
