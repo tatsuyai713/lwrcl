@@ -1,6 +1,6 @@
 # LWRCL (LightWeight Rclcpp Compatible Library) Fast DDS
 
-**ROS 2 互換の軽量通信ライブラリ - QNX 8.0 サポート対応**
+**ROS 2 互換の軽量通信ライブラリ - QNX 8.0 サポート**
 
 このライブラリは、ROS 2 の rclcpp と同様の API を提供しつつ、大幅に軽量化された DDS 通信ライブラリです。Fast DDS をバックエンドとして使用し、組み込みシステムやリソース制約のある環境でも ROS 2 エコシステムとシームレスに通信できます。
 
