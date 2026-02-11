@@ -1,0 +1,4 @@
+CustomROSTypeDataPublisher:
+  ros__parameters:
+    publish_topic_name: "custom_pose_topic"
+    publish_topic_interval_ms: 100

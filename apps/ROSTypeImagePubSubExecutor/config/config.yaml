@@ -1,0 +1,10 @@
+ROSTypeImagePubSubMono:
+  ros__parameters:
+    publish_topic_name: "mono_out"
+    publish_topic_interval_ms: 100
+    subscribe_topic_name: "video_frames"
+ROSTypeImagePubSubEdge:
+  ros__parameters:
+    publish_topic_name: "edge_out"
+    publish_topic_interval_ms: 100
+    subscribe_topic_name: "mono_out"

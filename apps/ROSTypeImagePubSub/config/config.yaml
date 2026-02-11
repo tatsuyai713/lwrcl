@@ -1,0 +1,5 @@
+ROSTypeImagePubSub:
+  ros__parameters:
+    publish_topic_name: "image_topic_out"
+    publish_topic_interval_ms: 100
+    subscribe_topic_name: "image_topic_in"

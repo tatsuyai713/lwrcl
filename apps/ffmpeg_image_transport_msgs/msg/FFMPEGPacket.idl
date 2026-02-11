@@ -1,0 +1,18 @@
+// FFMPEGPacket.idl
+// Depends on std_msgs/msg/Header.idl
+#include "std_msgs/msg/Header.idl"
+
+module ffmpeg_image_transport_msgs {
+  module msg {
+    struct FFMPEGPacket {
+      std_msgs::msg::Header header;
+      long                  width;         // int32
+      long                  height;        // int32
+      string                encoding;      // string
+      unsigned long long    pts;           // uint64
+      octet                 flags;         // uint8
+      boolean               is_bigendian;  // bool
+      sequence<octet>       data;          // uint8[]
+    };
+  };
+};

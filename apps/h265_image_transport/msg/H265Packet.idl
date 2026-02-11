@@ -1,0 +1,12 @@
+// H265Packet.idl
+// Depends on std_msgs/msg/Header.idl
+#include "std_msgs/msg/Header.idl"
+
+module h265_image_transport {
+  module msg {
+    struct H265Packet {
+      std_msgs::msg::Header header;
+      sequence<octet>       data;   // uint8[]
+    };
+  };
+};
