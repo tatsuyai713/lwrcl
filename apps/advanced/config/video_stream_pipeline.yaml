@@ -1,0 +1,8 @@
+# video_stream_pipeline configuration
+encoder:
+  ros__parameters:
+    width: 1280
+    height: 720
+    target_fps: 15.0
+    keyframe_interval: 30
+    stream_name: "front_camera"

@@ -1,0 +1,24 @@
+// VideoStreamStatus.idl
+// Custom message for video stream pipeline status reporting
+#include "std_msgs/msg/Header.idl"
+
+module advanced_msgs {
+  module msg {
+    struct VideoStreamStatus {
+      std_msgs::msg::Header header;
+      string                stream_name;       // Name of the stream
+      long                  width;             // int32 - Frame width
+      long                  height;            // int32 - Frame height
+      string                encoding;          // e.g. "h265", "h264", "raw"
+      unsigned long long    frame_count;       // uint64 - Total frames processed
+      unsigned long long    bytes_total;       // uint64 - Total bytes transmitted
+      double                fps_actual;        // Measured FPS
+      double                fps_target;        // Target FPS
+      double                latency_ms;        // End-to-end latency in ms
+      double                bitrate_kbps;      // Current bitrate in kbps
+      boolean               is_keyframe;       // Whether last frame was keyframe
+      octet                 quality_level;     // 0-100 quality metric
+      sequence<octet>       thumbnail;         // Small preview thumbnail (JPEG)
+    };
+  };
+};

@@ -1,0 +1,21 @@
+// DiagnosticEntry.idl
+// Custom message for system diagnostics reporting
+#include "std_msgs/msg/Header.idl"
+
+module advanced_msgs {
+  module msg {
+    struct KeyValue {
+      string key;
+      string value;
+    };
+
+    struct DiagnosticEntry {
+      std_msgs::msg::Header  header;
+      string                 node_name;        // Reporting node
+      string                 hardware_id;      // Hardware identifier
+      octet                  level;            // 0=OK, 1=WARN, 2=ERROR, 3=STALE
+      string                 message;          // Human-readable status
+      sequence<KeyValue>     values;           // Key-value telemetry data
+    };
+  };
+};

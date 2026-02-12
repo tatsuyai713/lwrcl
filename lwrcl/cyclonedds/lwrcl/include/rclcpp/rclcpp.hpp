@@ -71,6 +71,11 @@ namespace rclcpp {
       std::shared_ptr<FutureBase> future, const Duration & timeout){
         return lwrcl::spin_until_future_complete(node, future, timeout);
     }
+    template <typename ResponseT, typename Duration>
+    inline FutureReturnCode spin_until_future_complete(std::shared_ptr<Node> node,
+      std::shared_future<ResponseT> & future, const Duration & timeout){
+        return lwrcl::spin_until_future_complete(node, future, timeout);
+    }
 }
 
 // Include QoS helper functions from qos.hpp

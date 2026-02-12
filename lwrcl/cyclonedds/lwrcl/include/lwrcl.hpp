@@ -701,6 +701,11 @@ namespace lwrcl
       return future_.wait_for(timeout);
     }
 
+    std::shared_ptr<T> get()
+    {
+      return future_.get();
+    }
+
   private:
     std::shared_future<std::shared_ptr<T>> future_;
   };
@@ -710,6 +715,9 @@ namespace lwrcl
   {
   public:
     using SharedPtr = std::shared_ptr<Client>;
+    using SharedRequest = std::shared_ptr<typename T::Request>;
+    using SharedResponse = std::shared_ptr<typename T::Response>;
+    using SharedFuture = std::shared_future<SharedResponse>;
 
     Client(
         dds::domain::DomainParticipant *participant, const std::string &service_name,
@@ -777,9 +785,9 @@ namespace lwrcl
       }
     }
 
-    std::shared_ptr<FutureBase> async_send_request(std::shared_ptr<typename T::Request> request)
+    SharedFuture async_send_request(SharedRequest request)
     {
-      auto promise = std::make_shared<std::promise<std::shared_ptr<typename T::Response>>>();
+      auto promise = std::make_shared<std::promise<SharedResponse>>();
       auto future = promise->get_future().share();
 
       {
@@ -789,7 +797,7 @@ namespace lwrcl
 
       publisher_->publish(request);
 
-      return std::make_shared<TypedFuture<typename T::Response>>(future);
+      return future;
     }
 
     template <typename Duration>
@@ -837,6 +845,29 @@ namespace lwrcl
 
     if (
         future->wait_for(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)) ==
+        std::future_status::ready)
+    {
+      node->stop_spin();
+      spin_thread.join();
+      return SUCCESS;
+    }
+    else
+    {
+      node->stop_spin();
+      spin_thread.join();
+      return TIMEOUT;
+    }
+  }
+
+  template <typename ResponseT, typename Duration>
+  FutureReturnCode spin_until_future_complete(
+      std::shared_ptr<lwrcl::Node> node, std::shared_future<ResponseT> &future, const Duration &timeout)
+  {
+    std::thread spin_thread([node]()
+                            { lwrcl::spin(node); });
+
+    if (
+        future.wait_for(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)) ==
         std::future_status::ready)
     {
       node->stop_spin();

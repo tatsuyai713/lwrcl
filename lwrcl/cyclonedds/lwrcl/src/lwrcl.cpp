@@ -1544,10 +1544,4 @@ namespace lwrcl
       RMWQoSHistoryPolicy::KEEP_LAST, RMWQoSReliabilityPolicy::RELIABLE,
       RMWQoSDurabilityPolicy::VOLATILE};
 
-  QoSInitialization KeepLast(size_t depth)
-  {
-    return QoSInitialization(RMWQoSHistoryPolicy::KEEP_LAST, depth);
-  }
-
-  QoSInitialization KeepAll() { return QoSInitialization(RMWQoSHistoryPolicy::KEEP_ALL, 1000); }
 } // namespace lwrcl

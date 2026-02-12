@@ -1,0 +1,14 @@
+# diagnostic_aggregator configuration
+cpu_monitor:
+  ros__parameters:
+    hardware_id: "cpu_main"
+    report_interval_ms: 1000
+    warn_threshold_temp: 70.0
+    error_threshold_temp: 85.0
+
+gpu_monitor:
+  ros__parameters:
+    hardware_id: "gpu_rtx"
+    report_interval_ms: 500
+    warn_threshold_temp: 80.0
+    error_threshold_temp: 95.0

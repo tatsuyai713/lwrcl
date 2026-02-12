@@ -176,6 +176,19 @@ namespace lwrcl
     {
     }
 
+    // Constructor from QoSInitialization (rclcpp compatible: QoS(KeepAll{}))
+    QoS(const QoSInitialization &qos_init)
+        : depth_(qos_init.depth_),
+          history_(qos_init.history_ == RMWQoSHistoryPolicy::KEEP_LAST ? HistoryPolicy::KEEP_LAST : HistoryPolicy::KEEP_ALL),
+          reliability_(ReliabilityPolicy::RELIABLE),
+          durability_(DurabilityPolicy::VOLATILE),
+          liveliness_(LivelinessPolicy::AUTOMATIC),
+          deadline_(RMWDuration::infinite()),
+          lifespan_(RMWDuration::infinite()),
+          liveliness_lease_duration_(RMWDuration::infinite())
+    {
+    }
+
     // Constructor with HistoryPolicy and custom profile
     QoS(HistoryPolicy history, const RMWQoSProfile &custom_profile)
         : depth_(custom_profile.depth),
@@ -226,10 +239,38 @@ namespace lwrcl
       return *this;
     }
 
+    // Convenience: set RELIABLE (rclcpp compatible)
+    QoS &reliable()
+    {
+      reliability_ = ReliabilityPolicy::RELIABLE;
+      return *this;
+    }
+
+    // Convenience: set BEST_EFFORT (rclcpp compatible)
+    QoS &best_effort()
+    {
+      reliability_ = ReliabilityPolicy::BEST_EFFORT;
+      return *this;
+    }
+
     // Set DurabilityPolicy
     QoS &durability(DurabilityPolicy policy)
     {
       durability_ = policy;
+      return *this;
+    }
+
+    // Convenience: set TRANSIENT_LOCAL (rclcpp compatible)
+    QoS &transient_local()
+    {
+      durability_ = DurabilityPolicy::TRANSIENT_LOCAL;
+      return *this;
+    }
+
+    // Convenience: set VOLATILE (rclcpp compatible)
+    QoS &durability_volatile()
+    {
+      durability_ = DurabilityPolicy::VOLATILE;
       return *this;
     }
 
@@ -443,8 +484,28 @@ namespace lwrcl
   extern const RMWQoSProfile rmw_qos_profile_services_default;
   extern const RMWQoSProfile rmw_qos_profile_parameter_events;
 
-  QoSInitialization KeepLast(size_t depth);
-  QoSInitialization KeepAll();
+  // rclcpp-compatible KeepLast / KeepAll --------------------------------
+  // These are structs so that both QoS(KeepAll{}) and QoS(KeepAll()) work,
+  // matching rclcpp's API.
+  struct KeepLast
+  {
+    explicit KeepLast(size_t depth) : depth_(depth) {}
+    operator QoSInitialization() const                     // NOLINT implicit
+    {
+      return QoSInitialization(RMWQoSHistoryPolicy::KEEP_LAST, depth_);
+    }
+    size_t depth_;
+  };
+
+  struct KeepAll
+  {
+    KeepAll() = default;
+    operator QoSInitialization() const                     // NOLINT implicit
+    {
+      return QoSInitialization(RMWQoSHistoryPolicy::KEEP_ALL, 0);
+    }
+  };
+
 } // namespace lwrcl
 
 #endif // LWRCL_QOS_HPP

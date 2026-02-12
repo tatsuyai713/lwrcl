@@ -57,6 +57,9 @@ if(DDS_BACKEND STREQUAL "fastdds")
     add_subdirectory(CustomROSTypeDataPublisher)
     add_subdirectory(HelloWorldExample)
 
+    # Advanced examples
+    add_subdirectory(advanced)
+
 elseif(DDS_BACKEND STREQUAL "cyclonedds")
     if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
         set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/qnx/cyclonedds-libs)
@@ -91,6 +94,9 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
     endif()
 
     add_subdirectory(ROSCustomTypeImagePubSub)
+
+    # Advanced examples
+    add_subdirectory(advanced)
 
 else()
     message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds' or 'cyclonedds'.")

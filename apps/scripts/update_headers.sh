@@ -24,6 +24,12 @@ find "$folder_path" -type f -name "*.hpp" | while read -r file_path; do
     file_name=$(basename "$file_path")
     class_name=$(basename "$file_name" .hpp)
     directory_path=$(dirname "$file_path")
+
+    # snake_caseファイルはスキップ（idlcは常にPascalCaseを生成するため）
+    if [[ ! "$class_name" =~ [A-Z] ]]; then
+        echo "Skipping already snake_case file: $file_name"
+        continue
+    fi
     
     # 元ファイルを_cyclone.hppにリネーム
     cyclone_file_path="${file_path%.hpp}_cyclone.hpp"
