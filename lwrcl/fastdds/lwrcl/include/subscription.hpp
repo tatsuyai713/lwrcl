@@ -9,6 +9,7 @@
 #include <thread>
 #include <utility>
 #include <vector>
+#include <deque>
 
 #include "fast_dds_header.hpp"
 #include "qos.hpp"
@@ -310,7 +311,7 @@ namespace lwrcl
         return false;
       }
       auto front = std::move(pollable_buffer_.front());
-      pollable_buffer_.erase(pollable_buffer_.begin());
+      pollable_buffer_.pop_front();
       out_msg = std::move(front.first);
       info = front.second;
       return true;
@@ -446,16 +447,19 @@ namespace lwrcl
               {
                 if (info_.valid_data)
                 {
-                  auto message_copy = std::move(message_ptr_);
-                  message_ptr_ = std::make_shared<T>(); // fresh buffer for the next sample
+                  // Move the filled buffer out and allocate a fresh one for the next sample.
+                  // This avoids copying the message data — only the shared_ptr is moved.
+                  auto message_ready = std::move(message_ptr_);
+                  message_ptr_ = std::make_shared<T>();
+
                   channel_->produce(std::make_shared<SubscriberCallback<T>>(
-                      callback_function_, message_copy, lwrcl_subscriber_mutex_));
+                      callback_function_, message_ready, lwrcl_subscriber_mutex_));
                   new_info.source_timestamp = std::chrono::system_clock::now();
                   new_info.from_intra_process = false;
-                  pollable_buffer_.emplace_back(message_copy, new_info);
+                  pollable_buffer_.emplace_back(std::move(message_ready), new_info);
                   if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
                   {
-                    pollable_buffer_.erase(pollable_buffer_.begin());
+                    pollable_buffer_.pop_front();
                   }
                 }
                 else
@@ -481,7 +485,7 @@ namespace lwrcl
     std::shared_ptr<T> message_ptr_;
     std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
     eprosima::fastdds::dds::SampleInfo info_;
-    std::vector<std::pair<std::shared_ptr<T>, lwrcl::MessageInfo>> pollable_buffer_;
+    std::deque<std::pair<std::shared_ptr<T>, lwrcl::MessageInfo>> pollable_buffer_;
     std::atomic<int32_t> count_{0};
   };
 

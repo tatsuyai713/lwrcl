@@ -19,6 +19,7 @@
 #include <cstring>  // for memcpy/memset used by SerializedMessage/Serialization
 
 #include <dds/dds.hpp>
+#include "org/eclipse/cyclonedds/core/cdr/basic_cdr_ser.hpp"
 #include "qos.hpp"
 #include "clock_time_duration.hpp"
 #include "publisher.hpp"
@@ -173,9 +174,33 @@ namespace lwrcl
   public:
     using SharedPtr = std::shared_ptr<Node>;
 
+    struct NodeOptions
+    {
+      bool use_intra_process_comms = false;
+      bool start_parameter_services = true;
+      bool start_parameter_event_publisher = true;
+      bool allow_undeclared_parameters = false;
+      bool automatically_declare_parameters_from_overrides = false;
+
+      NodeOptions &set_use_intra_process_comms(bool value)
+      {
+        use_intra_process_comms = value;
+        return *this;
+      }
+
+      NodeOptions &set_allow_undeclared_parameters(bool value)
+      {
+        allow_undeclared_parameters = value;
+        return *this;
+      }
+    };
+
     // Getters
     std::shared_ptr<dds::domain::DomainParticipant> get_participant() const;
     std::string get_name() const;
+    std::string get_namespace() const;
+    std::string get_fully_qualified_name() const;
+    const NodeOptions &get_node_options() const;
     Logger get_logger() const;
 
     // Create publisher, subscription, service, client, timer
@@ -184,7 +209,7 @@ namespace lwrcl
     {
       QoS qos(depth);
       auto publisher =
-          std::make_shared<Publisher<T>>(participant_.get(), std::string("rt/") + topic, qos);
+          std::make_shared<Publisher<T>>(participant_.get(), resolve_topic_name(topic), qos);
       publisher_list_.push_front(publisher);
       return publisher;
     }
@@ -193,7 +218,7 @@ namespace lwrcl
     std::shared_ptr<Publisher<T>> create_publisher(const std::string &topic, const QoS &qos)
     {
       auto publisher =
-          std::make_shared<Publisher<T>>(participant_.get(), std::string("rt/") + topic, qos);
+          std::make_shared<Publisher<T>>(participant_.get(), resolve_topic_name(topic), qos);
       publisher_list_.push_front(publisher);
       return publisher;
     }
@@ -205,7 +230,7 @@ namespace lwrcl
     {
       QoS qos(depth);
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), std::string("rt/") + topic, qos, callback_function, channel_);
+          participant_.get(), resolve_topic_name(topic), qos, callback_function, channel_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -216,9 +241,33 @@ namespace lwrcl
         std::function<void(std::shared_ptr<T>)> callback_function)
     {
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), std::string("rt/") + topic, qos, callback_function, channel_);
+          participant_.get(), resolve_topic_name(topic), qos, callback_function, channel_);
       subscription_list_.push_front(subscription);
       return subscription;
+    }
+
+    // Const-ref callback overloads
+    template <typename T>
+    std::shared_ptr<Subscription<T>> create_subscription(
+        const std::string &topic, const uint16_t &depth,
+        std::function<void(const T &)> callback_function)
+    {
+      // Wrap const-ref callback into shared_ptr callback
+      auto wrapper = [callback_function](std::shared_ptr<T> msg) {
+        callback_function(*msg);
+      };
+      return create_subscription<T>(topic, depth, std::function<void(std::shared_ptr<T>)>(wrapper));
+    }
+
+    template <typename T>
+    std::shared_ptr<Subscription<T>> create_subscription(
+        const std::string &topic, const QoS &qos,
+        std::function<void(const T &)> callback_function)
+    {
+      auto wrapper = [callback_function](std::shared_ptr<T> msg) {
+        callback_function(*msg);
+      };
+      return create_subscription<T>(topic, qos, std::function<void(std::shared_ptr<T>)>(wrapper));
     }
 
     template <typename T>
@@ -271,12 +320,19 @@ namespace lwrcl
     // Create node
     static std::shared_ptr<Node> make_shared(int domain_id);
     static std::shared_ptr<Node> make_shared(int domain_id, const std::string &name);
+    static std::shared_ptr<Node> make_shared(int domain_id, const std::string &name, const std::string &ns);
+    static std::shared_ptr<Node> make_shared(int domain_id, const std::string &name, const std::string &ns, const NodeOptions &options);
     static std::shared_ptr<Node> make_shared(const std::string &name);
+    static std::shared_ptr<Node> make_shared(const std::string &name, const std::string &ns);
+    static std::shared_ptr<Node> make_shared(const std::string &name, const std::string &ns, const NodeOptions &options);
     static std::shared_ptr<Node> make_shared(
         std::shared_ptr<dds::domain::DomainParticipant> participant);
     static std::shared_ptr<Node> make_shared(
         std::shared_ptr<dds::domain::DomainParticipant> participant,
         const std::string &name);
+    static std::shared_ptr<Node> make_shared(
+        std::shared_ptr<dds::domain::DomainParticipant> participant,
+        const std::string &name, const std::string &ns);
 
     // Friend functions
     friend void lwrcl::spin(std::shared_ptr<Node> node);
@@ -291,6 +347,9 @@ namespace lwrcl
     Node(
         std::shared_ptr<dds::domain::DomainParticipant> participant,
         const std::string &name);
+    Node(
+        std::shared_ptr<dds::domain::DomainParticipant> participant,
+        const std::string &name, const std::string &ns);
     // Destructor
     virtual ~Node();
     Node(const Node &) = delete;
@@ -328,7 +387,11 @@ namespace lwrcl
     // Protected constructor
     Node(int domain_id);
     Node(int domain_id, const std::string &name);
+    Node(int domain_id, const std::string &name, const std::string &ns);
+    Node(int domain_id, const std::string &name, const std::string &ns, const NodeOptions &options);
     Node(const std::string &name);
+    Node(const std::string &name, const std::string &ns);
+    Node(const std::string &name, const std::string &ns, const NodeOptions &options);
 
   private:
     // Deleter for DomainParticipant
@@ -348,6 +411,8 @@ namespace lwrcl
     CallbackChannel::SharedPtr channel_;
     Clock::SharedPtr clock_;
     std::string name_;
+    std::string namespace_;
+    NodeOptions node_options_;
     bool stop_flag_;
     bool participant_owned_;  // <-- declared AFTER public bool closed_ (above)
 
@@ -357,6 +422,23 @@ namespace lwrcl
     std::forward_list<std::shared_ptr<IService>> service_list_;
     std::forward_list<std::shared_ptr<IClient>> client_list_;
     Parameters parameters_;
+
+    std::string get_topic_prefix() const
+    {
+      if (namespace_.empty() || namespace_ == "/")
+        return "rt/";
+      std::string ns = namespace_;
+      if (ns.front() == '/') ns = ns.substr(1);
+      if (!ns.empty() && ns.back() != '/') ns += '/';
+      return "rt/" + ns;
+    }
+
+    std::string resolve_topic_name(const std::string &topic) const
+    {
+      if (!topic.empty() && topic[0] == '/')
+        return "rt" + topic;
+      return get_topic_prefix() + topic;
+    }
   };
 
   // Executor classes
@@ -772,7 +854,8 @@ namespace lwrcl
   struct lwrcl_serialized_message_t
   {
     char *buffer;
-    size_t length;
+    size_t length;   // actual data size
+    size_t capacity; // allocated buffer size
   };
 
   class SerializedMessage
@@ -780,32 +863,44 @@ namespace lwrcl
   public:
     SerializedMessage() : data_(), is_own_buffer_(true)
     {
-      std::memset(&data_, 0, sizeof(lwrcl_serialized_message_t));
       data_.buffer = nullptr;
       data_.length = 0;
+      data_.capacity = 0;
     }
 
     explicit SerializedMessage(size_t initial_capacity) : data_(), is_own_buffer_(true)
     {
-      std::memset(&data_, 0, sizeof(lwrcl_serialized_message_t));
       data_.buffer = new char[initial_capacity];
       data_.length = initial_capacity;
+      data_.capacity = initial_capacity;
     }
 
     SerializedMessage(const SerializedMessage &other) : data_(), is_own_buffer_(true)
     {
-      std::memset(&data_, 0, sizeof(lwrcl_serialized_message_t));
-      data_.buffer = new char[other.data_.length];
-      std::memcpy(data_.buffer, other.data_.buffer, other.data_.length);
-      data_.length = other.data_.length;
+      if (other.data_.length > 0 && other.data_.buffer) {
+        data_.buffer = new char[other.data_.length];
+        std::memcpy(data_.buffer, other.data_.buffer, other.data_.length);
+        data_.length = other.data_.length;
+        data_.capacity = other.data_.length;
+      } else {
+        data_.buffer = nullptr;
+        data_.length = 0;
+        data_.capacity = 0;
+      }
     }
 
     SerializedMessage(const lwrcl_serialized_message_t &other) : data_(), is_own_buffer_(true)
     {
-      std::memset(&data_, 0, sizeof(lwrcl_serialized_message_t));
-      data_.buffer = new char[other.length];
-      std::memcpy(data_.buffer, other.buffer, other.length);
-      data_.length = other.length;
+      if (other.length > 0 && other.buffer) {
+        data_.buffer = new char[other.length];
+        std::memcpy(data_.buffer, other.buffer, other.length);
+        data_.length = other.length;
+        data_.capacity = other.length;
+      } else {
+        data_.buffer = nullptr;
+        data_.length = 0;
+        data_.capacity = 0;
+      }
     }
 
     SerializedMessage(SerializedMessage &&other) noexcept
@@ -813,12 +908,14 @@ namespace lwrcl
     {
       other.data_.buffer = nullptr;
       other.data_.length = 0;
+      other.data_.capacity = 0;
     }
 
     SerializedMessage(lwrcl_serialized_message_t &&other) noexcept : data_(other), is_own_buffer_(true)
     {
       other.buffer = nullptr;
       other.length = 0;
+      other.capacity = 0;
     }
 
     ~SerializedMessage()
@@ -833,14 +930,21 @@ namespace lwrcl
     {
       if (this != &other)
       {
-        if (data_.buffer != nullptr && is_own_buffer_)
+        // Reuse existing buffer if capacity is sufficient
+        if (is_own_buffer_ && data_.capacity >= other.data_.length && data_.buffer != nullptr)
         {
-          delete[] data_.buffer;
+          std::memcpy(data_.buffer, other.data_.buffer, other.data_.length);
+          data_.length = other.data_.length;
         }
-        data_.buffer = new char[other.data_.length];
-        std::memcpy(data_.buffer, other.data_.buffer, other.data_.length);
-        data_.length = other.data_.length;
-        is_own_buffer_ = true;
+        else
+        {
+          if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
+          data_.buffer = new char[other.data_.length];
+          std::memcpy(data_.buffer, other.data_.buffer, other.data_.length);
+          data_.length = other.data_.length;
+          data_.capacity = other.data_.length;
+          is_own_buffer_ = true;
+        }
       }
       return *this;
     }
@@ -849,14 +953,20 @@ namespace lwrcl
     {
       if (data_.buffer != other.buffer)
       {
-        if (data_.buffer != nullptr && is_own_buffer_)
+        if (is_own_buffer_ && data_.capacity >= other.length && data_.buffer != nullptr)
         {
-          delete[] data_.buffer;
+          std::memcpy(data_.buffer, other.buffer, other.length);
+          data_.length = other.length;
         }
-        data_.buffer = new char[other.length];
-        std::memcpy(data_.buffer, other.buffer, other.length);
-        data_.length = other.length;
-        is_own_buffer_ = true;
+        else
+        {
+          if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
+          data_.buffer = new char[other.length];
+          std::memcpy(data_.buffer, other.buffer, other.length);
+          data_.length = other.length;
+          data_.capacity = other.length;
+          is_own_buffer_ = true;
+        }
       }
       return *this;
     }
@@ -865,14 +975,12 @@ namespace lwrcl
     {
       if (this != &other)
       {
-        if (data_.buffer != nullptr && is_own_buffer_)
-        {
-          delete[] data_.buffer;
-        }
+        if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
         data_ = other.data_;
+        is_own_buffer_ = other.is_own_buffer_;
         other.data_.buffer = nullptr;
         other.data_.length = 0;
-        is_own_buffer_ = other.is_own_buffer_;
+        other.data_.capacity = 0;
       }
       return *this;
     }
@@ -881,63 +989,54 @@ namespace lwrcl
     {
       if (data_.buffer != other.buffer)
       {
-        if (data_.buffer != nullptr && is_own_buffer_)
-        {
-          delete[] data_.buffer;
-        }
+        if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
         data_ = other;
         other.buffer = nullptr;
         other.length = 0;
+        other.capacity = 0;
         is_own_buffer_ = true;
       }
       return *this;
     }
 
     lwrcl_serialized_message_t &get_rcl_serialized_message() { return data_; }
-
     const lwrcl_serialized_message_t &get_rcl_serialized_message() const { return data_; }
 
     void set_buffer(char *buffer, size_t length)
     {
-      if (data_.buffer != nullptr && is_own_buffer_)
-      {
-        delete[] data_.buffer;
-      }
+      if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
       data_.buffer = buffer;
       data_.length = length;
+      data_.capacity = length;
       is_own_buffer_ = false;
     }
 
     size_t size() const { return data_.length; }
-
-    size_t capacity() const { return data_.length; }
+    size_t capacity() const { return data_.capacity; }
 
     void reserve(size_t new_capacity)
     {
-      if (new_capacity > data_.length)
+      if (new_capacity > data_.capacity)
       {
         char *new_buffer = new char[new_capacity];
-        if (data_.buffer != nullptr && is_own_buffer_)
+        if (data_.buffer != nullptr && is_own_buffer_ && data_.length > 0)
         {
           std::memcpy(new_buffer, data_.buffer, data_.length);
           delete[] data_.buffer;
         }
-        else
-        {
-          std::memset(new_buffer, 0, new_capacity);
-        }
         data_.buffer = new_buffer;
-        data_.length = new_capacity;
+        data_.capacity = new_capacity;
         is_own_buffer_ = true;
+        // Note: data_.length (actual data size) is NOT changed here
       }
     }
 
     lwrcl_serialized_message_t release_lwrcl_serialized_message()
     {
-      // Hand ownership to the caller without freeing; mirror rclcpp semantics.
       lwrcl_serialized_message_t out = data_;
       data_.buffer = nullptr;
       data_.length = 0;
+      data_.capacity = 0;
       is_own_buffer_ = false;
       return out;
     }
@@ -953,30 +1052,43 @@ namespace lwrcl
   public:
     static void serialize_message(T *message, SerializedMessage *serialized_message)
     {
-      // Placeholder for Cyclone DDS serialization.
-      size_t message_size = sizeof(T);
-      serialized_message->reserve(message_size + 4); // +4 for header
+      using namespace org::eclipse::cyclonedds::core::cdr;
 
-      char *buffer = serialized_message->get_rcl_serialized_message().buffer;
+      // Determine serialized size via move (dry-run)
+      basic_cdr_stream sizer;
+      move(sizer, *message, false);
+      size_t payload_size = sizer.position();
+
+      // 4-byte CDR header + payload
+      serialized_message->reserve(payload_size + 4);
+      char *buf = serialized_message->get_rcl_serialized_message().buffer;
+
       uint8_t header[4] = {0x00, 0x01, 0x00, 0x00};
-      
-      memcpy(buffer, header, 4);
-      memcpy(buffer + 4, message, message_size);
-      serialized_message->get_rcl_serialized_message().length = message_size + 4;
+      memcpy(buf, header, 4);
+
+      // Serialize into buffer after header
+      basic_cdr_stream writer;
+      writer.set_buffer(buf + 4, payload_size);
+      write(writer, *message, false);
+
+      serialized_message->get_rcl_serialized_message().length = payload_size + 4;
     }
 
     static void deserialize_message(SerializedMessage *serialized_message, T *message)
     {
-      // Cyclone DDS deserialization implementation
-      // This is a placeholder - actual implementation would use Cyclone DDS APIs
-      
-      char *buffer = serialized_message->get_rcl_serialized_message().buffer;
+      using namespace org::eclipse::cyclonedds::core::cdr;
+
+      char *buf = serialized_message->get_rcl_serialized_message().buffer;
       size_t length = serialized_message->get_rcl_serialized_message().length;
-      
-      if (length >= 4) {
-        // Skip 4-byte header and copy message data
-        memcpy(message, buffer + 4, length - 4);
+
+      if (length <= 4) {
+        return;
       }
+
+      // Skip 4-byte CDR header and deserialize payload
+      basic_cdr_stream reader;
+      reader.set_buffer(buf + 4, length - 4);
+      read(reader, *message, false);
     }
   };
 } // namespace lwrcl

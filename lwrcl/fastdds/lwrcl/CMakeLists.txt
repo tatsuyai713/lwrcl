@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16.3)
 project(lwrcl)
 
 add_library(${PROJECT_NAME} SHARED src/${PROJECT_NAME}.cpp)
-target_include_directories(${PROJECT_NAME} PUBLIC include)
+target_include_directories(${PROJECT_NAME} BEFORE PUBLIC include)
 
 target_link_libraries(${PROJECT_NAME} fastrtps yaml-cpp)
 

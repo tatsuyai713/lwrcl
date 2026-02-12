@@ -883,7 +883,8 @@ namespace lwrcl
   struct lwrcl_serialized_message_t
   {
     char *buffer;
-    size_t length;
+    size_t length;   // actual data size
+    size_t capacity; // allocated buffer size
   };
 
   class SerializedMessage
@@ -891,32 +892,44 @@ namespace lwrcl
   public:
     SerializedMessage() : data_(), is_own_buffer_(true)
     {
-      memset(&data_, 0, sizeof(lwrcl_serialized_message_t));
       data_.buffer = nullptr;
       data_.length = 0;
+      data_.capacity = 0;
     }
 
     explicit SerializedMessage(size_t initial_capacity) : data_(), is_own_buffer_(true)
     {
-      memset(&data_, 0, sizeof(lwrcl_serialized_message_t));
       data_.buffer = new char[initial_capacity];
       data_.length = initial_capacity;
+      data_.capacity = initial_capacity;
     }
 
     SerializedMessage(const SerializedMessage &other) : data_(), is_own_buffer_(true)
     {
-      memset(&data_, 0, sizeof(lwrcl_serialized_message_t));
-      data_.buffer = new char[other.data_.length];
-      memcpy(data_.buffer, other.data_.buffer, other.data_.length);
-      data_.length = other.data_.length;
+      if (other.data_.length > 0 && other.data_.buffer) {
+        data_.buffer = new char[other.data_.length];
+        memcpy(data_.buffer, other.data_.buffer, other.data_.length);
+        data_.length = other.data_.length;
+        data_.capacity = other.data_.length;
+      } else {
+        data_.buffer = nullptr;
+        data_.length = 0;
+        data_.capacity = 0;
+      }
     }
 
     SerializedMessage(const lwrcl_serialized_message_t &other) : data_(), is_own_buffer_(true)
     {
-      memset(&data_, 0, sizeof(lwrcl_serialized_message_t));
-      data_.buffer = new char[other.length];
-      memcpy(data_.buffer, other.buffer, other.length);
-      data_.length = other.length;
+      if (other.length > 0 && other.buffer) {
+        data_.buffer = new char[other.length];
+        memcpy(data_.buffer, other.buffer, other.length);
+        data_.length = other.length;
+        data_.capacity = other.length;
+      } else {
+        data_.buffer = nullptr;
+        data_.length = 0;
+        data_.capacity = 0;
+      }
     }
 
     SerializedMessage(SerializedMessage &&other) noexcept
@@ -924,12 +937,14 @@ namespace lwrcl
     {
       other.data_.buffer = nullptr;
       other.data_.length = 0;
+      other.data_.capacity = 0;
     }
 
     SerializedMessage(lwrcl_serialized_message_t &&other) noexcept : data_(other), is_own_buffer_(true)
     {
       other.buffer = nullptr;
       other.length = 0;
+      other.capacity = 0;
     }
 
     ~SerializedMessage()
@@ -944,14 +959,21 @@ namespace lwrcl
     {
       if (this != &other)
       {
-        if (data_.buffer != nullptr && is_own_buffer_)
+        // Reuse existing buffer if capacity is sufficient
+        if (is_own_buffer_ && data_.capacity >= other.data_.length && data_.buffer != nullptr)
         {
-          delete[] data_.buffer;
+          memcpy(data_.buffer, other.data_.buffer, other.data_.length);
+          data_.length = other.data_.length;
         }
-        data_.buffer = new char[other.data_.length];
-        memcpy(data_.buffer, other.data_.buffer, other.data_.length);
-        data_.length = other.data_.length;
-        is_own_buffer_ = true;
+        else
+        {
+          if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
+          data_.buffer = new char[other.data_.length];
+          memcpy(data_.buffer, other.data_.buffer, other.data_.length);
+          data_.length = other.data_.length;
+          data_.capacity = other.data_.length;
+          is_own_buffer_ = true;
+        }
       }
       return *this;
     }
@@ -960,14 +982,20 @@ namespace lwrcl
     {
       if (data_.buffer != other.buffer)
       {
-        if (data_.buffer != nullptr && is_own_buffer_)
+        if (is_own_buffer_ && data_.capacity >= other.length && data_.buffer != nullptr)
         {
-          delete[] data_.buffer;
+          memcpy(data_.buffer, other.buffer, other.length);
+          data_.length = other.length;
         }
-        data_.buffer = new char[other.length];
-        memcpy(data_.buffer, other.buffer, other.length);
-        data_.length = other.length;
-        is_own_buffer_ = true;
+        else
+        {
+          if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
+          data_.buffer = new char[other.length];
+          memcpy(data_.buffer, other.buffer, other.length);
+          data_.length = other.length;
+          data_.capacity = other.length;
+          is_own_buffer_ = true;
+        }
       }
       return *this;
     }
@@ -976,14 +1004,12 @@ namespace lwrcl
     {
       if (this != &other)
       {
-        if (data_.buffer != nullptr && is_own_buffer_)
-        {
-          delete[] data_.buffer;
-        }
+        if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
         data_ = other.data_;
+        is_own_buffer_ = other.is_own_buffer_;
         other.data_.buffer = nullptr;
         other.data_.length = 0;
-        is_own_buffer_ = other.is_own_buffer_;
+        other.data_.capacity = 0;
       }
       return *this;
     }
@@ -992,63 +1018,54 @@ namespace lwrcl
     {
       if (data_.buffer != other.buffer)
       {
-        if (data_.buffer != nullptr && is_own_buffer_)
-        {
-          delete[] data_.buffer;
-        }
+        if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
         data_ = other;
         other.buffer = nullptr;
         other.length = 0;
+        other.capacity = 0;
         is_own_buffer_ = true;
       }
       return *this;
     }
 
     lwrcl_serialized_message_t &get_rcl_serialized_message() { return data_; }
-
     const lwrcl_serialized_message_t &get_rcl_serialized_message() const { return data_; }
 
     void set_buffer(char *buffer, size_t length)
     {
-      if (data_.buffer != nullptr && is_own_buffer_)
-      {
-        delete[] data_.buffer;
-      }
+      if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
       data_.buffer = buffer;
       data_.length = length;
+      data_.capacity = length;
       is_own_buffer_ = false;
     }
 
     size_t size() const { return data_.length; }
-
-    size_t capacity() const { return data_.length; }
+    size_t capacity() const { return data_.capacity; }
 
     void reserve(size_t new_capacity)
     {
-      if (new_capacity > data_.length)
+      if (new_capacity > data_.capacity)
       {
         char *new_buffer = new char[new_capacity];
-        if (data_.buffer != nullptr && is_own_buffer_)
+        if (data_.buffer != nullptr && is_own_buffer_ && data_.length > 0)
         {
           std::memcpy(new_buffer, data_.buffer, data_.length);
           delete[] data_.buffer;
         }
-        else
-        {
-          std::memset(new_buffer, 0, new_capacity);
-        }
         data_.buffer = new_buffer;
-        data_.length = new_capacity;
+        data_.capacity = new_capacity;
         is_own_buffer_ = true;
+        // Note: data_.length (actual data size) is NOT changed here
       }
     }
 
     lwrcl_serialized_message_t release_lwrcl_serialized_message()
     {
-      // Hand ownership to the caller without freeing; mirror rclcpp semantics.
       lwrcl_serialized_message_t out = data_;
       data_.buffer = nullptr;
       data_.length = 0;
+      data_.capacity = 0;
       is_own_buffer_ = false;
       return out;
     }
@@ -1064,24 +1081,37 @@ namespace lwrcl
   public:
     static void serialize_message(T *message, SerializedMessage *serialized_message)
     {
-      eprosima::fastcdr::FastBuffer fastbuffer;
-      eprosima::fastcdr::Cdr cdr(fastbuffer);
-      uint8_t header[4] = {0x00, 0x01, 0x00, 0x00};
-      message->serialize(cdr);
-      const char *buffer = cdr.getBufferPointer();
-      size_t length = cdr.getSerializedDataLength();
-      serialized_message->reserve(length + 4);
-      char *combined_buffer = serialized_message->get_rcl_serialized_message().buffer;
-      memcpy(combined_buffer, header, 4);
-      memcpy(combined_buffer + 4, buffer, length);
-      serialized_message->get_rcl_serialized_message().length = length + 4;
+      // First pass: determine the serialized size without allocating
+      // Uses FastCDR's getSerializedDataLength after serialize
+      eprosima::fastcdr::FastBuffer sizing_buf;
+      eprosima::fastcdr::Cdr sizing_cdr(sizing_buf);
+      message->serialize(sizing_cdr);
+      size_t payload_size = sizing_cdr.getSerializedDataLength();
+
+      // Reserve capacity (reuses buffer if large enough) then serialize directly
+      size_t total_size = payload_size + 4;
+      serialized_message->reserve(total_size);
+      char *buf = serialized_message->get_rcl_serialized_message().buffer;
+
+      // 4-byte CDR header
+      buf[0] = 0x00; buf[1] = 0x01; buf[2] = 0x00; buf[3] = 0x00;
+
+      // Serialize directly into destination buffer (zero intermediate copy)
+      eprosima::fastcdr::FastBuffer direct_buf(buf + 4, payload_size);
+      eprosima::fastcdr::Cdr direct_cdr(direct_buf);
+      message->serialize(direct_cdr);
+
+      serialized_message->get_rcl_serialized_message().length = total_size;
     }
 
     static void deserialize_message(SerializedMessage *serialized_message, T *message)
     {
-      eprosima::fastcdr::FastBuffer fastbuffer(
-          reinterpret_cast<char *>(serialized_message->get_rcl_serialized_message().buffer + 4),
-          serialized_message->get_rcl_serialized_message().length - 4);
+      // Zero-copy: wrap existing buffer directly, no allocation
+      char *buf = serialized_message->get_rcl_serialized_message().buffer;
+      size_t length = serialized_message->get_rcl_serialized_message().length;
+      if (length <= 4) { return; }
+
+      eprosima::fastcdr::FastBuffer fastbuffer(buf + 4, length - 4);
       eprosima::fastcdr::Cdr cdr(fastbuffer);
       message->deserialize(cdr);
     }

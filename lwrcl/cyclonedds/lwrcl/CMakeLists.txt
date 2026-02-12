@@ -4,7 +4,7 @@ project(lwrcl)
 # Include/link directories are inherited from the parent CMakeLists.txt
 
 add_library(${PROJECT_NAME} SHARED src/${PROJECT_NAME}.cpp)
-target_include_directories(${PROJECT_NAME} PUBLIC include)
+target_include_directories(${PROJECT_NAME} BEFORE PUBLIC include)
 
 target_link_libraries(${PROJECT_NAME} ddsc ddscxx yaml-cpp)
 

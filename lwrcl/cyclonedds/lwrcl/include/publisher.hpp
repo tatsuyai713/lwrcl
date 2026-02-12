@@ -136,6 +136,29 @@ namespace lwrcl
       return listener_.count.load();
     }
 
+    // Alias for rclcpp compatibility
+    int32_t get_subscription_count()
+    {
+      return get_subscriber_count();
+    }
+
+    // Get the topic name
+    std::string get_topic_name() const
+    {
+      if (topic_)
+      {
+        return topic_->name();
+      }
+      return "";
+    }
+
+    // Check if the publisher can loan messages (zero-copy support)
+    // CycloneDDS does not support zero-copy loaned messages in this wrapper
+    bool can_loan_messages() const
+    {
+      return false;
+    }
+
     using SharedPtr = std::shared_ptr<Publisher<T>>;
 
   private:

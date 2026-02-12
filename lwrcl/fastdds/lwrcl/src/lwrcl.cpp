@@ -1424,6 +1424,8 @@ namespace lwrcl
 
   void init(int argc, char *argv[])
   {
+    global_stop_flag.store(false);
+
     if (std::signal(SIGINT, lwrcl_signal_handler) == SIG_ERR)
     {
       throw std::runtime_error("Failed to set signal handler.");

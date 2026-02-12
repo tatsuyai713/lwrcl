@@ -80,7 +80,8 @@ namespace lwrcl
           timer_callback_(std::make_shared<TimerCallback>(callback_function)),
           worker_(),
           channel_(channel),
-          stop_flag_(false)
+          stop_flag_(false),
+          is_canceled_(false)
     {
       start();
     }
@@ -94,6 +95,7 @@ namespace lwrcl
 
     void start() override
     {
+      is_canceled_.store(false);
       worker_ = std::thread([this]()
                             { run(); });
     }
@@ -107,10 +109,45 @@ namespace lwrcl
       }
     }
 
+    // Cancel the timer (alias for stop)
+    void cancel()
+    {
+      is_canceled_.store(true);
+      stop();
+    }
+
+    // Check if the timer is canceled
+    bool is_canceled() const
+    {
+      return is_canceled_.load();
+    }
+
+    // Reset the timer (restart)
+    void reset()
+    {
+      stop();
+      is_canceled_.store(false);
+      stop_flag_.store(false);
+      start();
+    }
+
+    // Get the timer period
+    Duration get_period() const
+    {
+      return period_;
+    }
+
+    // Check if the timer is ready (not canceled and not stopped)
+    bool is_ready() const
+    {
+      return !is_canceled_.load() && !stop_flag_.load();
+    }
+
   private:
     void run_system_time()
     {
-      auto next_execution_time = std::chrono::system_clock::now() + std::chrono::nanoseconds(period_.nanoseconds());
+      // Use steady_clock for scheduling to avoid issues with system clock adjustments
+      auto next_execution_time = std::chrono::steady_clock::now() + std::chrono::nanoseconds(period_.nanoseconds());
       while (!stop_flag_.load())
       {
         std::this_thread::sleep_until(next_execution_time);
@@ -154,6 +191,7 @@ namespace lwrcl
     std::thread worker_;
     CallbackChannel::SharedPtr channel_;
     std::atomic<bool> stop_flag_;
+    std::atomic<bool> is_canceled_;
   };
 
 } // namespace lwrcl

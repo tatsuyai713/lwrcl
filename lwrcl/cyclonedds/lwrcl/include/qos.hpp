@@ -1,6 +1,7 @@
 #ifndef LWRCL_QOS_HPP
 #define LWRCL_QOS_HPP
 
+#include <chrono>
 #include <cstddef>
 #include <stdexcept>
 
@@ -25,11 +26,50 @@ enum class RMWQoSDurabilityPolicy
   TRANSIENT_LOCAL
 };
 
+// Custom QoS liveliness policy enumeration
+enum class RMWQoSLivelinessPolicy
+{
+  AUTOMATIC,
+  MANUAL_BY_TOPIC
+};
+
+// Duration structure for QoS settings (deadline, lifespan, liveliness_lease_duration)
+struct RMWDuration
+{
+  int64_t sec = 0;
+  uint32_t nsec = 0;
+
+  static constexpr int64_t INFINITE_SEC = 0x7FFFFFFF;
+  static constexpr uint32_t INFINITE_NSEC = 0xFFFFFFFF;
+
+  RMWDuration() = default;
+  RMWDuration(int64_t s, uint32_t ns) : sec(s), nsec(ns) {}
+
+  template <typename Rep, typename Period>
+  explicit RMWDuration(const std::chrono::duration<Rep, Period> &duration)
+  {
+    auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
+    sec = ns / 1000000000LL;
+    nsec = static_cast<uint32_t>(ns % 1000000000LL);
+  }
+
+  bool is_infinite() const
+  {
+    return sec == INFINITE_SEC && nsec == INFINITE_NSEC;
+  }
+
+  static RMWDuration infinite()
+  {
+    return RMWDuration(INFINITE_SEC, INFINITE_NSEC);
+  }
+};
+
 // Custom QoS profile structure
 struct RMWQoSProfile
 {
   RMWQoSProfile()
-      : depth(10), history(RMWQoSHistoryPolicy::KEEP_LAST), reliability(RMWQoSReliabilityPolicy::RELIABLE), durability(RMWQoSDurabilityPolicy::VOLATILE)
+      : depth(10), history(RMWQoSHistoryPolicy::KEEP_LAST), reliability(RMWQoSReliabilityPolicy::RELIABLE), durability(RMWQoSDurabilityPolicy::VOLATILE),
+        liveliness(RMWQoSLivelinessPolicy::AUTOMATIC), deadline(RMWDuration::infinite()), lifespan(RMWDuration::infinite()), liveliness_lease_duration(RMWDuration::infinite())
   {
   }
 
@@ -38,7 +78,22 @@ struct RMWQoSProfile
       RMWQoSHistoryPolicy history,
       RMWQoSReliabilityPolicy reliability,
       RMWQoSDurabilityPolicy durability)
-      : depth(depth), history(history), reliability(reliability), durability(durability)
+      : depth(depth), history(history), reliability(reliability), durability(durability),
+        liveliness(RMWQoSLivelinessPolicy::AUTOMATIC), deadline(RMWDuration::infinite()), lifespan(RMWDuration::infinite()), liveliness_lease_duration(RMWDuration::infinite())
+  {
+  }
+
+  RMWQoSProfile(
+      size_t depth,
+      RMWQoSHistoryPolicy history,
+      RMWQoSReliabilityPolicy reliability,
+      RMWQoSDurabilityPolicy durability,
+      RMWQoSLivelinessPolicy liveliness,
+      const RMWDuration &deadline,
+      const RMWDuration &lifespan,
+      const RMWDuration &liveliness_lease_duration)
+      : depth(depth), history(history), reliability(reliability), durability(durability),
+        liveliness(liveliness), deadline(deadline), lifespan(lifespan), liveliness_lease_duration(liveliness_lease_duration)
   {
   }
 
@@ -53,6 +108,10 @@ struct RMWQoSProfile
   RMWQoSHistoryPolicy history;
   RMWQoSReliabilityPolicy reliability;
   RMWQoSDurabilityPolicy durability;
+  RMWQoSLivelinessPolicy liveliness;
+  RMWDuration deadline;
+  RMWDuration lifespan;
+  RMWDuration liveliness_lease_duration;
 };
 
 namespace lwrcl
@@ -98,12 +157,22 @@ namespace lwrcl
       TRANSIENT_LOCAL
     };
 
+    enum class LivelinessPolicy
+    {
+      AUTOMATIC,
+      MANUAL_BY_TOPIC
+    };
+
     // Default constructor
     explicit QoS(size_t depth = 10)
         : depth_(depth),
           history_(HistoryPolicy::KEEP_LAST),
           reliability_(ReliabilityPolicy::RELIABLE),
-          durability_(DurabilityPolicy::VOLATILE)
+          durability_(DurabilityPolicy::VOLATILE),
+          liveliness_(LivelinessPolicy::AUTOMATIC),
+          deadline_(RMWDuration::infinite()),
+          lifespan_(RMWDuration::infinite()),
+          liveliness_lease_duration_(RMWDuration::infinite())
     {
     }
 
@@ -112,13 +181,21 @@ namespace lwrcl
         : depth_(custom_profile.depth),
           history_(history),
           reliability_(custom_profile.reliability == RMWQoSReliabilityPolicy::BEST_EFFORT ? ReliabilityPolicy::BEST_EFFORT : ReliabilityPolicy::RELIABLE),
-          durability_(custom_profile.durability == RMWQoSDurabilityPolicy::VOLATILE ? DurabilityPolicy::VOLATILE : DurabilityPolicy::TRANSIENT_LOCAL) {}
+          durability_(custom_profile.durability == RMWQoSDurabilityPolicy::VOLATILE ? DurabilityPolicy::VOLATILE : DurabilityPolicy::TRANSIENT_LOCAL),
+          liveliness_(custom_profile.liveliness == RMWQoSLivelinessPolicy::AUTOMATIC ? LivelinessPolicy::AUTOMATIC : LivelinessPolicy::MANUAL_BY_TOPIC),
+          deadline_(custom_profile.deadline),
+          lifespan_(custom_profile.lifespan),
+          liveliness_lease_duration_(custom_profile.liveliness_lease_duration) {}
 
     QoS(const QoSInitialization qos, const RMWQoSProfile &custom_profile)
         : depth_(qos.depth_),
           history_(qos.history_ == RMWQoSHistoryPolicy::KEEP_LAST ? HistoryPolicy::KEEP_LAST : HistoryPolicy::KEEP_ALL),
           reliability_(custom_profile.reliability == RMWQoSReliabilityPolicy::BEST_EFFORT ? ReliabilityPolicy::BEST_EFFORT : ReliabilityPolicy::RELIABLE),
-          durability_(custom_profile.durability == RMWQoSDurabilityPolicy::VOLATILE ? DurabilityPolicy::VOLATILE : DurabilityPolicy::TRANSIENT_LOCAL) {}
+          durability_(custom_profile.durability == RMWQoSDurabilityPolicy::VOLATILE ? DurabilityPolicy::VOLATILE : DurabilityPolicy::TRANSIENT_LOCAL),
+          liveliness_(custom_profile.liveliness == RMWQoSLivelinessPolicy::AUTOMATIC ? LivelinessPolicy::AUTOMATIC : LivelinessPolicy::MANUAL_BY_TOPIC),
+          deadline_(custom_profile.deadline),
+          lifespan_(custom_profile.lifespan),
+          liveliness_lease_duration_(custom_profile.liveliness_lease_duration) {}
 
     QoS(const QoS &) = default;
     QoS &operator=(const QoS &) = default;
@@ -156,6 +233,37 @@ namespace lwrcl
       return *this;
     }
 
+    // Set LivelinessPolicy
+    QoS &liveliness(LivelinessPolicy policy)
+    {
+      liveliness_ = policy;
+      return *this;
+    }
+
+    // Set Deadline
+    template <typename Rep, typename Period>
+    QoS &deadline(const std::chrono::duration<Rep, Period> &deadline)
+    {
+      deadline_ = RMWDuration(deadline);
+      return *this;
+    }
+
+    // Set Lifespan
+    template <typename Rep, typename Period>
+    QoS &lifespan(const std::chrono::duration<Rep, Period> &lifespan)
+    {
+      lifespan_ = RMWDuration(lifespan);
+      return *this;
+    }
+
+    // Set Liveliness Lease Duration
+    template <typename Rep, typename Period>
+    QoS &liveliness_lease_duration(const std::chrono::duration<Rep, Period> &lease_duration)
+    {
+      liveliness_lease_duration_ = RMWDuration(lease_duration);
+      return *this;
+    }
+
     size_t get_depth() const
     {
       return depth_;
@@ -174,6 +282,26 @@ namespace lwrcl
     DurabilityPolicy get_durability() const
     {
       return durability_;
+    }
+
+    LivelinessPolicy get_liveliness() const
+    {
+      return liveliness_;
+    }
+
+    RMWDuration get_deadline() const
+    {
+      return deadline_;
+    }
+
+    RMWDuration get_lifespan() const
+    {
+      return lifespan_;
+    }
+
+    RMWDuration get_liveliness_lease_duration() const
+    {
+      return liveliness_lease_duration_;
     }
 
     // Convert to a RMWQoSProfile
@@ -212,6 +340,20 @@ namespace lwrcl
         break;
       }
 
+      switch (liveliness_)
+      {
+      case LivelinessPolicy::AUTOMATIC:
+        profile.liveliness = RMWQoSLivelinessPolicy::AUTOMATIC;
+        break;
+      case LivelinessPolicy::MANUAL_BY_TOPIC:
+        profile.liveliness = RMWQoSLivelinessPolicy::MANUAL_BY_TOPIC;
+        break;
+      }
+
+      profile.deadline = deadline_;
+      profile.lifespan = lifespan_;
+      profile.liveliness_lease_duration = liveliness_lease_duration_;
+
       return profile;
     }
 
@@ -220,6 +362,79 @@ namespace lwrcl
     HistoryPolicy history_;
     ReliabilityPolicy reliability_;
     DurabilityPolicy durability_;
+    LivelinessPolicy liveliness_;
+    RMWDuration deadline_;
+    RMWDuration lifespan_;
+    RMWDuration liveliness_lease_duration_;
+  };
+
+  // Preset QoS profiles (rclcpp compatible)
+  class SensorDataQoS : public QoS
+  {
+  public:
+    SensorDataQoS() : QoS(5)
+    {
+      reliability(ReliabilityPolicy::BEST_EFFORT);
+      durability(DurabilityPolicy::VOLATILE);
+    }
+  };
+
+  class SystemDefaultsQoS : public QoS
+  {
+  public:
+    SystemDefaultsQoS() : QoS(10)
+    {
+      reliability(ReliabilityPolicy::RELIABLE);
+      durability(DurabilityPolicy::VOLATILE);
+    }
+  };
+
+  class ServicesQoS : public QoS
+  {
+  public:
+    ServicesQoS() : QoS(10)
+    {
+      reliability(ReliabilityPolicy::RELIABLE);
+      durability(DurabilityPolicy::VOLATILE);
+    }
+  };
+
+  class ParametersQoS : public QoS
+  {
+  public:
+    ParametersQoS() : QoS(1000)
+    {
+      reliability(ReliabilityPolicy::RELIABLE);
+      durability(DurabilityPolicy::VOLATILE);
+    }
+  };
+
+  class ParameterEventsQoS : public QoS
+  {
+  public:
+    ParameterEventsQoS() : QoS(1000)
+    {
+      reliability(ReliabilityPolicy::RELIABLE);
+      durability(DurabilityPolicy::VOLATILE);
+    }
+  };
+
+  class BestEffortQoS : public QoS
+  {
+  public:
+    BestEffortQoS() : QoS(10)
+    {
+      reliability(ReliabilityPolicy::BEST_EFFORT);
+    }
+  };
+
+  class ReliableQoS : public QoS
+  {
+  public:
+    ReliableQoS() : QoS(10)
+    {
+      reliability(ReliabilityPolicy::RELIABLE);
+    }
   };
 
   extern const RMWQoSProfile rmw_qos_profile_default;

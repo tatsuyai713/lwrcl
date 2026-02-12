@@ -346,18 +346,23 @@ namespace lwrcl
       return waitset_.has_message(); 
     }
 
-    int32_t get_publisher_count() const
+    // Alias for rclcpp compatibility
+    bool has_data() { return has_message(); }
+
+    // Get the number of messages waiting (approximation)
+    size_t get_message_count() const
     {
-      if (!reader_) {
-        return 0;
+      return 0; // CycloneDDS waitset polling - exact count not easily available as const
+    }
+
+    // Get the topic name
+    std::string get_topic_name() const
+    {
+      if (topic_)
+      {
+        return topic_->name();
       }
-      
-      try {
-        auto matched_status = reader_->subscription_matched_status();
-        return matched_status.current_count();
-      } catch (const dds::core::Exception& e) {
-        return 0;
-      }
+      return "";
     }
 
   private:

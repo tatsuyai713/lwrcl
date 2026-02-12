@@ -147,7 +147,9 @@ namespace lwrcl
   private:
     void run_system_time()
     {
-      auto next_execution_time = std::chrono::system_clock::now() + std::chrono::nanoseconds(period_.nanoseconds());
+      // Use steady_clock for scheduling even in SYSTEM_TIME mode to avoid
+      // instability with system_clock in containerised / virtualised environments.
+      auto next_execution_time = std::chrono::steady_clock::now() + std::chrono::nanoseconds(period_.nanoseconds());
       while (!stop_flag_.load())
       {
         std::this_thread::sleep_until(next_execution_time);

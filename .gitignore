@@ -4,3 +4,4 @@ build-*
 build_android
 packages/lwrcl_dart/lib/src/generated/
 .DS_Store
+*.log

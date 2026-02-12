@@ -635,6 +635,8 @@ namespace lwrcl
       , channel_(std::make_shared<CallbackChannel>())
       , clock_(std::make_unique<Clock>())
       , name_("lwrcl_default_node")
+      , namespace_("")
+      , node_options_()
       , stop_flag_(false)
       , participant_owned_(true)  // <-- then participant_owned_
       , parameters_()
@@ -657,6 +659,56 @@ namespace lwrcl
       , channel_(std::make_shared<CallbackChannel>())
       , clock_(std::make_unique<Clock>())
       , name_(name)
+      , namespace_("")
+      , node_options_()
+      , stop_flag_(false)
+      , participant_owned_(true)
+      , parameters_()
+  {
+    try {
+      dds::domain::qos::DomainParticipantQos participant_qos;
+      dds::domain::DomainParticipant dp(domain_id, participant_qos);
+      participant_ = std::make_shared<dds::domain::DomainParticipant>(std::move(dp));
+      if (!participant_) {
+        throw std::runtime_error("Failed to create domain participant");
+      }
+    } catch (const dds::core::Exception& e) {
+      throw std::runtime_error("Failed to create domain participant: " + std::string(e.what()));
+    }
+  }
+
+  Node::Node(int domain_id, const std::string &name, const std::string &ns)
+      : closed_(false)
+      , participant_(nullptr)
+      , channel_(std::make_shared<CallbackChannel>())
+      , clock_(std::make_unique<Clock>())
+      , name_(name)
+      , namespace_(ns)
+      , node_options_()
+      , stop_flag_(false)
+      , participant_owned_(true)
+      , parameters_()
+  {
+    try {
+      dds::domain::qos::DomainParticipantQos participant_qos;
+      dds::domain::DomainParticipant dp(domain_id, participant_qos);
+      participant_ = std::make_shared<dds::domain::DomainParticipant>(std::move(dp));
+      if (!participant_) {
+        throw std::runtime_error("Failed to create domain participant");
+      }
+    } catch (const dds::core::Exception& e) {
+      throw std::runtime_error("Failed to create domain participant: " + std::string(e.what()));
+    }
+  }
+
+  Node::Node(int domain_id, const std::string &name, const std::string &ns, const NodeOptions &options)
+      : closed_(false)
+      , participant_(nullptr)
+      , channel_(std::make_shared<CallbackChannel>())
+      , clock_(std::make_unique<Clock>())
+      , name_(name)
+      , namespace_(ns)
+      , node_options_(options)
       , stop_flag_(false)
       , participant_owned_(true)
       , parameters_()
@@ -679,11 +731,63 @@ namespace lwrcl
       , channel_(std::make_shared<CallbackChannel>())
       , clock_(std::make_unique<Clock>())
       , name_(name)
+      , namespace_("")
+      , node_options_()
       , stop_flag_(false)
       , participant_owned_(true)
       , parameters_()
   {
     int domain_id = 0; // Default domain ID
+    try {
+      dds::domain::qos::DomainParticipantQos participant_qos;
+      dds::domain::DomainParticipant dp(domain_id, participant_qos);
+      participant_ = std::make_shared<dds::domain::DomainParticipant>(std::move(dp));
+      if (!participant_) {
+        throw std::runtime_error("Failed to create domain participant");
+      }
+    } catch (const dds::core::Exception& e) {
+      throw std::runtime_error("Failed to create domain participant: " + std::string(e.what()));
+    }
+  }
+
+  Node::Node(const std::string &name, const std::string &ns)
+      : closed_(false)
+      , participant_(nullptr)
+      , channel_(std::make_shared<CallbackChannel>())
+      , clock_(std::make_unique<Clock>())
+      , name_(name)
+      , namespace_(ns)
+      , node_options_()
+      , stop_flag_(false)
+      , participant_owned_(true)
+      , parameters_()
+  {
+    int domain_id = 0;
+    try {
+      dds::domain::qos::DomainParticipantQos participant_qos;
+      dds::domain::DomainParticipant dp(domain_id, participant_qos);
+      participant_ = std::make_shared<dds::domain::DomainParticipant>(std::move(dp));
+      if (!participant_) {
+        throw std::runtime_error("Failed to create domain participant");
+      }
+    } catch (const dds::core::Exception& e) {
+      throw std::runtime_error("Failed to create domain participant: " + std::string(e.what()));
+    }
+  }
+
+  Node::Node(const std::string &name, const std::string &ns, const NodeOptions &options)
+      : closed_(false)
+      , participant_(nullptr)
+      , channel_(std::make_shared<CallbackChannel>())
+      , clock_(std::make_unique<Clock>())
+      , name_(name)
+      , namespace_(ns)
+      , node_options_(options)
+      , stop_flag_(false)
+      , participant_owned_(true)
+      , parameters_()
+  {
+    int domain_id = 0;
     try {
       dds::domain::qos::DomainParticipantQos participant_qos;
       dds::domain::DomainParticipant dp(domain_id, participant_qos);
@@ -702,6 +806,8 @@ namespace lwrcl
       , channel_(std::make_shared<CallbackChannel>())
       , clock_(std::make_unique<Clock>())
       , name_("lwrcl_default_node")
+      , namespace_("")
+      , node_options_()
       , stop_flag_(false)
       , participant_owned_(false)
       , parameters_()
@@ -719,6 +825,27 @@ namespace lwrcl
       , channel_(std::make_shared<CallbackChannel>())
       , clock_(std::make_unique<Clock>())
       , name_(name)
+      , namespace_("")
+      , node_options_()
+      , stop_flag_(false)
+      , participant_owned_(false)
+      , parameters_()
+  {
+    if (!participant_)
+    {
+      throw std::runtime_error("Domain participant pointer is null");
+    }
+  }
+
+  Node::Node(
+      std::shared_ptr<dds::domain::DomainParticipant> participant, const std::string &name, const std::string &ns)
+      : closed_(false)
+      , participant_(participant)
+      , channel_(std::make_shared<CallbackChannel>())
+      , clock_(std::make_unique<Clock>())
+      , name_(name)
+      , namespace_(ns)
+      , node_options_()
       , stop_flag_(false)
       , participant_owned_(false)
       , parameters_()
@@ -768,12 +895,66 @@ namespace lwrcl
     return node;
   }
 
+  std::shared_ptr<Node> Node::make_shared(int domain_id, const std::string &name, const std::string &ns)
+  {
+    auto node = std::shared_ptr<Node>(new Node(domain_id, name, ns), [](Node *node)
+                                      { delete node; });
+    return node;
+  }
+
+  std::shared_ptr<Node> Node::make_shared(int domain_id, const std::string &name, const std::string &ns, const NodeOptions &options)
+  {
+    auto node = std::shared_ptr<Node>(new Node(domain_id, name, ns, options), [](Node *node)
+                                      { delete node; });
+    return node;
+  }
+
+  std::shared_ptr<Node> Node::make_shared(const std::string &name, const std::string &ns)
+  {
+    auto node = std::shared_ptr<Node>(new Node(name, ns), [](Node *node)
+                                      { delete node; });
+    return node;
+  }
+
+  std::shared_ptr<Node> Node::make_shared(const std::string &name, const std::string &ns, const NodeOptions &options)
+  {
+    auto node = std::shared_ptr<Node>(new Node(name, ns, options), [](Node *node)
+                                      { delete node; });
+    return node;
+  }
+
+  std::shared_ptr<Node> Node::make_shared(
+      std::shared_ptr<dds::domain::DomainParticipant> participant, const std::string &name, const std::string &ns)
+  {
+    auto node = std::shared_ptr<Node>(new Node(participant, name, ns), [](Node *node)
+                                      { delete node; });
+    return node;
+  }
+
   std::shared_ptr<dds::domain::DomainParticipant> Node::get_participant() const
   {
     return participant_;
   }
 
   std::string Node::get_name() const { return name_; }
+
+  std::string Node::get_namespace() const { return namespace_; }
+
+  std::string Node::get_fully_qualified_name() const {
+    if (namespace_.empty()) {
+      return "/" + name_;
+    }
+    std::string ns = namespace_;
+    if (ns.front() != '/') {
+      ns = "/" + ns;
+    }
+    if (ns.back() == '/') {
+      ns.pop_back();
+    }
+    return ns + "/" + name_;
+  }
+
+  const Node::NodeOptions &Node::get_node_options() const { return node_options_; }
 
   Logger Node::get_logger() const { return Logger(name_); }
 
@@ -1185,6 +1366,8 @@ namespace lwrcl
 
   void init(int argc, char *argv[])
   {
+    global_stop_flag.store(false);
+
     if (std::signal(SIGINT, lwrcl_signal_handler) == SIG_ERR)
     {
       throw std::runtime_error("Failed to set signal handler.");
