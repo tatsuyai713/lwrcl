@@ -48,12 +48,14 @@ TEST_F(QoSTest, ToRMWProfile) {
 }
 
 TEST_F(QoSTest, KeepLastInitialization) {
-  auto init = lwrcl::KeepLast(42);
+  lwrcl::KeepLast kl(42);
+  lwrcl::QoSInitialization init = kl;
   EXPECT_EQ(init.depth_, 42u);
   EXPECT_TRUE(init.history_ == RMWQoSHistoryPolicy::KEEP_LAST);
 }
 
 TEST_F(QoSTest, KeepAllInitialization) {
-  auto init = lwrcl::KeepAll();
+  lwrcl::KeepAll ka;
+  lwrcl::QoSInitialization init = ka;
   EXPECT_TRUE(init.history_ == RMWQoSHistoryPolicy::KEEP_ALL);
 }

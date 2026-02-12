@@ -11,7 +11,7 @@ namespace lwrcl
 
   class Duration;
 
-  class Time : public std::enable_shared_from_this<Time>
+  class Time
   {
   public:
     using SharedPtr = std::shared_ptr<Time>;
@@ -44,7 +44,7 @@ namespace lwrcl
     int64_t nanoseconds_;
   };
 
-  class Duration : public std::enable_shared_from_this<Duration>
+  class Duration
   {
   public:
     using SharedPtr = std::shared_ptr<Duration>;
@@ -69,6 +69,12 @@ namespace lwrcl
     int64_t nanoseconds() const;
     double seconds() const;
 
+    template <typename DurationT>
+    DurationT to_chrono() const
+    {
+      return std::chrono::duration_cast<DurationT>(std::chrono::nanoseconds(nanoseconds_));
+    }
+
     Duration operator+(const Duration &rhs) const;
     Duration operator-(const Duration &rhs) const;
 
@@ -83,7 +89,7 @@ namespace lwrcl
     int64_t nanoseconds_;
   };
 
-  class Clock : public std::enable_shared_from_this<Clock>
+  class Clock
   {
   public:
     using SharedPtr = std::shared_ptr<Clock>;

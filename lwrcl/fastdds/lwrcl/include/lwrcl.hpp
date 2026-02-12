@@ -392,7 +392,7 @@ namespace lwrcl
     void get_parameter(const std::string &name, double &double_data) const;
     void get_parameter(const std::string &name, std::string &string_data) const;
 
-    bool closed_;
+    std::atomic<bool> closed_{false};
     void stop_spin();
 
   private:
@@ -431,7 +431,7 @@ namespace lwrcl
     std::string name_;
     std::string namespace_;
     NodeOptions node_options_;
-    bool stop_flag_;
+    std::atomic<bool> stop_flag_{false};
     bool participant_owned_;
 
     std::forward_list<std::shared_ptr<IPublisher>> publisher_list_;
@@ -498,7 +498,7 @@ namespace lwrcl
     private:
       std::vector<Node::SharedPtr> nodes_; // List of nodes managed by the executor.
       mutable std::mutex mutex_;           // Mutex for thread-safe access to the nodes list.
-      bool stop_flag_;                     // Flag to stop the executor.
+      std::atomic<bool> stop_flag_{true};  // Flag to stop the executor.
     };
 
     // Executor that manages and executes nodes, each in its own thread, allowing for parallel processing.
@@ -525,7 +525,7 @@ namespace lwrcl
       std::vector<Node::SharedPtr> nodes_; // List of nodes managed by the executor.
       std::vector<std::thread> threads_;   // Threads created for each node for parallel execution.
       mutable std::mutex mutex_;           // Mutex for thread-safe access to the nodes list.
-      bool stop_flag_;                     // Flag to stop the executor.
+      std::atomic<bool> stop_flag_{true};  // Flag to stop the executor.
     };
   } // namespace executors
 
@@ -651,8 +651,8 @@ namespace lwrcl
 
     Service(const Service &) = delete;
     Service &operator=(const Service &) = delete;
-    Service(Service &&) = default;
-    Service &operator=(Service &&) = default;
+    Service(Service &&) = delete;
+    Service &operator=(Service &&) = delete;
 
     void stop() override
     {
@@ -783,8 +783,8 @@ namespace lwrcl
 
     Client(const Client &) = delete;
     Client &operator=(const Client &) = delete;
-    Client(Client &&) = default;
-    Client &operator=(Client &&) = default;
+    Client(Client &&) = delete;
+    Client &operator=(Client &&) = delete;
 
     void handle_response(std::shared_ptr<typename T::Response> response)
     {
@@ -862,7 +862,7 @@ namespace lwrcl
     std::string response_topic_name_;
     std::mutex mutex_;
     std::condition_variable cv_;
-    bool response_received_;
+    std::atomic<bool> response_received_{false};
   }; //
 
   template <typename Duration>
@@ -931,7 +931,7 @@ namespace lwrcl
     explicit SerializedMessage(size_t initial_capacity) : data_(), is_own_buffer_(true)
     {
       data_.buffer = new char[initial_capacity];
-      data_.length = initial_capacity;
+      data_.length = 0;
       data_.capacity = initial_capacity;
     }
 
@@ -1079,9 +1079,12 @@ namespace lwrcl
       if (new_capacity > data_.capacity)
       {
         char *new_buffer = new char[new_capacity];
-        if (data_.buffer != nullptr && is_own_buffer_ && data_.length > 0)
+        if (data_.buffer != nullptr && data_.length > 0)
         {
           std::memcpy(new_buffer, data_.buffer, data_.length);
+        }
+        if (data_.buffer != nullptr && is_own_buffer_)
+        {
           delete[] data_.buffer;
         }
         data_.buffer = new_buffer;

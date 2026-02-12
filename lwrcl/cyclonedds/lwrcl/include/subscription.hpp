@@ -112,8 +112,8 @@ namespace lwrcl
 
     SubscriberWaitSet(const SubscriberWaitSet &) = delete;
     SubscriberWaitSet &operator=(const SubscriberWaitSet &) = delete;
-    SubscriberWaitSet(SubscriberWaitSet &&) = default;
-    SubscriberWaitSet &operator=(SubscriberWaitSet &&) = default;
+    SubscriberWaitSet(SubscriberWaitSet &&) = delete;
+    SubscriberWaitSet &operator=(SubscriberWaitSet &&) = delete;
 
     void ready(std::shared_ptr<dds::sub::DataReader<T>> reader)
     {
@@ -323,8 +323,8 @@ namespace lwrcl
 
     Subscription(const Subscription &) = delete;
     Subscription &operator=(const Subscription &) = delete;
-    Subscription(Subscription &&) = default;
-    Subscription &operator=(Subscription &&) = default;
+    Subscription(Subscription &&) = delete;
+    Subscription &operator=(Subscription &&) = delete;
 
     int32_t get_publisher_count()
     {

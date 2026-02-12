@@ -107,8 +107,8 @@ namespace lwrcl
 
     Publisher(const Publisher &) = delete;
     Publisher &operator=(const Publisher &) = delete;
-    Publisher(Publisher &&) = default;
-    Publisher &operator=(Publisher &&) = default;
+    Publisher(Publisher &&) = delete;
+    Publisher &operator=(Publisher &&) = delete;
 
     void publish(const std::shared_ptr<T> &message) const
     {

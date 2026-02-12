@@ -91,8 +91,8 @@ namespace lwrcl
 
     TimerBase(const TimerBase &) = delete;
     TimerBase &operator=(const TimerBase &) = delete;
-    TimerBase(TimerBase &&) = default;
-    TimerBase &operator=(TimerBase &&) = default;
+    TimerBase(TimerBase &&) = delete;
+    TimerBase &operator=(TimerBase &&) = delete;
 
     void start() override
     {

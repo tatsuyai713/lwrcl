@@ -27,7 +27,7 @@ namespace lwrcl
   volatile std::sig_atomic_t s_signal_status = 0;
 
   // Global flag to control the stopping of the application, e.g., in response to SIGINT
-  volatile std::atomic_bool global_stop_flag{false};
+  std::atomic_bool global_stop_flag{false};
 
   // Function to handle SIGINT signals for graceful application termination
   void lwrcl_signal_handler(int signal)
@@ -209,7 +209,8 @@ namespace lwrcl
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - now_sec);
     auto timestamp = std::chrono::system_clock::to_time_t(now);
     char timestamp_buf[80];
-    auto local_time = std::localtime(&timestamp);
+    struct tm local_time_buf;
+    auto local_time = localtime_r(&timestamp, &local_time_buf);
     if (local_time != nullptr)
     {
       std::strftime(timestamp_buf, sizeof(timestamp_buf), "%Y-%m-%d %H:%M:%S", local_time);
@@ -265,8 +266,10 @@ namespace lwrcl
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - now_sec);
     auto timestamp = std::chrono::system_clock::to_time_t(now);
     char timestamp_buf[80];
+    struct tm local_time_buf;
+    auto local_time = localtime_r(&timestamp, &local_time_buf);
     std::strftime(
-        timestamp_buf, sizeof(timestamp_buf), "%Y-%m-%d %H:%M:%S", std::localtime(&timestamp));
+        timestamp_buf, sizeof(timestamp_buf), "%Y-%m-%d %H:%M:%S", local_time);
 
     switch (level)
     {
@@ -447,7 +450,7 @@ namespace lwrcl
         }
         else
         {
-          throw std::runtime_error("Error: Node pointer is null, cannot add to executor.");
+          std::cerr << "[WARN] Node pointer is null in executor clear." << std::endl;
         }
       }
       nodes_.clear();
@@ -466,7 +469,7 @@ namespace lwrcl
           lwrcl::spin(node);
         }
       } else {
-        throw std::runtime_error("Error: Node pointer is null, cannot add to executor.");
+        std::cerr << "[WARN] Node pointer is null in executor spin." << std::endl;
       } });
       }
 
@@ -1004,6 +1007,7 @@ namespace lwrcl
 
   void Node::shutdown()
   {
+    if (closed_.load()) return;
     publisher_list_.clear();
     for (auto &subscriber : subscription_list_)
     {
@@ -1025,6 +1029,7 @@ namespace lwrcl
     {
       std::static_pointer_cast<IClient>(client)->stop();
     }
+    client_list_.clear();
     closed_ = true;
   }
 
