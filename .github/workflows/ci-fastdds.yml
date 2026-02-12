@@ -1,0 +1,143 @@
+name: CI (FastDDS)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FAST_DDS_VERSION: "2.11.2"
+  FOONATHAN_MEMORY_VERSION: "1.3.1"
+  GOOGLETEST_VERSION: "1.13.0"
+  FAST_DDS_GEN_VERSION: "2.5.2"
+  GRADLE_VERSION: "7.6.3"
+  DDS_PREFIX: /opt/fast-dds
+  LWRCL_PREFIX: /opt/fast-dds-libs
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── System dependencies ──────────────────────────────────────────
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake automake autoconf unzip git curl tar wget \
+            libasio-dev libssl-dev libyaml-cpp-dev \
+            libboost-dev libopencv-dev \
+            openjdk-11-jdk
+
+      # ── Cache Fast DDS install ───────────────────────────────────────
+      - name: Cache Fast DDS
+        id: cache-fastdds
+        uses: actions/cache@v4
+        with:
+          path: /opt/fast-dds
+          key: fastdds-${{ env.FAST_DDS_VERSION }}-ubuntu2404-v2
+
+      - name: Build & install Fast DDS
+        if: steps.cache-fastdds.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/dds_build"
+          mkdir -p "$WORK" && cd "$WORK"
+
+          git clone https://github.com/eProsima/Fast-DDS.git -b v${FAST_DDS_VERSION} --depth 1
+          cd Fast-DDS
+          WORKSPACE="$PWD"
+          git submodule update --init thirdparty/asio thirdparty/fastcdr thirdparty/tinyxml2
+          git clone https://github.com/eProsima/foonathan_memory_vendor.git -b v${FOONATHAN_MEMORY_VERSION} --depth 1
+          git clone https://github.com/google/googletest.git -b v${GOOGLETEST_VERSION} --depth 1
+
+          sudo mkdir -p $DDS_PREFIX
+
+          # foonathan_memory
+          cd "$WORKSPACE/foonathan_memory_vendor"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX
+          cmake --build build -j$(nproc) && sudo cmake --install build
+
+          # googletest
+          cd "$WORKSPACE/googletest"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX
+          cmake --build build -j$(nproc) && sudo cmake --install build
+
+          # fastcdr
+          cd "$WORKSPACE/thirdparty/fastcdr"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX
+          cmake --build build -j$(nproc) && sudo cmake --install build
+
+          # tinyxml2
+          cd "$WORKSPACE/thirdparty/tinyxml2"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX -DCMAKE_CXX_FLAGS="-fPIC"
+          cmake --build build -j$(nproc) && sudo cmake --install build
+
+          # Fast DDS
+          cd "$WORKSPACE"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX \
+            -Dfastcdr_DIR=$DDS_PREFIX/lib/cmake/fastcdr/ \
+            -Dfoonathan_memory_DIR=$DDS_PREFIX/lib/foonathan_memory/cmake/ \
+            -DCMAKE_SYSTEM_PREFIX_PATH=$DDS_PREFIX \
+            -DCMAKE_PREFIX_PATH=$DDS_PREFIX \
+            -DCMAKE_CXX_FLAGS="-DASIO_HAS_PTHREADS=1"
+          cmake --build build -j$(nproc) && sudo cmake --install build
+
+      # ── Cache Fast DDS Gen ───────────────────────────────────────────
+      - name: Cache Fast DDS Gen
+        id: cache-fastddsgen
+        uses: actions/cache@v4
+        with:
+          path: /opt/fast-dds-gen
+          key: fastddsgen-${{ env.FAST_DDS_GEN_VERSION }}-gradle${{ env.GRADLE_VERSION }}-v2
+
+      - name: Build & install Fast DDS Gen
+        if: steps.cache-fastddsgen.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/fastddsgen_build"
+          mkdir -p "$WORK" && cd "$WORK"
+
+          # Gradle
+          wget -q https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip
+          sudo mkdir -p /opt/gradle
+          sudo unzip -qo gradle-${GRADLE_VERSION}-bin.zip -d /opt/gradle
+
+          export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")
+          export PATH="/opt/gradle/gradle-${GRADLE_VERSION}/bin:$PATH"
+
+          # Fast DDS Gen
+          git clone --recursive -b v${FAST_DDS_GEN_VERSION} https://github.com/eProsima/Fast-DDS-Gen.git
+          cd Fast-DDS-Gen
+          gradle assemble
+          sudo mkdir -p /opt/fast-dds-gen
+          sudo /opt/gradle/gradle-${GRADLE_VERSION}/bin/gradle install --install_path=/opt/fast-dds-gen
+
+      # ── Set PATH / LD_LIBRARY_PATH ───────────────────────────────────
+      - name: Configure environment
+        run: |
+          echo "$DDS_PREFIX/bin" >> $GITHUB_PATH
+          echo "/opt/fast-dds-gen/bin" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=$DDS_PREFIX/lib:$LWRCL_PREFIX/lib" >> $GITHUB_ENV
+
+      # ── Build lwrcl (libraries → data_types → lwrcl) ─────────────────
+      - name: Build & install lwrcl (FastDDS)
+        run: |
+          sudo ldconfig
+          ./build_all.sh fastdds install
+
+      # ── Run tests ───────────────────────────────────────────────────
+      - name: Run tests (FastDDS)
+        run: |
+          cd test
+          ./run_tests_fastdds.sh all

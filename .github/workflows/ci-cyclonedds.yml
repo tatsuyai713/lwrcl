@@ -1,0 +1,94 @@
+name: CI (CycloneDDS)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CYCLONEDDS_VERSION: "0.10.5"
+  DDS_PREFIX: /opt/cyclonedds
+  LWRCL_PREFIX: /opt/cyclonedds-libs
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── System dependencies ──────────────────────────────────────────
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake automake autoconf git \
+            libasio-dev libssl-dev libyaml-cpp-dev \
+            libboost-dev libopencv-dev
+
+      # ── Cache Cyclone DDS install ────────────────────────────────────
+      - name: Cache Cyclone DDS
+        id: cache-cyclonedds
+        uses: actions/cache@v4
+        with:
+          path: /opt/cyclonedds
+          key: cyclonedds-${{ env.CYCLONEDDS_VERSION }}-ubuntu2404-v2
+
+      - name: Build & install Cyclone DDS
+        if: steps.cache-cyclonedds.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/dds_build"
+          mkdir -p "$WORK" && cd "$WORK"
+
+          sudo mkdir -p $DDS_PREFIX
+
+          # Cyclone DDS core
+          git clone https://github.com/eclipse-cyclonedds/cyclonedds.git --depth 1
+          cd cyclonedds && git fetch --tags && git checkout ${CYCLONEDDS_VERSION}
+          cmake -S . -B build \
+            -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX \
+            -DBUILD_SHARED_LIBS=ON \
+            -DENABLE_SHM=OFF
+          cmake --build build -j$(nproc)
+          sudo cmake --install build
+          cd "$WORK"
+
+          # Cyclone DDS C++ binding
+          git clone https://github.com/eclipse-cyclonedds/cyclonedds-cxx.git --depth 1
+          cd cyclonedds-cxx && git fetch --tags && git checkout ${CYCLONEDDS_VERSION}
+          cmake -B build \
+            -DCMAKE_PREFIX_PATH=$DDS_PREFIX \
+            -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX \
+            -DBUILD_IDLCPP_GENERATOR=ON \
+            -DCYCLONEDDS_CXX_BLD_IDLCPP=ON \
+            -DENABLE_TOPIC_DISCOVERY=OFF \
+            -DDDSCXX_NO_STD_OPTIONAL=ON \
+            -DBUILD_SHARED_LIBS=ON
+          cmake --build build -j$(nproc)
+          sudo cmake --install build
+
+      # ── Set PATH / LD_LIBRARY_PATH ───────────────────────────────────
+      - name: Configure environment
+        run: |
+          echo "$DDS_PREFIX/bin" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=$DDS_PREFIX/lib:$LWRCL_PREFIX/lib" >> $GITHUB_ENV
+
+      # ── Build lwrcl (libraries → data_types → lwrcl) ─────────────────
+      - name: Build & install lwrcl (CycloneDDS)
+        run: |
+          sudo ldconfig
+          ./build_all.sh cyclonedds install
+
+      # ── Run tests ───────────────────────────────────────────────────
+      - name: Run tests (CycloneDDS)
+        run: |
+          cd test
+          ./run_tests_cyclonedds.sh all
