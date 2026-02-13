@@ -74,7 +74,6 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
             -DCMAKE_PREFIX_PATH="${VSOMEIP_PREFIX}/lib/cmake"
             -DCycloneDDS_DIR="${VSOMEIP_PREFIX}/lib/cmake/CycloneDDS"
             -DCycloneDDS-CXX_DIR="${VSOMEIP_PREFIX}/lib/cmake/CycloneDDS-CXX"
-            -DCMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH=OFF
         )
     else
         export PATH="${DDS_PREFIX}/bin:${PATH}"
