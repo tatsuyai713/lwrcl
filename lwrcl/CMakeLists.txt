@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16.3)
 project(lwrcl)
 
 set(DDS_BACKEND "fastdds" CACHE STRING "DDS backend to use")
-set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds")
+set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "vsomeip")
 
 option(BUILD_FFI "Build FFI bindings for Dart/Flutter" OFF)
 
@@ -86,6 +86,36 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
     add_subdirectory(cyclonedds/tf2_ros)
     add_subdirectory(cyclonedds/lwrcl)
 
+elseif(DDS_BACKEND STREQUAL "vsomeip")
+    # vsomeip backend: uses vsomeip for transport + standalone CDR for serialization
+    # NO CycloneDDS runtime dependency required.
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+    if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
+        set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/qnx/vsomeip-libs)
+        set(VSOMEIP_PREFIX_DEFAULT /opt/qnx/vsomeip)
+    else()
+        set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/vsomeip-libs)
+        set(VSOMEIP_PREFIX_DEFAULT /opt/vsomeip)
+    endif()
+
+    set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix (include/lib)")
+    set(VSOMEIP_PREFIX "${VSOMEIP_PREFIX_DEFAULT}" CACHE PATH "vsomeip install prefix (includes CDR)")
+
+    # vsomeip headers, CDR headers (all installed under VSOMEIP_PREFIX)
+    include_directories(${VSOMEIP_PREFIX}/include)
+    # Data type headers
+    include_directories(${LWRCL_INSTALL_PREFIX}/include)
+    link_directories(${LWRCL_INSTALL_PREFIX}/lib)
+    link_directories(${VSOMEIP_PREFIX}/lib)
+
+    set(DDS_LIBRARIES vsomeip3 lwrcl_cdr CACHE INTERNAL "Transport + CDR link libraries")
+
+    add_subdirectory(vsomeip/tf2)
+    add_subdirectory(vsomeip/tf2_ros)
+    add_subdirectory(vsomeip/lwrcl)
+
 else()
-    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds' or 'cyclonedds'.")
+    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', or 'vsomeip'.")
 endif()

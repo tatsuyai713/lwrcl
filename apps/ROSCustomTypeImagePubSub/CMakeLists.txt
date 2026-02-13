@@ -76,7 +76,7 @@ target_include_directories(ROSCustomTypeImagePubSub
 )
 target_link_libraries(ROSCustomTypeImagePubSub
   PRIVATE
-    ddsc ddscxx
+    ${DDS_LIBRARIES}
     lwrcl geometry_msgs sensor_msgs std_msgs builtin_interfaces yaml-cpp
 )
 if(TARGET yaml-cpp)

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16.3)
 project(data_types)
 
 set(DDS_BACKEND "fastdds" CACHE STRING "DDS backend to use")
-set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds")
+set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "vsomeip")
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,6 +46,14 @@ if(DDS_BACKEND STREQUAL "fastdds")
 elseif(DDS_BACKEND STREQUAL "cyclonedds")
     add_subdirectory(src/ros-data-types-cyclonedds/src)
 
+elseif(DDS_BACKEND STREQUAL "vsomeip")
+    # vsomeip uses CycloneDDS-generated types but links against standalone CDR
+    # library (liblwrcl_cdr.a) instead of the full CycloneDDS runtime.
+    # The stub CMake configs at ${VSOMEIP_PREFIX}/lib/cmake/ provide
+    # CycloneDDS::ddsc and CycloneDDS-CXX::ddscxx targets that redirect
+    # to the CDR library.
+    add_subdirectory(src/ros-data-types-cyclonedds/src)
+
 else()
-    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds' or 'cyclonedds'.")
+    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', or 'vsomeip'.")
 endif()

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16.3)
 project("apps")
 
 set(DDS_BACKEND "fastdds" CACHE STRING "DDS backend to use")
-set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds")
+set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "vsomeip")
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -98,6 +98,49 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
     # Advanced examples
     add_subdirectory(advanced)
 
+elseif(DDS_BACKEND STREQUAL "vsomeip")
+    # vsomeip backend: uses vsomeip for transport + CycloneDDS for CDR serialization
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+    if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
+        set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/qnx/vsomeip-libs)
+        set(DDS_PREFIX_DEFAULT /opt/qnx/cyclonedds)
+        set(VSOMEIP_PREFIX_DEFAULT /opt/qnx/vsomeip)
+    else()
+        set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/vsomeip-libs)
+        set(DDS_PREFIX_DEFAULT /opt/cyclonedds)
+        set(VSOMEIP_PREFIX_DEFAULT /opt/vsomeip)
+    endif()
+
+    set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix")
+    set(DDS_PREFIX "${DDS_PREFIX_DEFAULT}" CACHE PATH "CycloneDDS install prefix (for CDR)")
+    set(VSOMEIP_PREFIX "${VSOMEIP_PREFIX_DEFAULT}" CACHE PATH "vsomeip install prefix")
+
+    include_directories(${DDS_PREFIX}/include)
+    include_directories(${DDS_PREFIX}/include/ddscxx)
+    include_directories(${LWRCL_INSTALL_PREFIX}/include)
+    include_directories(${VSOMEIP_PREFIX}/include)
+    link_directories(${LWRCL_INSTALL_PREFIX}/lib)
+    link_directories(${DDS_PREFIX}/lib)
+    link_directories(${VSOMEIP_PREFIX}/lib)
+
+    set(DDS_LIBRARIES ddsc ddscxx vsomeip3 CACHE INTERNAL "DDS link libraries")
+
+    # Common apps
+    add_subdirectory(lwrcl_example)
+
+    if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
+        add_subdirectory(ROSTypeImagePubSubEdge)
+        add_subdirectory(ROSTypeImagePubSubMono)
+        add_subdirectory(ROSTypeImagePubSubExecutor)
+    endif()
+
+    add_subdirectory(ROSCustomTypeImagePubSub)
+
+    # Advanced examples
+    add_subdirectory(advanced)
+
 else()
-    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds' or 'cyclonedds'.")
+    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', or 'vsomeip'.")
 endif()

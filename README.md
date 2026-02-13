@@ -1,5 +1,6 @@
 [![FastDDS CI](https://github.com/tatsuyai713/lwrcl/actions/workflows/ci-fastdds.yml/badge.svg)](https://github.com/tatsuyai713/lwrcl/actions/workflows/ci-fastdds.yml)
 [![CycloneDDS CI](https://github.com/tatsuyai713/lwrcl/actions/workflows/ci-cyclonedds.yml/badge.svg)](https://github.com/tatsuyai713/lwrcl/actions/workflows/ci-cyclonedds.yml)
+[![vsomeip CI](https://github.com/tatsuyai713/lwrcl/actions/workflows/ci-vsomeip.yml/badge.svg)](https://github.com/tatsuyai713/lwrcl/actions/workflows/ci-vsomeip.yml)
 
 **[日本語版 (Japanese)](README_JA.md)**
 
@@ -7,7 +8,7 @@
 
 **A lightweight DDS communication library with an rclcpp-compatible API**
 
-lwrcl provides an API compatible with ROS 2's rclcpp. It supports both **CycloneDDS** and **FastDDS** as DDS backends, enabling direct topic and service communication with ROS 2 nodes without a full ROS 2 installation.
+lwrcl provides an API compatible with ROS 2's rclcpp. It supports **CycloneDDS**, **FastDDS**, and **vsomeip (SOME/IP)** as communication backends, enabling direct topic and service communication with ROS 2 nodes without a full ROS 2 installation.
 
 ---
 
@@ -15,7 +16,7 @@ lwrcl provides an API compatible with ROS 2's rclcpp. It supports both **Cyclone
 
 - **rclcpp-compatible API** — Uses the `rclcpp` namespace, allowing existing ROS 2 code to be ported with minimal changes. Logging macros such as `RCLCPP_INFO` and `RCLCPP_WARN` are also available.
 - **Interoperability with ROS 2** — Communicates directly with ROS 2 nodes via topics and services on the same DDS domain.
-- **DDS backend selection** — Choose between CycloneDDS and FastDDS at build time. Both can be installed simultaneously and switched as needed.
+- **DDS backend selection** — Choose between CycloneDDS, FastDDS, or vsomeip at build time. Multiple backends can be installed simultaneously and switched as needed.
 - **Minimal dependencies** — Depends only on a DDS library and yaml-cpp, resulting in fast builds.
 - **Multi-platform** — Supports Linux (Ubuntu/Debian) and QNX 8.0.
 - **Includes tf2 / tf2_ros** — Bundled coordinate transformation support.
@@ -28,6 +29,7 @@ lwrcl provides an API compatible with ROS 2's rclcpp. It supports both **Cyclone
 |-------------------|-------------|
 | **CycloneDDS** | Eclipse Foundation open-source implementation. Lightweight. |
 | **FastDDS** | By eProsima. Rich QoS options. |
+| **vsomeip** | COVESA SOME/IP implementation. Automotive-grade transport without DDS runtime dependency. |
 
 ---
 
@@ -64,8 +66,9 @@ lwrcl provides an API compatible with ROS 2's rclcpp. It supports both **Cyclone
 
 - CMake 3.16.3 or later
 - C++14-compatible compiler
-- DDS implementation (CycloneDDS or FastDDS)
+- Communication backend (CycloneDDS, FastDDS, or vsomeip)
 - yaml-cpp (included as a submodule)
+- Boost (required for vsomeip backend)
 
 ---
 
@@ -74,10 +77,10 @@ lwrcl provides an API compatible with ROS 2's rclcpp. It supports both **Cyclone
 All build scripts follow this pattern:
 
 ```
-./build_<target>.sh <fastdds|cyclonedds> [install|clean]
+./build_<target>.sh <fastdds|cyclonedds|vsomeip> [install|clean]
 ```
 
-- 1st argument: DDS backend (`fastdds` or `cyclonedds`)
+- 1st argument: Communication backend (`fastdds`, `cyclonedds`, or `vsomeip`)
 - 2nd argument: `install` to build & install, `clean` to remove build directory
 
 ### Prerequisites
@@ -93,9 +96,9 @@ git clone --recursive <REPOSITORY_URL>
 cd lwrcl
 ```
 
-### 2. Install DDS
+### 2. Install Communication Backend
 
-Install the DDS implementation you want to use. You may install both without issues.
+Install the backend you want to use. You may install multiple backends without issues.
 
 **CycloneDDS:**
 
@@ -112,6 +115,14 @@ source ~/.bashrc
 ```
 
 > For Arch Linux, use `install_fast_dds_archlinux.sh` instead.
+
+**vsomeip (SOME/IP):**
+
+```bash
+./scripts/install_vsomeip.sh
+```
+
+> vsomeip requires Boost and CycloneDDS (for the `idlc` code generator at build time only). Install CycloneDDS first, then run `install_vsomeip.sh`. The vsomeip backend does **not** depend on a DDS runtime — it uses CDR serialization extracted from cyclonedds-cxx as a standalone static library.
 
 ### 3. Build Support Libraries
 
@@ -142,6 +153,7 @@ Builds ROS 2 compatible message types (`std_msgs`, `sensor_msgs`, `geometry_msgs
 Built binaries are placed in `apps/install-fastdds/`.
 
 > **To use CycloneDDS, replace `fastdds` with `cyclonedds` in the commands above.**
+> **To use vsomeip, replace `fastdds` with `vsomeip` in the commands above.**
 
 ### Cleaning Build Directories
 
@@ -149,7 +161,7 @@ Built binaries are placed in `apps/install-fastdds/`.
 ./build_lwrcl.sh fastdds clean
 ```
 
-> Build directories are separated by backend (`build-fastdds` / `build-cyclonedds`). Switching backends does not require cleaning.
+> Build directories are separated by backend (`build-fastdds` / `build-cyclonedds` / `build-vsomeip`). Switching backends does not require cleaning.
 
 ### Installation Paths
 
@@ -157,6 +169,7 @@ Built binaries are placed in `apps/install-fastdds/`.
 |---------|-----------------|-------------------|
 | FastDDS | `/opt/fast-dds` | `/opt/fast-dds-libs` |
 | CycloneDDS | `/opt/cyclonedds` | `/opt/cyclonedds-libs` |
+| vsomeip | `/opt/vsomeip` | `/opt/vsomeip-libs` |
 
 ---
 
@@ -190,10 +203,12 @@ lwrcl/
 │   │   ├── tf2/              # Coordinate transforms
 │   │   ├── tf2_ros/          # tf2 ROS integration
 │   │   └── lwrcl_ffi/        # Dart/Flutter FFI
-│   └── cyclonedds/            # CycloneDDS implementation
-│       ├── lwrcl/
-│       ├── tf2/
-│       └── tf2_ros/
+│   ├── cyclonedds/            # CycloneDDS implementation
+│   │   ├── lwrcl/
+│   │   ├── tf2/
+│   │   └── tf2_ros/
+│   └── vsomeip/               # vsomeip (SOME/IP) implementation
+│       └── lwrcl/
 ├── data_types/                 # ROS 2 compatible message types
 │   └── src/
 │       ├── ros-data-types-for-fastdds/    # FastDDS (submodule)
@@ -358,6 +373,7 @@ See `packages/lwrcl_dart/` for details.
 
 - [Fast-DDS](https://github.com/eProsima/Fast-DDS) — DDS implementation by eProsima
 - [CycloneDDS](https://github.com/eclipse-cyclonedds/cyclonedds) — DDS implementation by Eclipse
+- [vsomeip](https://github.com/COVESA/vsomeip) — SOME/IP implementation by COVESA
 - [yaml-cpp](https://github.com/jbeder/yaml-cpp) — YAML parser
 - [geometry2](https://github.com/ros2/geometry2) — Original tf2/tf2_ros project
 

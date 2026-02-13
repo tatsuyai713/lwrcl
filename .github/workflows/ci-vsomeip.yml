@@ -1,0 +1,117 @@
+name: CI (vsomeip)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VSOMEIP_VERSION: "3.4.10"
+  CYCLONEDDS_VERSION: "0.10.5"
+  VSOMEIP_PREFIX: /opt/vsomeip
+  DDS_PREFIX: /opt/cyclonedds
+  LWRCL_PREFIX: /opt/vsomeip-libs
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # ── System dependencies ──────────────────────────────────────────
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake automake autoconf git \
+            libasio-dev libssl-dev libyaml-cpp-dev \
+            libboost-system-dev libboost-thread-dev \
+            libboost-log-dev libboost-filesystem-dev \
+            libboost-dev libopencv-dev
+
+      # ── Cache Cyclone DDS (idlc tool only) ───────────────────────────
+      - name: Cache Cyclone DDS (idlc)
+        id: cache-cyclonedds
+        uses: actions/cache@v4
+        with:
+          path: /opt/cyclonedds
+          key: cyclonedds-${{ env.CYCLONEDDS_VERSION }}-ubuntu2404-v2
+
+      - name: Build & install Cyclone DDS (idlc)
+        if: steps.cache-cyclonedds.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/dds_build"
+          mkdir -p "$WORK" && cd "$WORK"
+
+          sudo mkdir -p $DDS_PREFIX
+
+          # Cyclone DDS core (provides idlc)
+          git clone https://github.com/eclipse-cyclonedds/cyclonedds.git --depth 1
+          cd cyclonedds && git fetch --tags && git checkout ${CYCLONEDDS_VERSION}
+          cmake -S . -B build \
+            -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX \
+            -DBUILD_SHARED_LIBS=ON \
+            -DENABLE_SHM=OFF
+          cmake --build build -j$(nproc)
+          sudo cmake --install build
+          cd "$WORK"
+
+          # Cyclone DDS C++ binding (provides idlcxx)
+          git clone https://github.com/eclipse-cyclonedds/cyclonedds-cxx.git --depth 1
+          cd cyclonedds-cxx && git fetch --tags && git checkout ${CYCLONEDDS_VERSION}
+          cmake -B build \
+            -DCMAKE_PREFIX_PATH=$DDS_PREFIX \
+            -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX \
+            -DBUILD_IDLCPP_GENERATOR=ON \
+            -DCYCLONEDDS_CXX_BLD_IDLCPP=ON \
+            -DENABLE_TOPIC_DISCOVERY=OFF \
+            -DDDSCXX_NO_STD_OPTIONAL=ON \
+            -DBUILD_SHARED_LIBS=ON
+          cmake --build build -j$(nproc)
+          sudo cmake --install build
+
+      # ── Cache vsomeip + CDR ──────────────────────────────────────────
+      - name: Cache vsomeip
+        id: cache-vsomeip
+        uses: actions/cache@v4
+        with:
+          path: /opt/vsomeip
+          key: vsomeip-${{ env.VSOMEIP_VERSION }}-ubuntu2404-v1
+
+      - name: Build & install vsomeip + CDR
+        if: steps.cache-vsomeip.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          sudo mkdir -p $VSOMEIP_PREFIX
+          sudo chmod 777 -R $VSOMEIP_PREFIX
+          INSTALL_PREFIX=$VSOMEIP_PREFIX ./scripts/install_vsomeip.sh
+
+      # ── Set PATH / LD_LIBRARY_PATH ───────────────────────────────────
+      - name: Configure environment
+        run: |
+          echo "$DDS_PREFIX/bin" >> $GITHUB_PATH
+          echo "$VSOMEIP_PREFIX/bin" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=$VSOMEIP_PREFIX/lib:$DDS_PREFIX/lib:$LWRCL_PREFIX/lib" >> $GITHUB_ENV
+
+      # ── Build lwrcl (libraries → data_types → lwrcl) ─────────────────
+      - name: Build & install lwrcl (vsomeip)
+        run: |
+          sudo ldconfig
+          ./build_all.sh vsomeip install
+
+      # ── Run tests ───────────────────────────────────────────────────
+      - name: Run tests (vsomeip)
+        run: |
+          cd test
+          ./run_tests_vsomeip.sh all

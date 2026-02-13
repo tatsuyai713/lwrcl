@@ -16,8 +16,11 @@ if [ "$BACKEND" = "fastdds" ]; then
 elif [ "$BACKEND" = "cyclonedds" ]; then
     DDS_PREFIX="/opt/cyclonedds"
     LWRCL_PREFIX="/opt/cyclonedds-libs"
+elif [ "$BACKEND" = "vsomeip" ]; then
+    VSOMEIP_PREFIX="/opt/vsomeip"
+    LWRCL_PREFIX="/opt/vsomeip-libs"
 else
-    echo "Usage: $0 <fastdds|cyclonedds> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|vsomeip> [install|clean]"
     exit 1
 fi
 
@@ -31,7 +34,9 @@ fi
 
 sudo mkdir -p "$LWRCL_PREFIX"
 
-export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+if [ -n "${DDS_PREFIX:-}" ]; then
+    export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
 
 CMAKE_ARGS=(
     -S "${SCRIPT_DIR}/lwrcl"
@@ -55,6 +60,11 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
     export PATH="${DDS_PREFIX}/bin:${PATH}"
     CMAKE_ARGS+=(
         -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
+    )
+elif [ "$BACKEND" = "vsomeip" ]; then
+    export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    CMAKE_ARGS+=(
+        -DVSOMEIP_PREFIX="${VSOMEIP_PREFIX}"
     )
 fi
 

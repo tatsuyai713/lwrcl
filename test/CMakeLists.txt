@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16.3)
 project(lwrcl_tests)
 
 set(DDS_BACKEND "fastdds" CACHE STRING "DDS backend to use")
-set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds")
+set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "vsomeip")
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -58,8 +58,28 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
     link_directories(${DDS_PREFIX}/lib)
 
     set(DDS_LIBRARIES ddsc ddscxx)
+
+elseif(DDS_BACKEND STREQUAL "vsomeip")
+    set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/vsomeip-libs)
+    set(VSOMEIP_PREFIX_DEFAULT /opt/vsomeip)
+    set(DDS_PREFIX_DEFAULT /opt/cyclonedds)
+    set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix")
+    set(VSOMEIP_PREFIX "${VSOMEIP_PREFIX_DEFAULT}" CACHE PATH "vsomeip install prefix")
+    set(DDS_PREFIX "${DDS_PREFIX_DEFAULT}" CACHE PATH "DDS install prefix (for CDR)")
+
+    # Prefer source headers over stale installed copies.
+    include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/../lwrcl/vsomeip/lwrcl/include)
+    include_directories(${VSOMEIP_PREFIX}/include)
+    include_directories(${DDS_PREFIX}/include)
+    include_directories(${DDS_PREFIX}/include/ddscxx)
+    include_directories(${LWRCL_INSTALL_PREFIX}/include)
+    link_directories(${LWRCL_INSTALL_PREFIX}/lib)
+    link_directories(${VSOMEIP_PREFIX}/lib)
+    link_directories(${DDS_PREFIX}/lib)
+
+    set(DDS_LIBRARIES vsomeip3 lwrcl_cdr)
 else()
-    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds' or 'cyclonedds'.")
+    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', or 'vsomeip'.")
 endif()
 
 # --- Common link libraries ---------------------------------------------------

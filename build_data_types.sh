@@ -13,12 +13,28 @@ if [ "$BACKEND" = "fastdds" ]; then
 elif [ "$BACKEND" = "cyclonedds" ]; then
     DDS_PREFIX="/opt/cyclonedds"
     LWRCL_PREFIX="/opt/cyclonedds-libs"
+elif [ "$BACKEND" = "vsomeip" ]; then
+    # vsomeip compiles data types against the standalone CDR library.
+    # CycloneDDS is needed ONLY for the idlc code generator tool.
+    # The stub CMake configs at VSOMEIP_PREFIX provide CycloneDDS::ddsc
+    # and CycloneDDS-CXX::ddscxx targets pointing to liblwrcl_cdr.a.
+    IDLC_PREFIX="${IDLC_PREFIX:-/opt/cyclonedds}"
+    VSOMEIP_PREFIX="/opt/vsomeip"
+    LWRCL_PREFIX="/opt/vsomeip-libs"
+    # Override backend to cyclonedds for data type generation pipeline
+    BACKEND="cyclonedds"
 else
-    echo "Usage: $0 <fastdds|cyclonedds> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|vsomeip> [install|clean]"
     exit 1
 fi
 
 BUILD_DIR="${SCRIPT_DIR}/data_types/build-${BACKEND}"
+
+# For vsomeip, override build dir to use vsomeip-specific path
+ORIGINAL_BACKEND="${1:-}"
+if [ "${ORIGINAL_BACKEND}" = "vsomeip" ]; then
+    BUILD_DIR="${SCRIPT_DIR}/data_types/build-vsomeip"
+fi
 
 if [ "$ACTION" = "clean" ]; then
     rm -rf "$BUILD_DIR"
@@ -28,7 +44,9 @@ fi
 
 sudo mkdir -p "$LWRCL_PREFIX"
 
-export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+if [ -n "${DDS_PREFIX:-}" ]; then
+    export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
 
 CMAKE_ARGS=(
     -S "${SCRIPT_DIR}/data_types"
@@ -48,10 +66,22 @@ if [ "$BACKEND" = "fastdds" ]; then
         -Dtinyxml2_DIR="${DDS_PREFIX}/lib/cmake/tinyxml2/"
     )
 elif [ "$BACKEND" = "cyclonedds" ]; then
-    export PATH="${DDS_PREFIX}/bin:${PATH}"
-    CMAKE_ARGS+=(
-        -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
-    )
+    if [ "${ORIGINAL_BACKEND}" = "vsomeip" ]; then
+        # vsomeip: use CDR stub configs for CycloneDDS targets,
+        # but still need idlc from CycloneDDS for code generation
+        export PATH="${IDLC_PREFIX}/bin:${PATH}"
+        CMAKE_ARGS+=(
+            -DCMAKE_PREFIX_PATH="${VSOMEIP_PREFIX}/lib/cmake"
+            -DCycloneDDS_DIR="${VSOMEIP_PREFIX}/lib/cmake/CycloneDDS"
+            -DCycloneDDS-CXX_DIR="${VSOMEIP_PREFIX}/lib/cmake/CycloneDDS-CXX"
+            -DCMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH=OFF
+        )
+    else
+        export PATH="${DDS_PREFIX}/bin:${PATH}"
+        CMAKE_ARGS+=(
+            -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
+        )
+    fi
 fi
 
 cmake "${CMAKE_ARGS[@]}"

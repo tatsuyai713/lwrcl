@@ -1,10 +1,14 @@
+[![FastDDS CI](https://github.com/tatsuyai713/lwrcl/actions/workflows/ci-fastdds.yml/badge.svg)](https://github.com/tatsuyai713/lwrcl/actions/workflows/ci-fastdds.yml)
+[![CycloneDDS CI](https://github.com/tatsuyai713/lwrcl/actions/workflows/ci-cyclonedds.yml/badge.svg)](https://github.com/tatsuyai713/lwrcl/actions/workflows/ci-cyclonedds.yml)
+[![vsomeip CI](https://github.com/tatsuyai713/lwrcl/actions/workflows/ci-vsomeip.yml/badge.svg)](https://github.com/tatsuyai713/lwrcl/actions/workflows/ci-vsomeip.yml)
+
 **[English (英語版)](README.md)**
 
 # LWRCL (LightWeight Rclcpp Compatible Library)
 
 **ROS 2 の rclcpp に似た API を持つ、軽量な DDS 通信ライブラリ**
 
-lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ライブラリです。DDS 実装として **CycloneDDS** と **FastDDS** の両方に対応しており、ROS 2 をフルインストールしなくても ROS 2 ノードとトピック・サービス通信を行えます。
+lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ライブラリです。通信バックエンドとして **CycloneDDS**、**FastDDS**、**vsomeip (SOME/IP)** に対応しており、ROS 2 をフルインストールしなくても ROS 2 ノードとトピック・サービス通信を行えます。
 
 ---
 
@@ -12,7 +16,7 @@ lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ラ�
 
 - **rclcpp 互換 API** — `rclcpp` 名前空間を使用しているため、既存の ROS 2 コードを少ない変更で移植できます。`RCLCPP_INFO` / `RCLCPP_WARN` などのログマクロも利用可能です。
 - **ROS 2 との相互通信** — ROS 2 ノードと同じ DDS ドメイン上でトピック・サービスを直接やり取りできます。
-- **DDS バックエンド選択** — CycloneDDS と FastDDS をビルド時に選択できます。両方同時にインストールしておき、用途に応じて切り替えることも可能です。
+- **DDS バックエンド選択** — CycloneDDS、FastDDS、vsomeip をビルド時に選択できます。複数同時にインストールしておき、用途に応じて切り替えることも可能です。
 - **依存関係が少ない** — DDS ライブラリと yaml-cpp のみに依存しており、ビルドが高速です。
 - **マルチプラットフォーム** — Linux (Ubuntu/Debian)、QNX 8.0 に対応しています。
 - **tf2 / tf2_ros 同梱** — 座標変換の基本機能を同梱しています。
@@ -25,6 +29,7 @@ lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ラ�
 |----------|------|
 | **CycloneDDS** | Eclipse Foundation のオープンソース実装。軽量。 |
 | **FastDDS** | eProsima 製。QoS オプションが豊富。 |
+| **vsomeip** | COVESA の SOME/IP 実装。DDS ランタイム不要の車載グレード通信。 |
 
 ---
 
@@ -61,8 +66,9 @@ lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ラ�
 
 - CMake 3.16.3 以上
 - C++14 対応コンパイラ
-- DDS 実装（CycloneDDS または FastDDS）
+- 通信バックエンド（CycloneDDS、FastDDS、または vsomeip）
 - yaml-cpp（サブモジュールとして同梱）
+- Boost（vsomeip バックエンド使用時に必要）
 
 ---
 
@@ -71,10 +77,10 @@ lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ラ�
 すべてのビルドスクリプトは以下の形式で実行します:
 
 ```
-./build_<target>.sh <fastdds|cyclonedds> [install|clean]
+./build_<target>.sh <fastdds|cyclonedds|vsomeip> [install|clean]
 ```
 
-- 第 1 引数: DDS バックエンド（`fastdds` または `cyclonedds`）
+- 第 1 引数: 通信バックエンド（`fastdds`、`cyclonedds`、または `vsomeip`）
 - 第 2 引数: `install` でビルド＆インストール、`clean` でビルドディレクトリ削除
 
 ### 前提条件
@@ -90,9 +96,9 @@ git clone --recursive <REPOSITORY_URL>
 cd lwrcl
 ```
 
-### 2. DDS のインストール
+### 2. 通信バックエンドのインストール
 
-使用したい DDS 実装をインストールします。両方インストールしても問題ありません。
+使用したいバックエンドをインストールします。複数インストールしても問題ありません。
 
 **CycloneDDS:**
 
@@ -109,6 +115,14 @@ source ~/.bashrc
 ```
 
 > Arch Linux の場合は `install_fast_dds_archlinux.sh` を使用してください。
+
+**vsomeip (SOME/IP):**
+
+```bash
+./scripts/install_vsomeip.sh
+```
+
+> vsomeip は Boost と CycloneDDS（ビルド時の `idlc` コード生成ツール用のみ）が必要です。先に CycloneDDS をインストールしてから `install_vsomeip.sh` を実行してください。vsomeip バックエンドは DDS ランタイムに**依存しません** — cyclonedds-cxx から抽出した CDR シリアライゼーションをスタンドアロンの静的ライブラリとして使用します。
 
 ### 3. サポートライブラリのビルド
 
@@ -139,6 +153,7 @@ ROS 2 互換のメッセージ型（`std_msgs`, `sensor_msgs`, `geometry_msgs` �
 ビルド済みバイナリは `apps/install-fastdds/` に配置されます。
 
 > **CycloneDDS を使う場合は、上記コマンドの `fastdds` を `cyclonedds` に置き換えてください。**
+> **vsomeip を使う場合は、上記コマンドの `fastdds` を `vsomeip` に置き換えてください。**
 
 ### ビルドディレクトリのクリーン
 
@@ -146,7 +161,7 @@ ROS 2 互換のメッセージ型（`std_msgs`, `sensor_msgs`, `geometry_msgs` �
 ./build_lwrcl.sh fastdds clean
 ```
 
-> ビルドディレクトリはバックエンドごとに分離されています（`build-fastdds` / `build-cyclonedds`）。バックエンドを切り替えても再クリーンは不要です。
+> ビルドディレクトリはバックエンドごとに分離されています（`build-fastdds` / `build-cyclonedds` / `build-vsomeip`）。バックエンドを切り替えても再クリーンは不要です。
 
 ### インストール先
 
@@ -154,6 +169,7 @@ ROS 2 互換のメッセージ型（`std_msgs`, `sensor_msgs`, `geometry_msgs` �
 |-------------|-------------------|---------------------|
 | FastDDS | `/opt/fast-dds` | `/opt/fast-dds-libs` |
 | CycloneDDS | `/opt/cyclonedds` | `/opt/cyclonedds-libs` |
+| vsomeip | `/opt/vsomeip` | `/opt/vsomeip-libs` |
 
 ---
 
@@ -187,10 +203,12 @@ lwrcl/
 │   │   ├── tf2/              # 座標変換ライブラリ
 │   │   ├── tf2_ros/          # tf2 の ROS 連携
 │   │   └── lwrcl_ffi/        # Dart/Flutter 用 FFI
-│   └── cyclonedds/            # CycloneDDS 版実装
-│       ├── lwrcl/
-│       ├── tf2/
-│       └── tf2_ros/
+│   ├── cyclonedds/            # CycloneDDS 版実装
+│   │   ├── lwrcl/
+│   │   ├── tf2/
+│   │   └── tf2_ros/
+│   └── vsomeip/               # vsomeip (SOME/IP) 版実装
+│       └── lwrcl/
 ├── data_types/                 # ROS 2 互換メッセージ型
 │   └── src/
 │       ├── ros-data-types-for-fastdds/    # FastDDS 用 (submodule)
@@ -355,6 +373,7 @@ BUILD_FFI=ON ./build_lwrcl.sh fastdds install
 
 - [Fast-DDS](https://github.com/eProsima/Fast-DDS) — eProsima の DDS 実装
 - [CycloneDDS](https://github.com/eclipse-cyclonedds/cyclonedds) — Eclipse の DDS 実装
+- [vsomeip](https://github.com/COVESA/vsomeip) — COVESA の SOME/IP 実装
 - [yaml-cpp](https://github.com/jbeder/yaml-cpp) — YAML パーサー
 - [geometry2](https://github.com/ros2/geometry2) — tf2 / tf2_ros の元プロジェクト
 

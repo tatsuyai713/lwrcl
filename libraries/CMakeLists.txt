@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16.3)
 project(libraries)
 
 set(DDS_BACKEND "fastdds" CACHE STRING "DDS backend to use")
-set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds")
+set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "vsomeip")
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -67,8 +67,20 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
     link_directories(${DDS_PREFIX}/lib)
 
+elseif(DDS_BACKEND STREQUAL "vsomeip")
+    # vsomeip backend: NO CycloneDDS runtime dependency.
+    # Only yaml-cpp is needed from the libraries build.
+    set(VSOMEIP_PREFIX "/opt/vsomeip" CACHE PATH "vsomeip install prefix")
+    set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/vsomeip-libs)
+    set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix")
+
+    include_directories(${VSOMEIP_PREFIX}/include)
+    include_directories(${LWRCL_INSTALL_PREFIX}/include)
+    link_directories(${LWRCL_INSTALL_PREFIX}/lib)
+    link_directories(${VSOMEIP_PREFIX}/lib)
+
 else()
-    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds' or 'cyclonedds'.")
+    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', or 'vsomeip'.")
 endif()
 
 add_subdirectory(src/yaml-cpp)

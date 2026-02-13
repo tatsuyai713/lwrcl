@@ -3,9 +3,10 @@
 # run_build_test.sh – Build all lwrcl components and verify compilation
 # ===========================================================================
 # Usage:
-#   ./run_build_test.sh                  # Build both backends (full)
+#   ./run_build_test.sh                  # Build all backends (full)
 #   ./run_build_test.sh fastdds          # Build only FastDDS backend
 #   ./run_build_test.sh cyclonedds       # Build only CycloneDDS backend
+#   ./run_build_test.sh vsomeip          # Build only vsomeip backend
 #   ./run_build_test.sh --clean          # Clean all build dirs first
 #   ./run_build_test.sh fastdds --clean  # Clean then build FastDDS only
 # ===========================================================================
@@ -29,6 +30,7 @@ for arg in "$@"; do
     case "$arg" in
         fastdds)     BACKENDS+=(fastdds) ;;
         cyclonedds)  BACKENDS+=(cyclonedds) ;;
+        vsomeip)     BACKENDS+=(vsomeip) ;;
         --clean)     CLEAN=true ;;
         *)           echo "Unknown arg: $arg"; exit 1 ;;
     esac
@@ -36,7 +38,7 @@ done
 
 # Default: both backends
 if [ ${#BACKENDS[@]} -eq 0 ]; then
-    BACKENDS=(fastdds cyclonedds)
+    BACKENDS=(fastdds cyclonedds vsomeip)
 fi
 
 PASS=0
@@ -76,6 +78,8 @@ check_dds_installed() {
         [ -d "/opt/fast-dds" ]
     elif [ "$backend" = "cyclonedds" ]; then
         [ -d "/opt/cyclonedds" ]
+    elif [ "$backend" = "vsomeip" ]; then
+        [ -d "/opt/vsomeip" ] && [ -d "/opt/cyclonedds" ]
     fi
 }
 
