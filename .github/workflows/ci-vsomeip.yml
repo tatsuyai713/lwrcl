@@ -87,7 +87,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /opt/vsomeip
-          key: vsomeip-${{ env.VSOMEIP_VERSION }}-ubuntu2404-v1
+          key: vsomeip-${{ env.VSOMEIP_VERSION }}-ubuntu2404-v2
 
       - name: Build & install vsomeip + CDR
         if: steps.cache-vsomeip.outputs.cache-hit != 'true'

@@ -62,7 +62,8 @@ cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DENABLE_SIGNAL_HANDLING=1 \
     -DBUILD_SHARED_LIBS=ON \
-    -DENABLE_MULTIPLE_ROUTING_MANAGERS=1
+    -DENABLE_MULTIPLE_ROUTING_MANAGERS=1 \
+    -DCMAKE_CXX_FLAGS="-Wno-stringop-overflow"
 
 make -j"${JOBS}"
 sudo make install
