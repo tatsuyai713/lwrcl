@@ -153,9 +153,9 @@ add_lwrcl_test(test_timer_control         src/test_timer_control.cpp)
 add_lwrcl_test(test_qos_presets           src/test_qos_presets.cpp)
 
 # ============================================================================
-# Fast DDS only tests
+# Fast DDS / CycloneDDS zero-copy tests
 # ============================================================================
-if(DDS_BACKEND STREQUAL "fastdds")
+if(DDS_BACKEND STREQUAL "fastdds" OR DDS_BACKEND STREQUAL "cyclonedds")
     # 19. Zero-copy (LoanedMessage)
     add_lwrcl_test(test_zero_copy         src/test_zero_copy.cpp)
 endif()

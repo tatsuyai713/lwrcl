@@ -18,6 +18,120 @@
 
 namespace lwrcl
 {
+
+  // =========================================================================
+  // LoanedSubscriptionMessage — zero-copy subscription helper (CycloneDDS)
+  //
+  // Wraps a single sample from dds::sub::LoanedSamples<T>.  The underlying
+  // loan is reference-counted via shared_ptr so the DDS loan is kept alive
+  // until all LoanedSubscriptionMessage instances referencing it are
+  // destroyed.
+  // =========================================================================
+  template <typename T>
+  class LoanedSubscriptionMessage
+  {
+  public:
+    /// Lightweight sample-info struct compatible with the FastDDS API
+    /// (provides the .valid_data member used by examples / tests).
+    struct SampleInfo
+    {
+      bool valid_data = false;
+    };
+
+    LoanedSubscriptionMessage() = default;
+
+    /**
+     * @brief Construct from a shared LoanedSamples container + index.
+     *
+     * The shared_ptr keeps the DDS loan alive until all messages sharing
+     * the same loan are destroyed.
+     */
+    LoanedSubscriptionMessage(
+        std::shared_ptr<dds::sub::LoanedSamples<T>> samples,
+        size_t index)
+        : samples_(std::move(samples)),
+          index_(index),
+          is_valid_(index_ < static_cast<size_t>(samples_->length()) &&
+                    (*samples_)[index_].info().valid())
+    {
+    }
+
+    ~LoanedSubscriptionMessage() = default;
+
+    // Move only — no copy
+    LoanedSubscriptionMessage(const LoanedSubscriptionMessage &) = delete;
+    LoanedSubscriptionMessage &operator=(const LoanedSubscriptionMessage &) = delete;
+
+    LoanedSubscriptionMessage(LoanedSubscriptionMessage &&other) noexcept
+        : samples_(std::move(other.samples_)),
+          index_(other.index_),
+          is_valid_(other.is_valid_)
+    {
+      other.is_valid_ = false;
+    }
+
+    LoanedSubscriptionMessage &operator=(LoanedSubscriptionMessage &&other) noexcept
+    {
+      if (this != &other)
+      {
+        samples_ = std::move(other.samples_);
+        index_ = other.index_;
+        is_valid_ = other.is_valid_;
+        other.is_valid_ = false;
+      }
+      return *this;
+    }
+
+    /// Check if the loaned message is valid
+    bool is_valid() const { return is_valid_; }
+    operator bool() const { return is_valid_; }
+
+    /// Get a reference to the loaned message data
+    T &get()
+    {
+      if (!is_valid_)
+        throw std::runtime_error("Attempting to access invalid loaned message");
+      return const_cast<T &>((*samples_)[index_].data());
+    }
+
+    const T &get() const
+    {
+      if (!is_valid_)
+        throw std::runtime_error("Attempting to access invalid loaned message");
+      return (*samples_)[index_].data();
+    }
+
+    T *operator->() { return &get(); }
+    const T *operator->() const { return &get(); }
+    T &operator*() { return get(); }
+    const T &operator*() const { return get(); }
+
+    /**
+     * @brief Get sample information.
+     *
+     * Returns a lightweight SampleInfo with a .valid_data field
+     * compatible with the FastDDS zero-copy examples.
+     */
+    SampleInfo get_sample_info() const
+    {
+      if (!is_valid_)
+        throw std::runtime_error("Attempting to access sample info of invalid loaned message");
+      return SampleInfo{(*samples_)[index_].info().valid()};
+    }
+
+    /// Release the underlying loan explicitly (automatic on destruction)
+    void release()
+    {
+      samples_.reset();
+      is_valid_ = false;
+    }
+
+  private:
+    std::shared_ptr<dds::sub::LoanedSamples<T>> samples_;
+    size_t index_ = 0;
+    bool is_valid_ = false;
+  };
+
   struct MessageInfo
   {
     std::chrono::system_clock::time_point source_timestamp;
@@ -170,6 +284,54 @@ namespace lwrcl
       std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
       return !pollable_buffer_.empty();
     }
+
+    /**
+     * @brief Take a loaned message directly from the reader (zero-copy).
+     *
+     * When CycloneDDS is built with iceoryx SHM support and iox-roudi is
+     * running, the underlying data may reside in shared memory.  The
+     * LoanedSubscriptionMessage keeps the DDS loan alive until it is
+     * destroyed.
+     *
+     * @param out_loaned  Output loaned message
+     * @return true if a message was successfully taken
+     */
+    bool take_loaned(LoanedSubscriptionMessage<T> &out_loaned)
+    {
+      if (!reader_)
+      {
+        return false;
+      }
+
+      try
+      {
+        dds::sub::LoanedSamples<T> samples = reader_->take();
+        if (samples.length() > 0)
+        {
+          // Find the first valid sample
+          for (size_t i = 0; i < static_cast<size_t>(samples.length()); ++i)
+          {
+            if (samples[i].info().valid())
+            {
+              auto loan_guard =
+                  std::make_shared<dds::sub::LoanedSamples<T>>(std::move(samples));
+              out_loaned = LoanedSubscriptionMessage<T>(loan_guard, i);
+              return true;
+            }
+          }
+        }
+      }
+      catch (const dds::core::Exception &)
+      {
+        // No data available
+      }
+      return false;
+    }
+
+    /**
+     * @brief Get the DataReader for direct access (advanced use)
+     */
+    dds::sub::DataReader<T> *get_reader() { return reader_.get(); }
 
   private:
     void run()
@@ -348,6 +510,26 @@ namespace lwrcl
 
     // Alias for rclcpp compatibility
     bool has_data() { return has_message(); }
+
+    /**
+     * @brief Take a loaned message (zero-copy when CycloneDDS SHM is active).
+     *
+     * @param out_loaned Output loaned message
+     * @return true if a message was successfully taken
+     */
+    bool take_loaned_message(LoanedSubscriptionMessage<T> &out_loaned)
+    {
+      return waitset_.take_loaned(out_loaned);
+    }
+
+    /**
+     * @brief Check if the subscription can loan messages.
+     * @return true — the loaned-message API is always available.
+     */
+    bool can_loan_messages() const
+    {
+      return true;
+    }
 
     // Get the number of messages waiting (approximation)
     size_t get_message_count() const

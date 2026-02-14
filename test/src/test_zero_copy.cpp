@@ -1,9 +1,11 @@
 /**
  * @file test_zero_copy.cpp
- * @brief Test: LoanedMessage / LoanedSubscriptionMessage zero-copy (FastDDS only)
+ * @brief Test: LoanedMessage / LoanedSubscriptionMessage zero-copy
  *
  * Covers: borrow_loaned_message, LoanedMessage::is_valid, publish(LoanedMessage&&),
  *         can_loan_messages, take_loaned_message, LoanedSubscriptionMessage::get
+ *
+ * Supported backends: FastDDS, CycloneDDS (with iceoryx SHM transport)
  */
 #include <gtest/gtest.h>
 #include <atomic>
@@ -68,6 +70,6 @@ TEST_F(ZeroCopyTest, CanLoanMessages) {
   auto node = rclcpp::Node::make_shared("zc_loan_check");
   rclcpp::SensorDataQoS qos;
   auto pub = node->create_publisher<sensor_msgs::msg::Image>("zc_loan_topic", qos);
-  // FastDDS should always claim it can loan
+  // Both FastDDS and CycloneDDS should claim they can loan
   EXPECT_TRUE(pub->can_loan_messages());
 }

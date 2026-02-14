@@ -48,6 +48,12 @@ if [ -n "${DDS_PREFIX:-}" ]; then
     export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 fi
 
+# Add iceoryx libraries if present (used by CycloneDDS SHM/zero-copy)
+ICEORYX_PREFIX_RT="${ICEORYX_PREFIX:-/opt/iceoryx}"
+if [ -d "${ICEORYX_PREFIX_RT}/lib" ]; then
+    export LD_LIBRARY_PATH="${ICEORYX_PREFIX_RT}/lib:${LD_LIBRARY_PATH:-}"
+fi
+
 CMAKE_ARGS=(
     -S "${SCRIPT_DIR}/data_types"
     -B "$BUILD_DIR"

@@ -28,6 +28,10 @@ namespace rclcpp {
     using Subscription = ::lwrcl::Subscription<MessageType>;
     template <typename MessageType>
     using Publisher = ::lwrcl::Publisher<MessageType>;
+    template <typename MessageType>
+    using LoanedMessage = ::lwrcl::LoanedMessage<MessageType>;
+    template <typename MessageType>
+    using LoanedSubscriptionMessage = ::lwrcl::LoanedSubscriptionMessage<MessageType>;
     
     using TimerBase = lwrcl::TimerBase;
 
