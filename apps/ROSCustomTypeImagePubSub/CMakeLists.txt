@@ -16,7 +16,11 @@ find_package(yaml-cpp QUIET)
 
 # --- Paths ---
 set(UPDATE_HEADERS_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/update_headers.sh")
-set(IDLC_EXECUTABLE /opt/cyclonedds/bin/idlc)
+if(DEFINED DDS_PREFIX)
+  set(IDLC_EXECUTABLE "${DDS_PREFIX}/bin/idlc")
+else()
+  set(IDLC_EXECUTABLE /opt/cyclonedds/bin/idlc)
+endif()
 
 
 include(../cmake/IdlcGenerate.cmake)
@@ -31,6 +35,7 @@ idlc_generate(
   IDL_ROOT "${IDL_ROOT}"
   IDLC     "${IDLC_EXECUTABLE}"
   UPDATE_HEADERS_SCRIPT "${UPDATE_HEADERS_SCRIPT}"
+  IDL_INCLUDE_PREFIX "${LWRCL_INSTALL_PREFIX}/include"
 )
 
 # --- Config file ---

@@ -11,36 +11,117 @@
 # ===========================================================================
 set -euo pipefail
 
-VSOMEIP_VER="${VSOMEIP_VER:-3.4.10}"
-CYCLONEDDS_CXX_VER="${CYCLONEDDS_CXX_VER:-0.10.5}"
-INSTALL_PREFIX="${INSTALL_PREFIX:-/opt/vsomeip}"
-BUILD_DIR="$HOME/build-vsomeip"
-JOBS=$(nproc 2>/dev/null || echo 4)
+VSOMEIP_TAG="3.4.10"
+CYCLONEDDS_CXX_TAG="0.10.5"
+INSTALL_PREFIX="/opt/vsomeip"
+BUILD_DIR="${HOME}/build-vsomeip"
+_nproc="$(nproc 2>/dev/null || echo 4)"
+_mem_kb="$(grep -i MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0)"
+_mem_jobs=$(( _mem_kb / 1572864 ))
+[[ "${_mem_jobs}" -lt 1 ]] && _mem_jobs=1
+JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
+[[ "${JOBS}" -lt 1 ]] && JOBS=1
+SKIP_SYSTEM_DEPS="OFF"
+FORCE_REINSTALL="OFF"
 
-echo "=== Installing vsomeip ${VSOMEIP_VER} + CDR library to ${INSTALL_PREFIX} ==="
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Options:
+  --prefix <path>       Install prefix (default: ${INSTALL_PREFIX})
+  --tag <version>       vsomeip version (default: ${VSOMEIP_TAG})
+  --cxx-tag <version>   CycloneDDS-CXX version for CDR (default: ${CYCLONEDDS_CXX_TAG})
+  --build-dir <path>    Build directory (default: \${HOME}/build-vsomeip)
+  --jobs <N>            Parallel build jobs (default: auto)
+  --skip-system-deps    Skip installing system dependencies
+  --force               Force reinstall even if already present
+  --help                Show this help message
+EOF
+  exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --prefix)
+      INSTALL_PREFIX="$2"
+      shift 2
+      ;;
+    --tag)
+      VSOMEIP_TAG="$2"
+      shift 2
+      ;;
+    --cxx-tag)
+      CYCLONEDDS_CXX_TAG="$2"
+      shift 2
+      ;;
+    --build-dir)
+      BUILD_DIR="$2"
+      shift 2
+      ;;
+    --jobs)
+      JOBS="$2"
+      shift 2
+      ;;
+    --skip-system-deps)
+      SKIP_SYSTEM_DEPS="ON"
+      shift
+      ;;
+    --force)
+      FORCE_REINSTALL="ON"
+      shift
+      ;;
+    --help)
+      usage
+      ;;
+    *)
+      echo "[ERROR] Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ "${FORCE_REINSTALL}" != "ON" ]] && [[ -f "${INSTALL_PREFIX}/lib/libvsomeip3.so" ]] && [[ -f "${INSTALL_PREFIX}/lib/liblwrcl_cdr.a" ]]; then
+  echo "[INFO] vsomeip + CDR already installed at ${INSTALL_PREFIX}. Skipping (use --force to reinstall)."
+  exit 0
+fi
+
+SUDO=""
+if [[ "${EUID}" -ne 0 ]]; then
+  if command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo"
+  else
+    echo "[ERROR] Please run as root or install sudo." >&2
+    exit 1
+  fi
+fi
+
+echo "=== Installing vsomeip ${VSOMEIP_TAG} + CDR library to ${INSTALL_PREFIX} ==="
 
 # ---------------------------------------------------------------------------
 # 1. Install system dependencies
 # ---------------------------------------------------------------------------
-if command -v apt-get &>/dev/null; then
+if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]]; then
+  if command -v apt-get &>/dev/null; then
     echo "--- Installing system dependencies (apt) ---"
-    sudo apt-get update -qq
-    sudo apt-get install -y --no-install-recommends \
+    ${SUDO} apt-get update -qq
+    ${SUDO} apt-get install -y --no-install-recommends \
         build-essential cmake git \
         libboost-system-dev libboost-thread-dev libboost-log-dev \
         libboost-filesystem-dev
-elif command -v pacman &>/dev/null; then
+  elif command -v pacman &>/dev/null; then
     echo "--- Installing system dependencies (pacman) ---"
-    sudo pacman -Sy --noconfirm base-devel cmake git boost
-else
+    ${SUDO} pacman -Sy --noconfirm base-devel cmake git boost
+  else
     echo "[WARN] Unknown package manager. Ensure cmake, git, and boost are installed."
+  fi
 fi
 
 # ---------------------------------------------------------------------------
 # 2. Create install directory
 # ---------------------------------------------------------------------------
-sudo mkdir -p "${INSTALL_PREFIX}"
-sudo chmod 777 -R "${INSTALL_PREFIX}"
+${SUDO} mkdir -p "${INSTALL_PREFIX}"
+${SUDO} chmod 777 -R "${INSTALL_PREFIX}"
 
 # ---------------------------------------------------------------------------
 # 3. Clone and build vsomeip
@@ -53,7 +134,7 @@ if [ ! -d vsomeip ]; then
     git clone https://github.com/COVESA/vsomeip.git
 fi
 cd vsomeip
-git checkout "${VSOMEIP_VER}"
+git checkout "${VSOMEIP_TAG}"
 
 mkdir -p build && cd build
 
@@ -66,16 +147,16 @@ cmake .. \
     -DCMAKE_CXX_FLAGS="-Wno-stringop-overflow"
 
 make -j"${JOBS}"
-sudo make install
+${SUDO} make install
 
-# Re-apply permissions after sudo make install (which creates root-owned dirs)
-sudo chmod 777 -R "${INSTALL_PREFIX}"
+# Re-apply permissions after ${SUDO} make install (which creates root-owned dirs)
+${SUDO} chmod 777 -R "${INSTALL_PREFIX}"
 
 # ---------------------------------------------------------------------------
 # 4. Create default vsomeip configuration
 # ---------------------------------------------------------------------------
-sudo mkdir -p "${INSTALL_PREFIX}/etc"
-cat <<'VSOMEIP_CFG' | sudo tee "${INSTALL_PREFIX}/etc/vsomeip-lwrcl.json" > /dev/null
+${SUDO} mkdir -p "${INSTALL_PREFIX}/etc"
+cat <<'VSOMEIP_CFG' | ${SUDO} tee "${INSTALL_PREFIX}/etc/vsomeip-lwrcl.json" > /dev/null
 {
     "unicast": "127.0.0.1",
     "logging": {
@@ -114,7 +195,7 @@ if [ ! -d cyclonedds-cxx ]; then
     git clone https://github.com/eclipse-cyclonedds/cyclonedds-cxx.git
 fi
 cd cyclonedds-cxx
-git checkout "${CYCLONEDDS_CXX_VER}"
+git checkout "${CYCLONEDDS_CXX_TAG}"
 
 CDR_SRC_BASE="src/ddscxx"
 CDR_INC="${CDR_SRC_BASE}/include"
@@ -405,7 +486,7 @@ CYCLONECXX_VER
 # 6. Verify installation
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== vsomeip + CDR installation complete ==="
+echo "=== vsomeip ${VSOMEIP_TAG} + CDR installation complete ==="
 echo "  Install prefix: ${INSTALL_PREFIX}"
 echo "  Libraries:      ${INSTALL_PREFIX}/lib/"
 echo "  Headers:        ${INSTALL_PREFIX}/include/"

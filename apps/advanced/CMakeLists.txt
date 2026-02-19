@@ -123,6 +123,34 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
   set(ADVANCED_IDL_SOURCES ${advanced_msgs_FINAL_SRCS})
   set(ADVANCED_IDL_TARGET_DEPS advanced_msgs_final_sources advanced_msgs_idl_gen)
 
+elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
+  # ── Adaptive AUTOSAR: reuse idlc for CycloneDDS-compatible code generation
+  set(UPDATE_HEADERS_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/update_headers.sh")
+  set(IDLC_EXECUTABLE "${DDS_PREFIX}/bin/idlc")
+
+  include(../cmake/IdlcGenerate.cmake)
+
+  idlc_generate(
+    NAME  advanced_msgs
+    ALIAS advanced_msgs
+    IDL_ROOT "${IDL_ROOT}"
+    IDLC     "${IDLC_EXECUTABLE}"
+    UPDATE_HEADERS_SCRIPT "${UPDATE_HEADERS_SCRIPT}"
+    IDL_INCLUDE_PREFIX "${LWRCL_INSTALL_PREFIX}/include"
+  )
+
+  include_directories(
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/generated
+    ${advanced_msgs_GEN_PKG_DIR}
+  )
+  if(DEFINED ROS_DATA_TYPES_INCLUDE_PATH)
+    include_directories(${ROS_DATA_TYPES_INCLUDE_PATH})
+  endif()
+
+  set(ADVANCED_IDL_SOURCES ${advanced_msgs_FINAL_SRCS})
+  set(ADVANCED_IDL_TARGET_DEPS advanced_msgs_final_sources advanced_msgs_idl_gen)
+
 endif()
 
 # ── Executables ───────────────────────────────────────────────────────────
@@ -155,7 +183,7 @@ add_executable(state_machine_controller
 if(DDS_BACKEND STREQUAL "fastdds")
   add_dependencies(video_stream_pipeline ${ADVANCED_IDL_TARGET})
   add_dependencies(diagnostic_aggregator ${ADVANCED_IDL_TARGET})
-elseif(DDS_BACKEND STREQUAL "cyclonedds" OR DDS_BACKEND STREQUAL "vsomeip")
+elseif(DDS_BACKEND STREQUAL "cyclonedds" OR DDS_BACKEND STREQUAL "vsomeip" OR DDS_BACKEND STREQUAL "adaptive-autosar")
   add_dependencies(video_stream_pipeline ${ADVANCED_IDL_TARGET_DEPS})
   add_dependencies(diagnostic_aggregator ${ADVANCED_IDL_TARGET_DEPS})
 endif()
@@ -181,6 +209,8 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
   set(APP_INSTALL_PREFIX "/opt/cyclonedds-apps")
 elseif(DDS_BACKEND STREQUAL "vsomeip")
   set(APP_INSTALL_PREFIX "/opt/vsomeip-apps")
+elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
+  set(APP_INSTALL_PREFIX "/opt/autosar-ap-apps")
 endif()
 
 install(TARGETS

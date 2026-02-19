@@ -23,17 +23,26 @@ elif [ "$BACKEND" = "vsomeip" ]; then
     LWRCL_PREFIX="/opt/vsomeip-libs"
     # Override backend to cyclonedds for data type generation pipeline
     BACKEND="cyclonedds"
+elif [ "$BACKEND" = "adaptive-autosar" ]; then
+    # Adaptive AUTOSAR wraps CycloneDDS internally, so data types are
+    # identical to CycloneDDS-generated types linked against real CycloneDDS.
+    DDS_PREFIX="/opt/cyclonedds"
+    LWRCL_PREFIX="/opt/autosar-ap-libs"
+    # Override backend to cyclonedds for data type generation pipeline
+    BACKEND="cyclonedds"
 else
-    echo "Usage: $0 <fastdds|cyclonedds|vsomeip> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|vsomeip|adaptive-autosar> [install|clean]"
     exit 1
 fi
 
 BUILD_DIR="${SCRIPT_DIR}/data_types/build-${BACKEND}"
 
-# For vsomeip, override build dir to use vsomeip-specific path
+# For vsomeip/adaptive-autosar, override build dir to use backend-specific path
 ORIGINAL_BACKEND="${1:-}"
 if [ "${ORIGINAL_BACKEND}" = "vsomeip" ]; then
     BUILD_DIR="${SCRIPT_DIR}/data_types/build-vsomeip"
+elif [ "${ORIGINAL_BACKEND}" = "adaptive-autosar" ]; then
+    BUILD_DIR="${SCRIPT_DIR}/data_types/build-adaptive-autosar"
 fi
 
 if [ "$ACTION" = "clean" ]; then
@@ -83,9 +92,17 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
         )
     else
         export PATH="${DDS_PREFIX}/bin:${PATH}"
-        CMAKE_ARGS+=(
-            -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
-        )
+        # Include iceoryx cmake configs if present (CycloneDDS depends on it)
+        ICEORYX_CMAKE="${ICEORYX_PREFIX_RT}/lib/cmake"
+        if [ -d "${ICEORYX_CMAKE}" ]; then
+            CMAKE_ARGS+=(
+                -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake;${ICEORYX_CMAKE}"
+            )
+        else
+            CMAKE_ARGS+=(
+                -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
+            )
+        fi
     fi
 fi
 

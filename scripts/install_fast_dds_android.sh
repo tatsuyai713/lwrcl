@@ -1,24 +1,92 @@
-#!/bin/bash
-
+#!/usr/bin/env bash
 set -euo pipefail
-
-fast_dds_version="${FAST_DDS_VERSION:-2.11.2}"
-foonathan_memory_vendor_version="${FOONATHAN_MEMORY_VENDOR_VERSION:-1.3.1}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-FAST_DDS_WORK_DIR="${FAST_DDS_WORK_DIR:-${ROOT_DIR}/dds_build_android}"
+FAST_DDS_TAG="2.11.2"
+FOONATHAN_MEMORY_TAG="1.3.1"
+ANDROID_ABI="arm64-v8a"
+ANDROID_API="31"
+BUILD_TYPE="Release"
+BUILD_DIR="${ROOT_DIR}/dds_build_android"
+INSTALL_PREFIX=""
+JOBS="4"
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS] [clean]
+
+Options:
+  --prefix <path>       Install prefix (default: \${ROOT}/lwrcl/android/\${ABI})
+  --tag <version>       Fast-DDS version (default: ${FAST_DDS_TAG})
+  --abi <abi>           Android ABI (default: ${ANDROID_ABI})
+  --api <level>         Android API level (default: ${ANDROID_API})
+  --ndk <path>          Android NDK path (default: \$ANDROID_NDK_HOME)
+  --build-dir <path>    Build directory (default: \${ROOT}/dds_build_android)
+  --jobs <N>            Parallel build jobs (default: ${JOBS})
+  --help                Show this help message
+
+Positional:
+  clean                 Remove build directory and exit
+EOF
+  exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --prefix)
+      INSTALL_PREFIX="$2"
+      shift 2
+      ;;
+    --tag)
+      FAST_DDS_TAG="$2"
+      shift 2
+      ;;
+    --abi)
+      ANDROID_ABI="$2"
+      shift 2
+      ;;
+    --api)
+      ANDROID_API="$2"
+      shift 2
+      ;;
+    --ndk)
+      ANDROID_NDK_HOME="$2"
+      shift 2
+      ;;
+    --build-dir)
+      BUILD_DIR="$2"
+      shift 2
+      ;;
+    --jobs)
+      JOBS="$2"
+      shift 2
+      ;;
+    --help)
+      usage
+      ;;
+    clean)
+      rm -rf "${BUILD_DIR}"
+      echo "[OK] Cleaned build directory: ${BUILD_DIR}"
+      exit 0
+      ;;
+    *)
+      echo "[ERROR] Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
 
 NDK="${ANDROID_NDK_HOME:-${ANDROID_NDK:-${NDK:-}}}"
-if [ -z "${NDK}" ]; then
-  echo "ANDROID_NDK_HOME is not set."
+if [[ -z "${NDK}" ]]; then
+  echo "[ERROR] ANDROID_NDK_HOME is not set. Use --ndk <path> or export ANDROID_NDK_HOME." >&2
   exit 1
 fi
 
 TOOLCHAIN_FILE="${NDK}/build/cmake/android.toolchain.cmake"
-if [ ! -f "${TOOLCHAIN_FILE}" ]; then
-  echo "Android toolchain file not found: ${TOOLCHAIN_FILE}"
+if [[ ! -f "${TOOLCHAIN_FILE}" ]]; then
+  echo "[ERROR] Android toolchain file not found: ${TOOLCHAIN_FILE}" >&2
   exit 1
 fi
 
@@ -30,96 +98,69 @@ case "${HOST_ARCH}" in
 esac
 
 NDK_PREBUILT="${NDK}/toolchains/llvm/prebuilt/${HOST_TAG}"
-if [ ! -d "${NDK_PREBUILT}" ]; then
-  echo "NDK host toolchain not found: ${NDK_PREBUILT}"
+if [[ ! -d "${NDK_PREBUILT}" ]]; then
+  echo "[ERROR] NDK host toolchain not found: ${NDK_PREBUILT}" >&2
   echo "Host arch: ${HOST_ARCH}. Install an NDK with ${HOST_TAG} support or use an x86_64 environment."
   exit 1
 fi
 
-ANDROID_ABI="${ANDROID_ABI:-arm64-v8a}"
-ANDROID_API="${ANDROID_API:-31}"
-BUILD_TYPE="${BUILD_TYPE:-Release}"
-ANDROID_PREFIX="${ANDROID_PREFIX:-${ROOT_DIR}/lwrcl/android/${ANDROID_ABI}}"
-FAST_DDS_PREFIX="${FAST_DDS_PREFIX:-${ANDROID_PREFIX}}"
-JOBS="${JOBS:-4}"
-
-OPT="${1:-}"
-if [ "${OPT}" = "clean" ]; then
-  rm -rf "${FAST_DDS_WORK_DIR}"
-  exit 0
+if [[ -z "${INSTALL_PREFIX}" ]]; then
+  INSTALL_PREFIX="${ROOT_DIR}/lwrcl/android/${ANDROID_ABI}"
 fi
 
-mkdir -p "${FAST_DDS_WORK_DIR}"
-cd "${FAST_DDS_WORK_DIR}"
+echo "=== Building Fast-DDS v${FAST_DDS_TAG} for Android (ABI=${ANDROID_ABI}, API=${ANDROID_API}) ==="
 
-if [ ! -d "Fast-DDS" ]; then
-  git clone https://github.com/eProsima/Fast-DDS.git -b "v${fast_dds_version}" --depth 1
+mkdir -p "${BUILD_DIR}"
+cd "${BUILD_DIR}"
+
+if [[ ! -d "Fast-DDS" ]]; then
+  git clone https://github.com/eProsima/Fast-DDS.git -b "v${FAST_DDS_TAG}" --depth 1
 fi
 
 cd Fast-DDS
 WORKSPACE="$PWD"
 git submodule update --init "${WORKSPACE}/thirdparty/asio" "${WORKSPACE}/thirdparty/fastcdr" "${WORKSPACE}/thirdparty/tinyxml2"
-cd "${FAST_DDS_WORK_DIR}"
+cd "${BUILD_DIR}"
 
-if [ ! -d "foonathan_memory_vendor" ]; then
-  git clone https://github.com/eProsima/foonathan_memory_vendor.git -b "v${foonathan_memory_vendor_version}"
+if [[ ! -d "foonathan_memory_vendor" ]]; then
+  git clone https://github.com/eProsima/foonathan_memory_vendor.git -b "v${FOONATHAN_MEMORY_TAG}"
 fi
 
-echo "Building foonathan_memory_vendor..."
-cmake -S "${FAST_DDS_WORK_DIR}/foonathan_memory_vendor" -B "${FAST_DDS_WORK_DIR}/foonathan_memory_vendor/build" \
-  -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" \
-  -DANDROID_ABI="${ANDROID_ABI}" \
-  -DANDROID_PLATFORM="android-${ANDROID_API}" \
-  -DANDROID_STL=c++_shared \
-  -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-  -DCMAKE_INSTALL_PREFIX="${FAST_DDS_PREFIX}" \
-  -DBUILD_SHARED_LIBS=ON \
+ANDROID_CMAKE_ARGS=(
+  -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}"
+  -DANDROID_ABI="${ANDROID_ABI}"
+  -DANDROID_PLATFORM="android-${ANDROID_API}"
+  -DANDROID_STL=c++_shared
+  -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+  -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}"
+  -DBUILD_SHARED_LIBS=ON
   -DBUILD_TESTING=OFF
-cmake --build "${FAST_DDS_WORK_DIR}/foonathan_memory_vendor/build" -j "${JOBS}"
-cmake --install "${FAST_DDS_WORK_DIR}/foonathan_memory_vendor/build" --prefix "${FAST_DDS_PREFIX}"
+)
+
+echo "Building foonathan_memory_vendor..."
+cmake -S "${BUILD_DIR}/foonathan_memory_vendor" -B "${BUILD_DIR}/foonathan_memory_vendor/build" "${ANDROID_CMAKE_ARGS[@]}"
+cmake --build "${BUILD_DIR}/foonathan_memory_vendor/build" -j "${JOBS}"
+cmake --install "${BUILD_DIR}/foonathan_memory_vendor/build" --prefix "${INSTALL_PREFIX}"
 
 echo "Building Fast-CDR..."
-cmake -S "${WORKSPACE}/thirdparty/fastcdr" -B "${WORKSPACE}/thirdparty/fastcdr/build_android_${ANDROID_ABI}" \
-  -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" \
-  -DANDROID_ABI="${ANDROID_ABI}" \
-  -DANDROID_PLATFORM="android-${ANDROID_API}" \
-  -DANDROID_STL=c++_shared \
-  -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-  -DCMAKE_INSTALL_PREFIX="${FAST_DDS_PREFIX}" \
-  -DBUILD_SHARED_LIBS=ON \
-  -DBUILD_TESTING=OFF
+cmake -S "${WORKSPACE}/thirdparty/fastcdr" -B "${WORKSPACE}/thirdparty/fastcdr/build_android_${ANDROID_ABI}" "${ANDROID_CMAKE_ARGS[@]}"
 cmake --build "${WORKSPACE}/thirdparty/fastcdr/build_android_${ANDROID_ABI}" -j "${JOBS}"
-cmake --install "${WORKSPACE}/thirdparty/fastcdr/build_android_${ANDROID_ABI}" --prefix "${FAST_DDS_PREFIX}"
+cmake --install "${WORKSPACE}/thirdparty/fastcdr/build_android_${ANDROID_ABI}" --prefix "${INSTALL_PREFIX}"
 
 echo "Building TinyXML2..."
-cmake -S "${WORKSPACE}/thirdparty/tinyxml2" -B "${WORKSPACE}/thirdparty/tinyxml2/build_android_${ANDROID_ABI}" \
-  -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" \
-  -DANDROID_ABI="${ANDROID_ABI}" \
-  -DANDROID_PLATFORM="android-${ANDROID_API}" \
-  -DANDROID_STL=c++_shared \
-  -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-  -DCMAKE_INSTALL_PREFIX="${FAST_DDS_PREFIX}" \
-  -DBUILD_SHARED_LIBS=ON \
-  -DBUILD_TESTING=OFF
+cmake -S "${WORKSPACE}/thirdparty/tinyxml2" -B "${WORKSPACE}/thirdparty/tinyxml2/build_android_${ANDROID_ABI}" "${ANDROID_CMAKE_ARGS[@]}"
 cmake --build "${WORKSPACE}/thirdparty/tinyxml2/build_android_${ANDROID_ABI}" -j "${JOBS}"
-cmake --install "${WORKSPACE}/thirdparty/tinyxml2/build_android_${ANDROID_ABI}" --prefix "${FAST_DDS_PREFIX}"
+cmake --install "${WORKSPACE}/thirdparty/tinyxml2/build_android_${ANDROID_ABI}" --prefix "${INSTALL_PREFIX}"
 
 echo "Building Fast DDS..."
 cmake -S "${WORKSPACE}" -B "${WORKSPACE}/build_android_${ANDROID_ABI}" \
-  -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" \
-  -DANDROID_ABI="${ANDROID_ABI}" \
-  -DANDROID_PLATFORM="android-${ANDROID_API}" \
-  -DANDROID_STL=c++_shared \
-  -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-  -DCMAKE_INSTALL_PREFIX="${FAST_DDS_PREFIX}" \
-  -Dfastcdr_DIR="${FAST_DDS_PREFIX}/lib/cmake/fastcdr" \
-  -Dfoonathan_memory_DIR="${FAST_DDS_PREFIX}/lib/foonathan_memory/cmake" \
-  -Dtinyxml2_DIR="${FAST_DDS_PREFIX}/lib/cmake/tinyxml2" \
+  "${ANDROID_CMAKE_ARGS[@]}" \
+  -Dfastcdr_DIR="${INSTALL_PREFIX}/lib/cmake/fastcdr" \
+  -Dfoonathan_memory_DIR="${INSTALL_PREFIX}/lib/foonathan_memory/cmake" \
+  -Dtinyxml2_DIR="${INSTALL_PREFIX}/lib/cmake/tinyxml2" \
   -DASIO_INCLUDE_DIR="${WORKSPACE}/thirdparty/asio/asio/include" \
-  -DBUILD_SHARED_LIBS=ON \
-  -DBUILD_TESTING=OFF \
   -DBUILD_TESTS=OFF
 cmake --build "${WORKSPACE}/build_android_${ANDROID_ABI}" -j "${JOBS}"
-cmake --install "${WORKSPACE}/build_android_${ANDROID_ABI}" --prefix "${FAST_DDS_PREFIX}"
+cmake --install "${WORKSPACE}/build_android_${ANDROID_ABI}" --prefix "${INSTALL_PREFIX}"
 
-echo "Fast DDS for Android installed to: ${FAST_DDS_PREFIX}"
+echo "[OK] Installed Fast-DDS v${FAST_DDS_TAG} for Android to ${INSTALL_PREFIX}"

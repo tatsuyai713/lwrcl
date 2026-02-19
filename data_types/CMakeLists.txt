@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16.3)
 project(data_types)
 
 set(DDS_BACKEND "fastdds" CACHE STRING "DDS backend to use")
-set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "vsomeip")
+set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "vsomeip" "adaptive-autosar")
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -44,6 +44,18 @@ if(DDS_BACKEND STREQUAL "fastdds")
     add_subdirectory(src/ros-data-types-for-fastdds)
 
 elseif(DDS_BACKEND STREQUAL "cyclonedds")
+    # CycloneDDSConfig.cmake has a bug where find_dependency(iceoryx_binding_c)
+    # is guarded by an empty if(), so we must import iceoryx targets manually.
+    set(ICEORYX_PREFIX "${ICEORYX_PREFIX}" CACHE PATH "iceoryx install prefix")
+    if(NOT ICEORYX_PREFIX)
+        set(ICEORYX_PREFIX "/opt/iceoryx")
+    endif()
+    if(EXISTS "${ICEORYX_PREFIX}/lib/cmake")
+        list(APPEND CMAKE_PREFIX_PATH "${ICEORYX_PREFIX}/lib/cmake")
+        find_package(iceoryx_hoofs QUIET)
+        find_package(iceoryx_posh QUIET)
+        find_package(iceoryx_binding_c QUIET)
+    endif()
     add_subdirectory(src/ros-data-types-cyclonedds/src)
 
 elseif(DDS_BACKEND STREQUAL "vsomeip")
@@ -54,6 +66,21 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
     # to the CDR library.
     add_subdirectory(src/ros-data-types-cyclonedds/src)
 
+elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
+    # Adaptive AUTOSAR wraps CycloneDDS internally, so data types are
+    # identical to CycloneDDS-generated types linked against real CycloneDDS.
+    set(ICEORYX_PREFIX "${ICEORYX_PREFIX}" CACHE PATH "iceoryx install prefix")
+    if(NOT ICEORYX_PREFIX)
+        set(ICEORYX_PREFIX "/opt/iceoryx")
+    endif()
+    if(EXISTS "${ICEORYX_PREFIX}/lib/cmake")
+        list(APPEND CMAKE_PREFIX_PATH "${ICEORYX_PREFIX}/lib/cmake")
+        find_package(iceoryx_hoofs QUIET)
+        find_package(iceoryx_posh QUIET)
+        find_package(iceoryx_binding_c QUIET)
+    endif()
+    add_subdirectory(src/ros-data-types-cyclonedds/src)
+
 else()
-    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', or 'vsomeip'.")
+    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', 'vsomeip', or 'adaptive-autosar'.")
 endif()

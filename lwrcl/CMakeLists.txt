@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16.3)
 project(lwrcl)
 
 set(DDS_BACKEND "fastdds" CACHE STRING "DDS backend to use")
-set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "vsomeip")
+set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "vsomeip" "adaptive-autosar")
 
 option(BUILD_FFI "Build FFI bindings for Dart/Flutter" OFF)
 
@@ -116,6 +116,61 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
     add_subdirectory(vsomeip/tf2_ros)
     add_subdirectory(vsomeip/lwrcl)
 
+elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
+    # Adaptive AUTOSAR DDS backend: uses only ara::com interface APIs.
+    # CycloneDDS is a transitive dependency (not called directly from lwrcl code).
+
+    set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/autosar-ap-libs)
+    set(AUTOSAR_AP_PREFIX_DEFAULT /opt/autosar_ap)
+    set(DDS_PREFIX_DEFAULT /opt/cyclonedds)
+
+    set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix (include/lib)")
+    set(AUTOSAR_AP_PREFIX "${AUTOSAR_AP_PREFIX_DEFAULT}" CACHE PATH "Adaptive AUTOSAR AP install prefix")
+    set(DDS_PREFIX "${DDS_PREFIX_DEFAULT}" CACHE PATH "CycloneDDS install prefix (transitive dep)")
+
+    # Find Adaptive AUTOSAR package
+    list(APPEND CMAKE_PREFIX_PATH "${AUTOSAR_AP_PREFIX}/lib/cmake/AdaptiveAutosarAP")
+    list(APPEND CMAKE_PREFIX_PATH "${DDS_PREFIX}/lib/cmake")
+    find_package(AdaptiveAutosarAP REQUIRED)
+
+    # iceoryx headers (transitive CycloneDDS dependency)
+    set(ICEORYX_PREFIX "${ICEORYX_PREFIX}" CACHE PATH "iceoryx install prefix")
+    if(NOT ICEORYX_PREFIX)
+        set(ICEORYX_PREFIX "/opt/iceoryx")
+    endif()
+    if(EXISTS "${ICEORYX_PREFIX}/lib/cmake")
+        list(APPEND CMAKE_PREFIX_PATH "${ICEORYX_PREFIX}/lib/cmake")
+        find_package(iceoryx_hoofs QUIET)
+        find_package(iceoryx_posh QUIET)
+        find_package(iceoryx_binding_c QUIET)
+    endif()
+    # Add iceoryx include directories (versioned layout)
+    file(GLOB ICEORYX_INCLUDE_DIRS "${ICEORYX_PREFIX}/include/iceoryx/v*")
+    foreach(dir ${ICEORYX_INCLUDE_DIRS})
+        include_directories(${dir})
+    endforeach()
+
+    # Adaptive AUTOSAR headers
+    include_directories(${AUTOSAR_AP_PREFIX}/include)
+    # CycloneDDS headers (needed by data types and tf2, transitive dep)
+    include_directories(${DDS_PREFIX}/include)
+    include_directories(${DDS_PREFIX}/include/ddscxx)
+    # Data type headers
+    include_directories(${LWRCL_INSTALL_PREFIX}/include)
+    link_directories(${LWRCL_INSTALL_PREFIX}/lib)
+    link_directories(${AUTOSAR_AP_PREFIX}/lib)
+    link_directories(${DDS_PREFIX}/lib)
+
+    # Enable CycloneDDS binding in ara::com headers
+    add_compile_definitions(ARA_COM_USE_CYCLONEDDS=1)
+
+    # lwrcl only uses ara::com APIs; ddsc/ddscxx are for data types and tf2
+    set(DDS_LIBRARIES AdaptiveAutosarAP::ara_com ddsc ddscxx CACHE INTERNAL "DDS link libraries")
+
+    add_subdirectory(adaptive-autosar/tf2)
+    add_subdirectory(adaptive-autosar/tf2_ros)
+    add_subdirectory(adaptive-autosar/lwrcl)
+
 else()
-    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', or 'vsomeip'.")
+    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', 'vsomeip', or 'adaptive-autosar'.")
 endif()

@@ -19,8 +19,12 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
 elif [ "$BACKEND" = "vsomeip" ]; then
     VSOMEIP_PREFIX="/opt/vsomeip"
     LWRCL_PREFIX="/opt/vsomeip-libs"
+elif [ "$BACKEND" = "adaptive-autosar" ]; then
+    AUTOSAR_AP_PREFIX="/opt/autosar_ap"
+    DDS_PREFIX="/opt/cyclonedds"
+    LWRCL_PREFIX="/opt/autosar-ap-libs"
 else
-    echo "Usage: $0 <fastdds|cyclonedds|vsomeip> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|vsomeip|adaptive-autosar> [install|clean]"
     exit 1
 fi
 
@@ -71,6 +75,14 @@ elif [ "$BACKEND" = "vsomeip" ]; then
     export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
     CMAKE_ARGS+=(
         -DVSOMEIP_PREFIX="${VSOMEIP_PREFIX}"
+    )
+elif [ "$BACKEND" = "adaptive-autosar" ]; then
+    export LD_LIBRARY_PATH="${AUTOSAR_AP_PREFIX}/lib:${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export PATH="${DDS_PREFIX}/bin:${PATH}"
+    CMAKE_ARGS+=(
+        -DAUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX}"
+        -DDDS_PREFIX="${DDS_PREFIX}"
+        -DCMAKE_PREFIX_PATH="${AUTOSAR_AP_PREFIX}/lib/cmake/AdaptiveAutosarAP;${DDS_PREFIX}/lib/cmake"
     )
 fi
 

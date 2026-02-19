@@ -15,7 +15,7 @@
 #   <NAME>_IDL_FILES
 
 function(idlc_generate)
-  cmake_parse_arguments(IDLCG "" "NAME;ALIAS;IDL_ROOT;IDLC;UPDATE_HEADERS_SCRIPT" "" ${ARGN})
+  cmake_parse_arguments(IDLCG "" "NAME;ALIAS;IDL_ROOT;IDLC;UPDATE_HEADERS_SCRIPT;IDL_INCLUDE_PREFIX" "" ${ARGN})
 
   foreach(req NAME IDL_ROOT IDLC UPDATE_HEADERS_SCRIPT)
     if(NOT IDLCG_${req})
@@ -25,6 +25,10 @@ function(idlc_generate)
 
   if(NOT IDLCG_ALIAS)
     set(IDLCG_ALIAS "${IDLCG_NAME}")
+  endif()
+
+  if(NOT IDLCG_IDL_INCLUDE_PREFIX)
+    set(IDLCG_IDL_INCLUDE_PREFIX "/opt/cyclonedds-libs/include")
   endif()
 
   # 生成先ディレクトリ
@@ -61,7 +65,7 @@ function(idlc_generate)
               -fcase-sensitive
               -I "${IDLCG_IDL_ROOT}"
               -I "${CMAKE_CURRENT_SOURCE_DIR}"
-              -I "/opt/cyclonedds-libs/include"
+              -I "${IDLCG_IDL_INCLUDE_PREFIX}"
               "${IDL_FILE}"
       # 生成ヘッダの最小パッチ（return "pkg::msg::Type"; → return "pkg::msg::dds_::Type_";）
       COMMAND ${CMAKE_COMMAND} -E env bash -c
