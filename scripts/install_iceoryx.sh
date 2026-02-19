@@ -1,64 +1,88 @@
 #!/usr/bin/env bash
-# ============================================================================
-# Install Eclipse iceoryx for CycloneDDS shared-memory (zero-copy) transport.
-#
-# iceoryx provides inter-process shared memory communication.
-# When CycloneDDS is built with -DENABLE_SHM=ON it uses iceoryx
-# for zero-copy data transfer between processes on the same host.
-#
-# Prerequisites: cmake (>=3.16), g++ (>=7), libacl1-dev (Debian/Ubuntu)
-#
-# Usage:
-#   ./install_iceoryx.sh [INSTALL_PREFIX]
-#   Default prefix: /opt/iceoryx
-# ============================================================================
 set -euo pipefail
 
-ICEORYX_TAG="v2.0.5"
-INSTALL_PREFIX="${1:-/opt/iceoryx}"
-BUILD_DIR="$HOME/build-iceoryx"
+ICEORYX_TAG="v2.0.6"
+INSTALL_PREFIX="/opt/iceoryx"
+BUILD_DIR="${HOME}/build-iceoryx"
+_nproc="$(nproc 2>/dev/null || echo 4)"
+_mem_kb="$(grep -i MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0)"
+_mem_jobs=$(( _mem_kb / 1572864 ))
+[[ "${_mem_jobs}" -lt 1 ]] && _mem_jobs=1
+JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
+[[ "${JOBS}" -lt 1 ]] && JOBS=1
+SKIP_SYSTEM_DEPS="OFF"
+FORCE_REINSTALL="OFF"
 
-echo "=== Installing Eclipse iceoryx ${ICEORYX_TAG} ==="
-echo "  Install prefix : ${INSTALL_PREFIX}"
-echo "  Build directory: ${BUILD_DIR}"
-echo ""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --prefix)
+      INSTALL_PREFIX="$2"
+      shift 2
+      ;;
+    --tag)
+      ICEORYX_TAG="$2"
+      shift 2
+      ;;
+    --build-dir)
+      BUILD_DIR="$2"
+      shift 2
+      ;;
+    --jobs)
+      JOBS="$2"
+      shift 2
+      ;;
+    --skip-system-deps)
+      SKIP_SYSTEM_DEPS="ON"
+      shift
+      ;;
+    --force)
+      FORCE_REINSTALL="ON"
+      shift
+      ;;
+    *)
+      echo "[ERROR] Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
 
-# Install OS-level dependencies (Debian / Ubuntu)
-if command -v apt-get &>/dev/null; then
-    sudo apt-get update -qq
-    sudo apt-get install -y -qq libacl1-dev libncurses5-dev
+if [[ "${FORCE_REINSTALL}" != "ON" ]] && [[ -f "${INSTALL_PREFIX}/lib/cmake/iceoryx_posh/iceoryx_poshConfig.cmake" ]]; then
+  echo "[INFO] iceoryx already installed at ${INSTALL_PREFIX}. Skipping (use --force to reinstall)."
+  exit 0
 fi
 
-sudo mkdir -p "${INSTALL_PREFIX}"
-sudo chmod 777 -R "${INSTALL_PREFIX}"
+SUDO=""
+if [[ "${EUID}" -ne 0 ]]; then
+  if command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo"
+  else
+    echo "[ERROR] Please run as root or install sudo." >&2
+    exit 1
+  fi
+fi
+
+if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]] && command -v apt-get >/dev/null 2>&1; then
+  ${SUDO} apt-get update -qq
+  ${SUDO} apt-get install -y --no-install-recommends libacl1-dev libncurses5-dev
+fi
+
+${SUDO} mkdir -p "${INSTALL_PREFIX}"
 
 rm -rf "${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}"
-cd "${BUILD_DIR}"
 
-# Clone iceoryx
-git clone https://github.com/eclipse-iceoryx/iceoryx.git
-cd iceoryx
-git checkout "${ICEORYX_TAG}"
+git clone --depth 1 --branch "${ICEORYX_TAG}" https://github.com/eclipse-iceoryx/iceoryx.git "${BUILD_DIR}/iceoryx"
 
-# Build using iceoryx_meta (top-level CMake project)
-cmake -B build -S iceoryx_meta \
-    -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_SHARED_LIBS=ON \
-    -DBUILD_TEST=OFF \
-    -DINTROSPECTION=OFF \
-    -DBUILD_DOC=OFF \
-    -DEXAMPLES=OFF
+cmake -S "${BUILD_DIR}/iceoryx/iceoryx_meta" -B "${BUILD_DIR}/build" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
+  -DBUILD_SHARED_LIBS=ON \
+  -DBUILD_TEST=OFF \
+  -DINTROSPECTION=OFF \
+  -DBUILD_DOC=OFF \
+  -DEXAMPLES=OFF
 
-cmake --build build -j"$(nproc)"
-sudo cmake --install build
+cmake --build "${BUILD_DIR}/build" -j"${JOBS}"
+${SUDO} cmake --install "${BUILD_DIR}/build"
 
-echo ""
-echo "=== iceoryx ${ICEORYX_TAG} installed to ${INSTALL_PREFIX} ==="
-echo ""
-echo "To use iceoryx, ensure iox-roudi is running before launching CycloneDDS apps:"
-echo "  ${INSTALL_PREFIX}/bin/iox-roudi &"
-echo ""
-echo "Runtime library path:"
-echo "  export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:\${LD_LIBRARY_PATH:-}"
+echo "[OK] Installed iceoryx ${ICEORYX_TAG} to ${INSTALL_PREFIX}"
