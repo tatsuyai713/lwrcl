@@ -12,6 +12,7 @@ JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
 [[ "${JOBS}" -lt 1 ]] && JOBS=1
 SKIP_SYSTEM_DEPS="OFF"
 FORCE_REINSTALL="OFF"
+ALLOW_NO_ACL="ON"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -37,6 +38,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --force)
       FORCE_REINSTALL="ON"
+      shift
+      ;;
+    --strict-acl)
+      ALLOW_NO_ACL="OFF"
       shift
       ;;
     *)
@@ -72,6 +77,33 @@ rm -rf "${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}"
 
 git clone --depth 1 --branch "${ICEORYX_TAG}" https://github.com/eclipse-iceoryx/iceoryx.git "${BUILD_DIR}/iceoryx"
+
+if [[ "${ALLOW_NO_ACL}" == "ON" ]]; then
+  ACCESS_CONTROL_CPP="${BUILD_DIR}/iceoryx/iceoryx_hoofs/source/posix_wrapper/access_control.cpp"
+  if [[ -f "${ACCESS_CONTROL_CPP}" ]]; then
+    # In some container kernels (/dev/shm without POSIX ACL support), acl_set_fd returns ENOTSUP/EOPNOTSUPP.
+    # Fallback to continue startup with default shm permissions so RouDi can run.
+    patch -d "${BUILD_DIR}/iceoryx" -p1 <<'PATCH_EOF'
+diff --git a/iceoryx_hoofs/source/posix_wrapper/access_control.cpp b/iceoryx_hoofs/source/posix_wrapper/access_control.cpp
+index 2647fcdf..6f145f31 100644
+--- a/iceoryx_hoofs/source/posix_wrapper/access_control.cpp
++++ b/iceoryx_hoofs/source/posix_wrapper/access_control.cpp
+@@ -70,6 +70,12 @@ bool AccessController::writePermissionsToFile(const int32_t f_fileDescriptor) c
+     auto aclSetFdCall = posixCall(acl_set_fd)(f_fileDescriptor, workingACL.get()).successReturnValue(0).evaluate();
+     if (aclSetFdCall.has_error())
+     {
++        const auto aclErrno = aclSetFdCall.get_error().errnum;
++        if (aclErrno == ENOTSUP || aclErrno == EOPNOTSUPP)
++        {
++            std::cerr << "Warning: ACL is not supported in this environment. Continuing without ACL enforcement." << std::endl;
++            return true;
++        }
+         std::cerr << "Error: Could not set file ACL." << std::endl;
+         return false;
+     }
+PATCH_EOF
+  fi
+fi
 
 cmake -S "${BUILD_DIR}/iceoryx/iceoryx_meta" -B "${BUILD_DIR}/build" \
   -DCMAKE_BUILD_TYPE=Release \

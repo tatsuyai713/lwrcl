@@ -665,7 +665,7 @@ void BufferCore::lookupTransformImpl(
       case tf2::TF2Error::TF2_LOOKUP_ERROR:
         throw LookupException(error_string);
       default:
-        printf("Unknown error code: %d\n", retval);
+        printf("Unknown error code: %d\n", static_cast<int>(retval));
         assert(0);
     }
   }
@@ -1459,7 +1459,7 @@ void BufferCore::_chainAsVector(
       case tf2::TF2Error::TF2_LOOKUP_ERROR:
         throw LookupException(error_string);
       default:
-        printf("Unknown error code: %d\n", retval);
+        printf("Unknown error code: %d\n", static_cast<int>(retval));
         assert(0);
     }
   }
@@ -1479,7 +1479,7 @@ void BufferCore::_chainAsVector(
         case tf2::TF2Error::TF2_LOOKUP_ERROR:
           throw LookupException(error_string);
         default:
-          printf("Unknown error code: %d\n", retval);
+          printf("Unknown error code: %d\n", static_cast<int>(retval));
           assert(0);
       }
     }

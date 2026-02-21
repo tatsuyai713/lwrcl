@@ -141,4 +141,25 @@ cmake -S "${BUILD_DIR}/cyclonedds-cxx" -B "${BUILD_DIR}/cyclonedds-cxx-build" \
 cmake --build "${BUILD_DIR}/cyclonedds-cxx-build" -j"${JOBS}"
 ${SUDO} cmake --install "${BUILD_DIR}/cyclonedds-cxx-build"
 
+if [[ "${ENABLE_SHM}" == "ON" ]]; then
+  ${SUDO} mkdir -p "${INSTALL_PREFIX}/etc"
+  cat <<'CYCLONEDDS_XML' | ${SUDO} tee "${INSTALL_PREFIX}/etc/cyclonedds-lwrcl.xml" > /dev/null
+<?xml version="1.0" encoding="UTF-8" ?>
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain Id="any">
+    <SharedMemory>
+      <Enable>true</Enable>
+      <LogLevel>warn</LogLevel>
+    </SharedMemory>
+  </Domain>
+</CycloneDDS>
+CYCLONEDDS_XML
+fi
+
 echo "[OK] Installed cyclonedds ${CYCLONEDDS_TAG} (+cxx ${CYCLONEDDS_CXX_TAG}) to ${INSTALL_PREFIX} (SHM=${ENABLE_SHM})"
+if [[ "${ENABLE_SHM}" == "ON" ]]; then
+  echo "[INFO] CycloneDDS SHM config: ${INSTALL_PREFIX}/etc/cyclonedds-lwrcl.xml"
+  echo "[INFO] To use iceoryx zero-copy transport:"
+  echo "       export CYCLONEDDS_URI=file://${INSTALL_PREFIX}/etc/cyclonedds-lwrcl.xml"
+  echo "       iox-roudi"
+fi

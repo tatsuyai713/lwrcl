@@ -20,6 +20,8 @@ private:
     const std::shared_ptr<sensor_msgs::srv::SetCameraInfo::Request> request,
     std::shared_ptr<sensor_msgs::srv::SetCameraInfo::Response> response)
   {
+    (void)request;
+    (void)response;
     RCLCPP_INFO(this->get_logger(), "Received request.");
   }
 

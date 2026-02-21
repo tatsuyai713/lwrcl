@@ -9,12 +9,22 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 DDS_PREFIX="/opt/cyclonedds"
 LWRCL_PREFIX="/opt/cyclonedds-libs"
+ICEORYX_PREFIX="/opt/iceoryx"
 BUILD_DIR="${SCRIPT_DIR}/build-cyclonedds"
 JOBS=$(nproc 2>/dev/null || echo 4)
 ACTION="${1:-all}"
 
-export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
-export PATH="${DDS_PREFIX}/bin:${PATH}"
+if [ -d "${ICEORYX_PREFIX}/lib" ]; then
+    export LD_LIBRARY_PATH="${ICEORYX_PREFIX}/lib:${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+else
+    export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
+
+if [ -d "${ICEORYX_PREFIX}/bin" ]; then
+    export PATH="${ICEORYX_PREFIX}/bin:${DDS_PREFIX}/bin:${PATH}"
+else
+    export PATH="${DDS_PREFIX}/bin:${PATH}"
+fi
 
 # ---------------------------------------------------------------------------
 show_usage() {
@@ -33,6 +43,7 @@ do_build() {
         -DCMAKE_BUILD_TYPE=Debug \
         -DDDS_BACKEND=cyclonedds \
         -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake" \
+        -DICEORYX_PREFIX="${ICEORYX_PREFIX}" \
         -Dyaml-cpp_DIR="${LWRCL_PREFIX}/lib/cmake/yaml-cpp/"
 
     echo "=== [CycloneDDS] Building tests ==="

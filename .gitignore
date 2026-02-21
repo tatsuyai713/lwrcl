@@ -1,7 +1,6 @@
 .vscode
-build
-build-*
-build_android
+build*/
 packages/lwrcl_dart/lib/src/generated/
 .DS_Store
 *.log
+install*/

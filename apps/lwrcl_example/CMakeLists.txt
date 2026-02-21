@@ -15,22 +15,24 @@ add_executable(example_class_pubsub_executor src/example_class_pubsub_executor.c
 add_executable(example_service_server src/example_service_server.cpp)
 add_executable(example_service_client src/example_service_client.cpp)
 
-target_link_libraries(example_spin PRIVATE ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp)
-target_link_libraries(example_timer PRIVATE ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp)
-target_link_libraries(example_waitset PRIVATE ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp)
-target_link_libraries(example_class_pub PRIVATE ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp)
-target_link_libraries(example_class_sub PRIVATE ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp)
-target_link_libraries(example_class_pubsub_executor PRIVATE ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp)
-target_link_libraries(example_service_server PRIVATE ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp)
-target_link_libraries(example_service_client PRIVATE ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp)
+set(LWRCL_EXAMPLE_MESSAGE_LIBS std_msgs sensor_msgs geometry_msgs builtin_interfaces)
+
+target_link_libraries(example_spin PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
+target_link_libraries(example_timer PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
+target_link_libraries(example_waitset PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
+target_link_libraries(example_class_pub PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
+target_link_libraries(example_class_sub PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
+target_link_libraries(example_class_pubsub_executor PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
+target_link_libraries(example_service_server PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
+target_link_libraries(example_service_client PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
 
 # Fast DDS / CycloneDDS zero-copy examples
 if(DDS_BACKEND STREQUAL "fastdds" OR DDS_BACKEND STREQUAL "cyclonedds")
     add_executable(example_zero_copy_pub src/example_zero_copy_pub.cpp)
     add_executable(example_zero_copy_sub src/example_zero_copy_sub.cpp)
 
-    target_link_libraries(example_zero_copy_pub PRIVATE ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp)
-    target_link_libraries(example_zero_copy_sub PRIVATE ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp)
+    target_link_libraries(example_zero_copy_pub PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
+    target_link_libraries(example_zero_copy_sub PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
 endif()
 
 # Fast DDS only examples
@@ -39,9 +41,9 @@ if(DDS_BACKEND STREQUAL "fastdds")
     add_executable(example_namespace src/example_namespace.cpp)
     add_executable(example_timer_control src/example_timer_control.cpp)
 
-    target_link_libraries(example_qos_presets PRIVATE ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp)
-    target_link_libraries(example_namespace PRIVATE ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp)
-    target_link_libraries(example_timer_control PRIVATE ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp)
+    target_link_libraries(example_qos_presets PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
+    target_link_libraries(example_namespace PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
+    target_link_libraries(example_timer_control PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
 endif()
 
 # Install targets

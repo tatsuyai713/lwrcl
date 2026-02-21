@@ -25,6 +25,17 @@ configure_file(
 # ── IDL generation (backend-specific) ─────────────────────────────────────
 set(IDL_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/msg)
 
+# Resolve idlc path for environments where QNX CycloneDDS install does not
+# include host tools.
+if(DEFINED DDS_PREFIX)
+  set(ADVANCED_IDLC_EXECUTABLE "${DDS_PREFIX}/bin/idlc")
+else()
+  set(ADVANCED_IDLC_EXECUTABLE "/opt/qnx/cyclonedds/bin/idlc")
+endif()
+if(NOT EXISTS "${ADVANCED_IDLC_EXECUTABLE}")
+  set(ADVANCED_IDLC_EXECUTABLE "/opt/cyclonedds/bin/idlc")
+endif()
+
 if(DDS_BACKEND STREQUAL "fastdds")
   # ── Fast DDS: fastddsgen to compile custom IDL ──────────────────────────
   file(GLOB_RECURSE ADVANCED_IDL_FILES "${IDL_ROOT}/*.idl")
@@ -71,7 +82,7 @@ if(DDS_BACKEND STREQUAL "fastdds")
 elseif(DDS_BACKEND STREQUAL "cyclonedds")
   # ── Cyclone DDS: idlc ───────────────────────────────────────────────────
   set(UPDATE_HEADERS_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/update_headers.sh")
-  set(IDLC_EXECUTABLE /opt/cyclonedds/bin/idlc)
+  set(IDLC_EXECUTABLE "${ADVANCED_IDLC_EXECUTABLE}")
 
   include(../cmake/IdlcGenerate.cmake)
 
@@ -99,7 +110,7 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
   # ── vsomeip: reuse idlc for CDR code generation ───────────────────────
   set(UPDATE_HEADERS_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/update_headers.sh")
   # DDS_PREFIX points to CycloneDDS install (for idlc tool)
-  set(IDLC_EXECUTABLE "${DDS_PREFIX}/bin/idlc")
+  set(IDLC_EXECUTABLE "${ADVANCED_IDLC_EXECUTABLE}")
 
   include(../cmake/IdlcGenerate.cmake)
 
@@ -126,7 +137,7 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
 elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
   # ── Adaptive AUTOSAR: reuse idlc for CycloneDDS-compatible code generation
   set(UPDATE_HEADERS_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/update_headers.sh")
-  set(IDLC_EXECUTABLE "${DDS_PREFIX}/bin/idlc")
+  set(IDLC_EXECUTABLE "${ADVANCED_IDLC_EXECUTABLE}")
 
   include(../cmake/IdlcGenerate.cmake)
 
@@ -194,6 +205,8 @@ set(COMMON_LINK_LIBS
   lwrcl
   std_msgs
   sensor_msgs
+  geometry_msgs
+  builtin_interfaces
   yaml-cpp
 )
 

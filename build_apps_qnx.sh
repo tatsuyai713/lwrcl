@@ -7,10 +7,15 @@ ACTION="${2:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JOBS=$(nproc 2>/dev/null || echo 4)
 
-if [ -z "$QNX_TARGET" ]; then
-    echo "Please source QNX path."
+if [ -z "${QNX_TARGET:-}" ] || [ -z "${QNX_HOST:-}" ]; then
+    echo "Please source QNX SDP environment (QNX_HOST/QNX_TARGET)."
     exit 1
 fi
+
+QNX_ARCH="${AUTOSAR_QNX_ARCH:-aarch64le}"
+ICEORYX_PREFIX="/opt/qnx/iceoryx"
+IDLC_PREFIX="${IDLC_PREFIX:-/opt/cyclonedds}"
+HOST_ICEORYX_PREFIX="${HOST_ICEORYX_PREFIX:-/opt/iceoryx}"
 
 if [ "$BACKEND" = "fastdds" ]; then
     DDS_PREFIX="/opt/qnx/fast-dds"
@@ -20,12 +25,17 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
     DDS_PREFIX="/opt/qnx/cyclonedds"
     LWRCL_PREFIX="/opt/qnx/cyclonedds-libs"
     TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
+elif [ "$BACKEND" = "adaptive-autosar" ]; then
+    DDS_PREFIX="/opt/qnx/cyclonedds"
+    AUTOSAR_AP_PREFIX="/opt/qnx/autosar_ap/${QNX_ARCH}"
+    LWRCL_PREFIX="/opt/qnx/autosar-ap-libs"
+    TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
 else
-    echo "Usage: $0 <fastdds|cyclonedds> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|adaptive-autosar> [install|clean]"
     exit 1
 fi
 
-BUILD_DIR="${SCRIPT_DIR}/apps/build_qnx"
+BUILD_DIR="${SCRIPT_DIR}/apps/build_qnx-${BACKEND}"
 INSTALL_DIR="${SCRIPT_DIR}/apps/install"
 
 if [ "$ACTION" = "clean" ]; then
@@ -37,6 +47,18 @@ fi
 mkdir -p "$INSTALL_DIR"
 
 export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+if [ -d "${ICEORYX_PREFIX}/lib" ]; then
+    export LD_LIBRARY_PATH="${ICEORYX_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
+if [ -d "${IDLC_PREFIX}/lib" ]; then
+    export LD_LIBRARY_PATH="${IDLC_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
+if [ -d "${HOST_ICEORYX_PREFIX}/lib" ]; then
+    export LD_LIBRARY_PATH="${HOST_ICEORYX_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
+if [ "$BACKEND" = "adaptive-autosar" ] && [ -d "${AUTOSAR_AP_PREFIX}/lib" ]; then
+    export LD_LIBRARY_PATH="${AUTOSAR_AP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
 
 CMAKE_ARGS=(
     -S "${SCRIPT_DIR}/apps"
@@ -59,7 +81,26 @@ if [ "$BACKEND" = "fastdds" ]; then
 elif [ "$BACKEND" = "cyclonedds" ]; then
     export PATH="${DDS_PREFIX}/bin:${PATH}"
     CMAKE_ARGS+=(
-        -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
+        -DICEORYX_PREFIX="${ICEORYX_PREFIX}"
+        -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake;${ICEORYX_PREFIX}/lib/cmake"
+    )
+elif [ "$BACKEND" = "adaptive-autosar" ]; then
+    IDLC_BIN_DIR=""
+    if [ -x "${DDS_PREFIX}/bin/idlc" ]; then
+        IDLC_BIN_DIR="${DDS_PREFIX}/bin"
+    elif [ -x "${IDLC_PREFIX}/bin/idlc" ]; then
+        IDLC_BIN_DIR="${IDLC_PREFIX}/bin"
+    fi
+    if [ -n "${IDLC_BIN_DIR}" ]; then
+        export PATH="${IDLC_BIN_DIR}:${PATH}"
+    else
+        echo "Warning: idlc not found under ${DDS_PREFIX}/bin or ${IDLC_PREFIX}/bin"
+    fi
+    CMAKE_ARGS+=(
+        -DAUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX}"
+        -DDDS_PREFIX="${DDS_PREFIX}"
+        -DICEORYX_PREFIX="${ICEORYX_PREFIX}"
+        -DCMAKE_PREFIX_PATH="${AUTOSAR_AP_PREFIX}/lib/cmake/AdaptiveAutosarAP;${DDS_PREFIX}/lib/cmake;${ICEORYX_PREFIX}/lib/cmake"
     )
 fi
 

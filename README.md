@@ -8,7 +8,7 @@
 
 **A lightweight DDS communication library with an rclcpp-compatible API**
 
-lwrcl provides an API compatible with ROS 2's rclcpp. It supports **CycloneDDS**, **FastDDS**, and **vsomeip (SOME/IP)** as communication backends, enabling direct topic and service communication with ROS 2 nodes without a full ROS 2 installation.
+lwrcl provides an API compatible with ROS 2's rclcpp. It supports **CycloneDDS**, **FastDDS**, **vsomeip (SOME/IP)**, and **Adaptive AUTOSAR (ara::com)** as communication backends, enabling direct topic and service communication with ROS 2 nodes without a full ROS 2 installation.
 
 ---
 
@@ -16,7 +16,7 @@ lwrcl provides an API compatible with ROS 2's rclcpp. It supports **CycloneDDS**
 
 - **rclcpp-compatible API** — Uses the `rclcpp` namespace, allowing existing ROS 2 code to be ported with minimal changes. Logging macros such as `RCLCPP_INFO` and `RCLCPP_WARN` are also available.
 - **Interoperability with ROS 2** — Communicates directly with ROS 2 nodes via topics and services on the same DDS domain.
-- **DDS backend selection** — Choose between CycloneDDS, FastDDS, or vsomeip at build time. Multiple backends can be installed simultaneously and switched as needed.
+- **DDS backend selection** — Choose between CycloneDDS, FastDDS, vsomeip, or Adaptive AUTOSAR at build time. Multiple backends can be installed simultaneously and switched as needed.
 - **Minimal dependencies** — Depends only on a DDS library and yaml-cpp, resulting in fast builds.
 - **Multi-platform** — Supports Linux (Ubuntu/Debian) and QNX 8.0.
 - **Includes tf2 / tf2_ros** — Bundled coordinate transformation support.
@@ -30,6 +30,7 @@ lwrcl provides an API compatible with ROS 2's rclcpp. It supports **CycloneDDS**
 | **CycloneDDS** | Eclipse Foundation open-source implementation. Lightweight. |
 | **FastDDS** | By eProsima. Rich QoS options. |
 | **vsomeip** | COVESA SOME/IP implementation. Automotive-grade transport without DDS runtime dependency. |
+| **Adaptive AUTOSAR** | `ara::com`-based backend (Adaptive-AUTOSAR integration) running on CycloneDDS. |
 
 ---
 
@@ -66,7 +67,7 @@ lwrcl provides an API compatible with ROS 2's rclcpp. It supports **CycloneDDS**
 
 - CMake 3.16.3 or later
 - C++14-compatible compiler
-- Communication backend (CycloneDDS, FastDDS, or vsomeip)
+- Communication backend (CycloneDDS, FastDDS, vsomeip, or Adaptive AUTOSAR)
 - yaml-cpp (included as a submodule)
 - Boost (required for vsomeip backend)
 
@@ -77,10 +78,10 @@ lwrcl provides an API compatible with ROS 2's rclcpp. It supports **CycloneDDS**
 All build scripts follow this pattern:
 
 ```
-./build_<target>.sh <fastdds|cyclonedds|vsomeip> [install|clean]
+./build_<target>.sh <fastdds|cyclonedds|vsomeip|adaptive-autosar> [install|clean]
 ```
 
-- 1st argument: Communication backend (`fastdds`, `cyclonedds`, or `vsomeip`)
+- 1st argument: Communication backend (`fastdds`, `cyclonedds`, `vsomeip`, or `adaptive-autosar`)
 - 2nd argument: `install` to build & install, `clean` to remove build directory
 
 ### Prerequisites
@@ -103,14 +104,14 @@ Install the backend you want to use. You may install multiple backends without i
 **CycloneDDS:**
 
 ```bash
-./scripts/install_cyclone_dds.sh
+./scripts/install_cyclonedds.sh
 source ~/.bashrc
 ```
 
 **FastDDS (Ubuntu/Debian):**
 
 ```bash
-./scripts/install_fast_dds_ubuntu_debian.sh
+./scripts/install_fast_dds.sh
 source ~/.bashrc
 ```
 
@@ -123,6 +124,12 @@ source ~/.bashrc
 ```
 
 > vsomeip requires Boost and CycloneDDS (for the `idlc` code generator at build time only). Install CycloneDDS first, then run `install_vsomeip.sh`. The vsomeip backend does **not** depend on a DDS runtime — it uses CDR serialization extracted from cyclonedds-cxx as a standalone static library.
+
+**Adaptive AUTOSAR (ara::com):**
+
+- Install Adaptive AUTOSAR AP runtime to `/opt/autosar_ap` (for example with [`Adaptive-AUTOSAR`](https://github.com/tatsuyai713/Adaptive-AUTOSAR)).
+- CycloneDDS is still required as the DDS runtime backend used by `ara::com`.
+- Build with `adaptive-autosar` backend (see below).
 
 ### 3. Build Support Libraries
 
@@ -154,6 +161,19 @@ Built binaries are placed in `apps/install-fastdds/`.
 
 > **To use CycloneDDS, replace `fastdds` with `cyclonedds` in the commands above.**
 > **To use vsomeip, replace `fastdds` with `vsomeip` in the commands above.**
+> **For Adaptive AUTOSAR, run the backend-specific steps below instead of `build_libraries.sh`.**
+
+### Adaptive AUTOSAR Build Flow
+
+Adaptive AUTOSAR backend uses `ara::com` APIs and does not require `build_libraries.sh`.
+
+```bash
+./build_data_types.sh adaptive-autosar install
+./build_lwrcl.sh adaptive-autosar install
+./build_apps.sh adaptive-autosar install
+```
+
+Built sample binaries are placed in `apps/install-adaptive-autosar/`.
 
 ### Cleaning Build Directories
 
@@ -161,7 +181,7 @@ Built binaries are placed in `apps/install-fastdds/`.
 ./build_lwrcl.sh fastdds clean
 ```
 
-> Build directories are separated by backend (`build-fastdds` / `build-cyclonedds` / `build-vsomeip`). Switching backends does not require cleaning.
+> Build directories are separated by backend (`build-fastdds` / `build-cyclonedds` / `build-vsomeip` / `build-adaptive-autosar`). Switching backends does not require cleaning.
 
 ### Installation Paths
 
@@ -170,6 +190,49 @@ Built binaries are placed in `apps/install-fastdds/`.
 | FastDDS | `/opt/fast-dds` | `/opt/fast-dds-libs` |
 | CycloneDDS | `/opt/cyclonedds` | `/opt/cyclonedds-libs` |
 | vsomeip | `/opt/vsomeip` | `/opt/vsomeip-libs` |
+| Adaptive AUTOSAR | `/opt/autosar_ap` | `/opt/autosar-ap-libs` |
+
+---
+
+## CycloneDDS Zero-Copy (iceoryx)
+
+For CycloneDDS backend, lwrcl uses native writer-loan/read-loan APIs when available and falls back safely when loaning is unavailable.
+
+To enable SHM zero-copy transport with iceoryx:
+
+```bash
+./scripts/install_iceoryx.sh
+./scripts/install_cyclonedds.sh --enable-shm
+export LD_LIBRARY_PATH=/opt/iceoryx/lib:/opt/cyclonedds/lib:/opt/cyclonedds-libs/lib:${LD_LIBRARY_PATH}
+export CYCLONEDDS_URI=file:///opt/cyclonedds/etc/cyclonedds-lwrcl.xml
+iox-roudi
+```
+
+`install_iceoryx.sh` applies a container-safe ACL fallback by default (if `/dev/shm` ACL is unsupported).  
+If you need strict ACL enforcement, reinstall with:
+
+```bash
+./scripts/install_iceoryx.sh --force --strict-acl
+```
+
+Container-side setting (preferred if host supports tmpfs ACL):
+
+```bash
+docker run ... \
+  --tmpfs /dev/shm:rw,nosuid,nodev,noexec,size=4g,mode=1777,acl \
+  <image>
+```
+
+```yaml
+services:
+  app:
+    tmpfs:
+      - /dev/shm:rw,nosuid,nodev,noexec,size=4g,mode=1777,acl
+```
+
+If the host kernel/filesystem does not support tmpfs POSIX ACL, container settings alone cannot enable ACL.
+
+Then build and run with `cyclonedds` backend (`example_zero_copy_pub` / `example_zero_copy_sub`).
 
 ---
 
@@ -178,18 +241,43 @@ Built binaries are placed in `apps/install-fastdds/`.
 Set up QNX SDP environment variables (`QNX_TARGET`, etc.) before building.
 
 ```bash
+source ~/qnx803/qnxsdp-env.sh
+# Optional (default: aarch64le)
+export AUTOSAR_QNX_ARCH=aarch64le
+```
+
+FastDDS/CycloneDDS backends:
+
+```bash
 ./build_libraries_qnx.sh <fastdds|cyclonedds> install
 ./build_data_types_qnx.sh <fastdds|cyclonedds> install
 ./build_lwrcl_qnx.sh <fastdds|cyclonedds> install
 ./build_apps_qnx.sh <fastdds|cyclonedds> install
 ```
 
-QNX installation paths:
+Adaptive AUTOSAR backend (`adaptive-autosar`):
 
-| Backend | DDS | lwrcl |
-|---------|-----|-------|
+```bash
+# 1) Build QNX middleware + AUTOSAR AP runtime (Adaptive-AUTOSAR repository)
+cd ../Adaptive-AUTOSAR
+./qnx/scripts/build_libraries_qnx.sh all install
+./qnx/scripts/build_autosar_ap_qnx.sh install
+
+# 2) Build lwrcl with adaptive-autosar backend
+cd ../lwrcl-unified
+./build_libraries_qnx.sh adaptive-autosar install
+./build_data_types_qnx.sh adaptive-autosar install
+./build_lwrcl_qnx.sh adaptive-autosar install
+./build_apps_qnx.sh adaptive-autosar install
+```
+
+QNX default installation paths:
+
+| Backend | Runtime/Middleware | lwrcl |
+|---------|--------------------|-------|
 | FastDDS | `/opt/qnx/fast-dds` | `/opt/qnx/fast-dds-libs` |
-| CycloneDDS | `/opt/qnx/cyclonedds` | `/opt/qnx/cyclonedds-libs` |
+| CycloneDDS | `/opt/qnx/cyclonedds` (+ iceoryx: `/opt/qnx/iceoryx`) | `/opt/qnx/cyclonedds-libs` |
+| Adaptive AUTOSAR | AUTOSAR AP: `/opt/qnx/autosar_ap/aarch64le`, CycloneDDS: `/opt/qnx/cyclonedds` | `/opt/qnx/autosar-ap-libs` (includes `yaml-cpp` via `build_libraries_qnx.sh adaptive-autosar`) |
 
 ---
 
@@ -204,6 +292,10 @@ lwrcl/
 │   │   ├── tf2_ros/          # tf2 ROS integration
 │   │   └── lwrcl_ffi/        # Dart/Flutter FFI
 │   ├── cyclonedds/            # CycloneDDS implementation
+│   │   ├── lwrcl/
+│   │   ├── tf2/
+│   │   └── tf2_ros/
+│   ├── adaptive-autosar/       # Adaptive AUTOSAR (ara::com) implementation
 │   │   ├── lwrcl/
 │   │   ├── tf2/
 │   │   └── tf2_ros/

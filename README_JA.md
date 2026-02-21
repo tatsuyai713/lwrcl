@@ -8,7 +8,7 @@
 
 **ROS 2 の rclcpp に似た API を持つ、軽量な DDS 通信ライブラリ**
 
-lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ライブラリです。通信バックエンドとして **CycloneDDS**、**FastDDS**、**vsomeip (SOME/IP)** に対応しており、ROS 2 をフルインストールしなくても ROS 2 ノードとトピック・サービス通信を行えます。
+lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ライブラリです。通信バックエンドとして **CycloneDDS**、**FastDDS**、**vsomeip (SOME/IP)**、**Adaptive AUTOSAR (ara::com)** に対応しており、ROS 2 をフルインストールしなくても ROS 2 ノードとトピック・サービス通信を行えます。
 
 ---
 
@@ -16,7 +16,7 @@ lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ラ�
 
 - **rclcpp 互換 API** — `rclcpp` 名前空間を使用しているため、既存の ROS 2 コードを少ない変更で移植できます。`RCLCPP_INFO` / `RCLCPP_WARN` などのログマクロも利用可能です。
 - **ROS 2 との相互通信** — ROS 2 ノードと同じ DDS ドメイン上でトピック・サービスを直接やり取りできます。
-- **DDS バックエンド選択** — CycloneDDS、FastDDS、vsomeip をビルド時に選択できます。複数同時にインストールしておき、用途に応じて切り替えることも可能です。
+- **DDS バックエンド選択** — CycloneDDS、FastDDS、vsomeip、Adaptive AUTOSAR をビルド時に選択できます。複数同時にインストールしておき、用途に応じて切り替えることも可能です。
 - **依存関係が少ない** — DDS ライブラリと yaml-cpp のみに依存しており、ビルドが高速です。
 - **マルチプラットフォーム** — Linux (Ubuntu/Debian)、QNX 8.0 に対応しています。
 - **tf2 / tf2_ros 同梱** — 座標変換の基本機能を同梱しています。
@@ -30,6 +30,7 @@ lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ラ�
 | **CycloneDDS** | Eclipse Foundation のオープンソース実装。軽量。 |
 | **FastDDS** | eProsima 製。QoS オプションが豊富。 |
 | **vsomeip** | COVESA の SOME/IP 実装。DDS ランタイム不要の車載グレード通信。 |
+| **Adaptive AUTOSAR** | `ara::com` ベースのバックエンド（Adaptive-AUTOSAR 連携）。 |
 
 ---
 
@@ -66,7 +67,7 @@ lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ラ�
 
 - CMake 3.16.3 以上
 - C++14 対応コンパイラ
-- 通信バックエンド（CycloneDDS、FastDDS、または vsomeip）
+- 通信バックエンド（CycloneDDS、FastDDS、vsomeip、または Adaptive AUTOSAR）
 - yaml-cpp（サブモジュールとして同梱）
 - Boost（vsomeip バックエンド使用時に必要）
 
@@ -77,10 +78,10 @@ lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ラ�
 すべてのビルドスクリプトは以下の形式で実行します:
 
 ```
-./build_<target>.sh <fastdds|cyclonedds|vsomeip> [install|clean]
+./build_<target>.sh <fastdds|cyclonedds|vsomeip|adaptive-autosar> [install|clean]
 ```
 
-- 第 1 引数: 通信バックエンド（`fastdds`、`cyclonedds`、または `vsomeip`）
+- 第 1 引数: 通信バックエンド（`fastdds`、`cyclonedds`、`vsomeip`、または `adaptive-autosar`）
 - 第 2 引数: `install` でビルド＆インストール、`clean` でビルドディレクトリ削除
 
 ### 前提条件
@@ -103,14 +104,14 @@ cd lwrcl
 **CycloneDDS:**
 
 ```bash
-./scripts/install_cyclone_dds.sh
+./scripts/install_cyclonedds.sh
 source ~/.bashrc
 ```
 
 **FastDDS (Ubuntu/Debian):**
 
 ```bash
-./scripts/install_fast_dds_ubuntu_debian.sh
+./scripts/install_fast_dds.sh
 source ~/.bashrc
 ```
 
@@ -123,6 +124,12 @@ source ~/.bashrc
 ```
 
 > vsomeip は Boost と CycloneDDS（ビルド時の `idlc` コード生成ツール用のみ）が必要です。先に CycloneDDS をインストールしてから `install_vsomeip.sh` を実行してください。vsomeip バックエンドは DDS ランタイムに**依存しません** — cyclonedds-cxx から抽出した CDR シリアライゼーションをスタンドアロンの静的ライブラリとして使用します。
+
+**Adaptive AUTOSAR (ara::com):**
+
+- Adaptive AUTOSAR AP ランタイムを `/opt/autosar_ap` に導入します（例: [`Adaptive-AUTOSAR`](https://github.com/tatsuyai713/Adaptive-AUTOSAR)）。
+- `ara::com` の内部DDSとして CycloneDDS も必要です。
+- ビルドは `adaptive-autosar` バックエンドで実行します（下記）。
 
 ### 3. サポートライブラリのビルド
 
@@ -154,6 +161,19 @@ ROS 2 互換のメッセージ型（`std_msgs`, `sensor_msgs`, `geometry_msgs` �
 
 > **CycloneDDS を使う場合は、上記コマンドの `fastdds` を `cyclonedds` に置き換えてください。**
 > **vsomeip を使う場合は、上記コマンドの `fastdds` を `vsomeip` に置き換えてください。**
+> **Adaptive AUTOSAR の場合は `build_libraries.sh` を使わず、以下の専用手順を実行してください。**
+
+### Adaptive AUTOSAR バックエンドのビルド手順
+
+Adaptive AUTOSAR バックエンドは `ara::com` API を使用するため、`build_libraries.sh` は不要です。
+
+```bash
+./build_data_types.sh adaptive-autosar install
+./build_lwrcl.sh adaptive-autosar install
+./build_apps.sh adaptive-autosar install
+```
+
+ビルド済みバイナリは `apps/install-adaptive-autosar/` に配置されます。
 
 ### ビルドディレクトリのクリーン
 
@@ -161,7 +181,7 @@ ROS 2 互換のメッセージ型（`std_msgs`, `sensor_msgs`, `geometry_msgs` �
 ./build_lwrcl.sh fastdds clean
 ```
 
-> ビルドディレクトリはバックエンドごとに分離されています（`build-fastdds` / `build-cyclonedds` / `build-vsomeip`）。バックエンドを切り替えても再クリーンは不要です。
+> ビルドディレクトリはバックエンドごとに分離されています（`build-fastdds` / `build-cyclonedds` / `build-vsomeip` / `build-adaptive-autosar`）。バックエンドを切り替えても再クリーンは不要です。
 
 ### インストール先
 
@@ -170,6 +190,49 @@ ROS 2 互換のメッセージ型（`std_msgs`, `sensor_msgs`, `geometry_msgs` �
 | FastDDS | `/opt/fast-dds` | `/opt/fast-dds-libs` |
 | CycloneDDS | `/opt/cyclonedds` | `/opt/cyclonedds-libs` |
 | vsomeip | `/opt/vsomeip` | `/opt/vsomeip-libs` |
+| Adaptive AUTOSAR | `/opt/autosar_ap` | `/opt/autosar-ap-libs` |
+
+---
+
+## CycloneDDS の Zero Copy (iceoryx)
+
+CycloneDDS バックエンドでは、lwrcl は利用可能な場合に native の writer-loan/read-loan API を使用し、利用できない場合は安全にフォールバックします。
+
+iceoryx SHM 転送によるゼロコピーを有効化するには:
+
+```bash
+./scripts/install_iceoryx.sh
+./scripts/install_cyclonedds.sh --enable-shm
+export LD_LIBRARY_PATH=/opt/iceoryx/lib:/opt/cyclonedds/lib:/opt/cyclonedds-libs/lib:${LD_LIBRARY_PATH}
+export CYCLONEDDS_URI=file:///opt/cyclonedds/etc/cyclonedds-lwrcl.xml
+iox-roudi
+```
+
+`install_iceoryx.sh` は、`/dev/shm` が ACL 非対応のコンテナ環境でも起動できるように、デフォルトで ACL フォールバックを適用します。  
+厳密な ACL 強制が必要な場合は、以下で再インストールしてください。
+
+```bash
+./scripts/install_iceoryx.sh --force --strict-acl
+```
+
+コンテナ設定で対応する場合（ホストが tmpfs ACL 対応なら推奨）:
+
+```bash
+docker run ... \
+  --tmpfs /dev/shm:rw,nosuid,nodev,noexec,size=4g,mode=1777,acl \
+  <image>
+```
+
+```yaml
+services:
+  app:
+    tmpfs:
+      - /dev/shm:rw,nosuid,nodev,noexec,size=4g,mode=1777,acl
+```
+
+ホストカーネル/ファイルシステム側が tmpfs の POSIX ACL をサポートしていない場合、コンテナ設定だけでは ACL を有効化できません。
+
+その後 `cyclonedds` バックエンドでビルドし、`example_zero_copy_pub` / `example_zero_copy_sub` を実行してください。
 
 ---
 
@@ -178,18 +241,42 @@ ROS 2 互換のメッセージ型（`std_msgs`, `sensor_msgs`, `geometry_msgs` �
 QNX SDP の環境変数（`QNX_TARGET` 等）を事前に設定してください。
 
 ```bash
+source ~/qnx803/qnxsdp-env.sh
+# 任意（デフォルト: aarch64le）
+export AUTOSAR_QNX_ARCH=aarch64le
+```
+
+FastDDS/CycloneDDS バックエンド:
+
+```bash
 ./build_libraries_qnx.sh <fastdds|cyclonedds> install
 ./build_data_types_qnx.sh <fastdds|cyclonedds> install
 ./build_lwrcl_qnx.sh <fastdds|cyclonedds> install
 ./build_apps_qnx.sh <fastdds|cyclonedds> install
 ```
 
-QNX でのインストール先:
+Adaptive AUTOSAR バックエンド（`adaptive-autosar`）:
 
-| バックエンド | DDS | lwrcl |
-|-------------|-----|-------|
+```bash
+# 1) QNX向けミドルウェア + AUTOSAR AP ランタイムをビルド（Adaptive-AUTOSAR リポジトリ）
+cd ../Adaptive-AUTOSAR
+./qnx/scripts/build_libraries_qnx.sh all install
+./qnx/scripts/build_autosar_ap_qnx.sh install
+
+# 2) lwrcl を adaptive-autosar でビルド
+cd ../lwrcl-unified
+./build_data_types_qnx.sh adaptive-autosar install
+./build_lwrcl_qnx.sh adaptive-autosar install
+./build_apps_qnx.sh adaptive-autosar install
+```
+
+QNX の既定インストール先:
+
+| バックエンド | ランタイム/ミドルウェア | lwrcl |
+|-------------|-------------------------|-------|
 | FastDDS | `/opt/qnx/fast-dds` | `/opt/qnx/fast-dds-libs` |
-| CycloneDDS | `/opt/qnx/cyclonedds` | `/opt/qnx/cyclonedds-libs` |
+| CycloneDDS | `/opt/qnx/cyclonedds`（+ iceoryx: `/opt/qnx/iceoryx`） | `/opt/qnx/cyclonedds-libs` |
+| Adaptive AUTOSAR | AUTOSAR AP: `/opt/qnx/autosar_ap/aarch64le`、CycloneDDS: `/opt/qnx/cyclonedds` | `/opt/qnx/autosar-ap-libs` |
 
 ---
 
@@ -204,6 +291,10 @@ lwrcl/
 │   │   ├── tf2_ros/          # tf2 の ROS 連携
 │   │   └── lwrcl_ffi/        # Dart/Flutter 用 FFI
 │   ├── cyclonedds/            # CycloneDDS 版実装
+│   │   ├── lwrcl/
+│   │   ├── tf2/
+│   │   └── tf2_ros/
+│   ├── adaptive-autosar/       # Adaptive AUTOSAR (ara::com) 版実装
 │   │   ├── lwrcl/
 │   │   ├── tf2/
 │   │   └── tf2_ros/

@@ -159,20 +159,32 @@ namespace lwrcl
       return "";
     }
 
-    // Zero-copy API: borrow a loaned message
-    // Returns a LoanedMessage that can be used for zero-copy publishing.
-    // When CycloneDDS is built with iceoryx SHM support, the transport
-    // layer uses shared memory automatically; at the API level the message
-    // is heap-allocated (the same fallback pattern used by FastDDS).
+    // Zero-copy API: borrow a loaned message.
+    // Tries native CycloneDDS writer-loan first, then falls back to heap.
     LoanedMessage<T> borrow_loaned_message();
 
     // Check if the publisher can loan messages (zero-copy support)
-    // Returns true — the loaned-message API is always available.
-    // Actual shared-memory transport depends on whether CycloneDDS was
-    // built with iceoryx (ENABLE_SHM=ON) and iox-roudi is running.
+    // API is always available (native loan or safe fallback).
     bool can_loan_messages() const
     {
       return true;
+    }
+
+    // Check whether native CycloneDDS writer loan is currently available.
+    bool is_native_loan_supported() const
+    {
+      if (!writer_)
+      {
+        return false;
+      }
+      try
+      {
+        return writer_->delegate()->is_loan_supported();
+      }
+      catch (...)
+      {
+        return false;
+      }
     }
 
     // Get the data writer (for internal use)
@@ -207,10 +219,8 @@ namespace lwrcl
   // =========================================================================
   // LoanedMessage — zero-copy publishing helper (CycloneDDS backend)
   //
-  // The message is heap-allocated because CycloneDDS C++ binding serialises
-  // internally, so application-level loaning doesn't skip the serialisation
-  // step.  The real zero-copy benefit comes from the iceoryx SHM transport
-  // which operates transparently at the DDS transport layer.
+  // Uses native CycloneDDS writer-loan when available (iceoryx SHM enabled
+  // and compatible type), otherwise falls back to heap allocation.
   // =========================================================================
   template <typename T>
   class LoanedMessage
@@ -218,10 +228,29 @@ namespace lwrcl
   public:
     using MessageType = T;
 
-    // Constructor — allocates a message on the heap
+    // Constructor — tries native writer-loan, falls back to heap allocation.
     explicit LoanedMessage(Publisher<T> &publisher)
-        : publisher_(&publisher), message_(new T()), is_valid_(true), loaned_(false)
+        : publisher_(&publisher), message_(nullptr), is_valid_(false), loaned_(false)
     {
+      if (publisher_ != nullptr && publisher_->get_writer() != nullptr &&
+          publisher_->is_native_loan_supported())
+      {
+        try
+        {
+          message_ = &publisher_->get_writer()->delegate()->loan_sample();
+          is_valid_ = true;
+          loaned_ = true;
+          return;
+        }
+        catch (...)
+        {
+          // Fallback below.
+        }
+      }
+
+      message_ = new T();
+      is_valid_ = true;
+      loaned_ = false;
     }
 
     // Move constructor
@@ -283,8 +312,7 @@ namespace lwrcl
       return msg;
     }
 
-    // Check if this was a true loan (vs heap allocation fallback)
-    // CycloneDDS always uses heap allocation at the API level.
+    // Check if this is a native CycloneDDS loan (vs heap fallback).
     bool is_loaned() const { return loaned_; }
 
     // Get the publisher
@@ -298,6 +326,17 @@ namespace lwrcl
         if (!loaned_)
         {
           delete message_;
+        }
+        else if (publisher_ != nullptr && publisher_->get_writer() != nullptr)
+        {
+          try
+          {
+            publisher_->get_writer()->delegate()->return_loan(*message_);
+          }
+          catch (...)
+          {
+            // Best-effort release in destructor path.
+          }
         }
         message_ = nullptr;
       }
@@ -326,10 +365,59 @@ namespace lwrcl
     }
 
     T *msg = loaned_message.release_ownership();
-    if (writer_) {
-      writer_->write(*msg);
+    if (writer_ && msg)
+    {
+      try
+      {
+        writer_->write(*msg);
+      }
+      catch (...)
+      {
+        if (loaned_message.is_loaned())
+        {
+          try
+          {
+            writer_->delegate()->return_loan(*msg);
+          }
+          catch (...)
+          {
+            // Best-effort release before rethrow.
+          }
+        }
+        else
+        {
+          delete msg;
+        }
+        throw;
+      }
     }
-    delete msg;
+    else if (msg)
+    {
+      if (loaned_message.is_loaned())
+      {
+        try
+        {
+          if (writer_)
+          {
+            writer_->delegate()->return_loan(*msg);
+          }
+        }
+        catch (...)
+        {
+          // Best-effort cleanup.
+        }
+      }
+      else
+      {
+        delete msg;
+      }
+      throw std::runtime_error("Failed to publish loaned message: DataWriter is null");
+    }
+
+    if (!loaned_message.is_loaned())
+    {
+      delete msg;
+    }
   }
 } // namespace lwrcl
 
