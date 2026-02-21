@@ -31,15 +31,16 @@
 #include <string>
 #include <utility>
 
-#include "tf2/time_cache.h"
-#include "tf2/exceptions.h"
+#include "tf2/time_cache.hpp"
+#include "tf2/exceptions.hpp"
 
-#include "tf2/LinearMath/Transform.h"
+#include "tf2/LinearMath/Transform.hpp"
 
 bool tf2::StaticCache::getData(
   tf2::TimePoint time,
-  tf2::TransformStorage & data_out, std::string * error_str)
+  tf2::TransformStorage & data_out, std::string * error_str, TF2Error * error_code)
 {
+  (void)error_code;
   (void)error_str;
   data_out = storage_;
   data_out.stamp_ = time;
@@ -56,9 +57,12 @@ void tf2::StaticCache::clearList() {}
 
 unsigned tf2::StaticCache::getListLength() {return 1;}
 
-tf2::CompactFrameID tf2::StaticCache::getParent(tf2::TimePoint time, std::string * error_str)
+tf2::CompactFrameID tf2::StaticCache::getParent(
+  tf2::TimePoint time, std::string * error_str,
+  TF2Error * error_code)
 {
   (void)time;
+  (void)error_code;
   (void)error_str;
   return storage_.frame_id_;
 }

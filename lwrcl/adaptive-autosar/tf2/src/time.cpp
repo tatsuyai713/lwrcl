@@ -32,7 +32,9 @@
 #include <stdexcept>
 #include <string>
 
-#include "tf2/time.h"
+#include "rcutils/snprintf.h"
+#include "rcutils/strerror.h"
+#include "tf2/time.hpp"
 
 tf2::TimePoint tf2::get_now()
 {
@@ -41,6 +43,9 @@ tf2::TimePoint tf2::get_now()
 
 tf2::Duration tf2::durationFromSec(double t_sec)
 {
+  if (t_sec > std::numeric_limits<int32_t>::max() || t_sec < std::numeric_limits<int32_t>::min()) {
+    throw std::overflow_error("Input t_sec is too large or too small for tf2::Duration");
+  }
   int32_t sec, nsec;
   sec = static_cast<int32_t>(floor(t_sec));
   nsec = static_cast<int32_t>(std::round((t_sec - sec) * 1e9));
@@ -82,9 +87,10 @@ std::string tf2::displayTimePoint(const tf2::TimePoint & stamp)
 
   // Determine how many bytes to allocate for the string. If successful, buff_size does not count
   // null terminating character. http://www.cplusplus.com/reference/cstdio/snprintf/
-  int buff_size = snprintf(nullptr, 0, format_str, current_time);
+  int buff_size = rcutils_snprintf(nullptr, 0, format_str, current_time);
   if (buff_size < 0) {
-    char errmsg[200] = "error";
+    char errmsg[200];
+    rcutils_strerror(errmsg, sizeof(errmsg));
     throw std::runtime_error(errmsg);
   }
 
@@ -93,10 +99,11 @@ std::string tf2::displayTimePoint(const tf2::TimePoint & stamp)
   char * buffer = new char[buff_size];
 
   // Write to the string. buffer size must accommodate the null-terminating character
-  int bytes_written = sprintf(buffer, format_str, current_time);
+  int bytes_written = rcutils_snprintf(buffer, buff_size, format_str, current_time);
   if (bytes_written < 0) {
     delete[] buffer;
-    char errmsg[200] = "error";
+    char errmsg[200];
+    rcutils_strerror(errmsg, sizeof(errmsg));
     throw std::runtime_error(errmsg);
   }
   std::string result = std::string(buffer);

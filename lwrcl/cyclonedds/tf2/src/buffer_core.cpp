@@ -38,13 +38,15 @@
 #include <utility>
 #include <vector>
 
-#include "tf2/buffer_core.h"
-#include "tf2/time_cache.h"
-#include "tf2/exceptions.h"
+#include <iostream>
 
-#include "tf2/LinearMath/Quaternion.h"
-#include "tf2/LinearMath/Transform.h"
-#include "tf2/LinearMath/Vector3.h"
+#include "tf2/buffer_core.hpp"
+#include "tf2/time_cache.hpp"
+#include "tf2/exceptions.hpp"
+
+#include "tf2/LinearMath/Quaternion.hpp"
+#include "tf2/LinearMath/Transform.hpp"
+#include "tf2/LinearMath/Vector3.hpp"
 
 #include "builtin_interfaces/msg/time.hpp"
 #include "geometry_msgs/msg/transform.hpp"
@@ -89,7 +91,10 @@ void fillOrWarnMessageForInvalidFrame(
   if (error_msg != nullptr) {
     *error_msg = s;
   } else {
-    printf("%s\n", s.c_str());
+    static constexpr std::chrono::milliseconds warning_interval =
+      std::chrono::milliseconds(2500);
+
+    RCUTILS_LOG_WARN_THROTTLE(RCUTILS_STEADY_TIME, warning_interval.count(), "%s", s.c_str());
   }
 }
 
@@ -205,24 +210,24 @@ bool BufferCore::setTransformImpl(
 
   bool error_exists = false;
   if (stripped_child_frame_id == stripped_frame_id) {
-    printf(
+    RCUTILS_LOG_ERROR(
       "TF_SELF_TRANSFORM: Ignoring transform from authority \"%s\" with frame_id and  "
-      "child_frame_id \"%s\" because they are the same\n",
+      "child_frame_id \"%s\" because they are the same",
       authority.c_str(), stripped_child_frame_id.c_str());
     error_exists = true;
   }
 
   if (stripped_child_frame_id.empty()) {
-    printf(
+    RCUTILS_LOG_ERROR(
       "TF_NO_CHILD_FRAME_ID: Ignoring transform from authority \"%s\" because child_frame_id not"
-      " set \n", authority.c_str());
+      " set ", authority.c_str());
     error_exists = true;
   }
 
   if (stripped_frame_id.empty()) {
-    printf(
+    RCUTILS_LOG_ERROR(
       "TF_NO_FRAME_ID: Ignoring transform with child_frame_id \"%s\"  from authority \"%s\" "
-      "because frame_id not set\n", stripped_child_frame_id.c_str(), authority.c_str());
+      "because frame_id not set", stripped_child_frame_id.c_str(), authority.c_str());
     error_exists = true;
   }
 
@@ -231,9 +236,9 @@ bool BufferCore::setTransformImpl(
     std::isnan(transform_in.getRotation().x()) || std::isnan(transform_in.getRotation().y()) ||
     std::isnan(transform_in.getRotation().z()) || std::isnan(transform_in.getRotation().w()))
   {
-    printf(
+    RCUTILS_LOG_ERROR(
       "TF_NAN_INPUT: Ignoring transform for child_frame_id \"%s\" from authority \"%s\" because"
-      " of a nan value in the transform (%f %f %f) (%f %f %f %f)\n",
+      " of a nan value in the transform (%f %f %f) (%f %f %f %f)",
       stripped_child_frame_id.c_str(), authority.c_str(),
       transform_in.getOrigin().x(), transform_in.getOrigin().y(), transform_in.getOrigin().z(),
       transform_in.getRotation().x(), transform_in.getRotation().y(),
@@ -250,9 +255,9 @@ bool BufferCore::setTransformImpl(
     QUATERNION_NORMALIZATION_TOLERANCE;
 
   if (!valid) {
-    printf(
+    RCUTILS_LOG_ERROR(
       "TF_DENORMALIZED_QUATERNION: Ignoring transform for child_frame_id \"%s\" from authority"
-      " \"%s\" because of an invalid quaternion in the transform (%f %f %f %f)\n",
+      " \"%s\" because of an invalid quaternion in the transform (%f %f %f %f)",
       stripped_child_frame_id.c_str(), authority.c_str(),
       transform_in.getRotation().x(), transform_in.getRotation().y(),
       transform_in.getRotation().z(), transform_in.getRotation().w());
@@ -288,9 +293,9 @@ bool BufferCore::setTransformImpl(
       frame_authority_[frame_number] = authority;
     } else {
       std::string stamp_str = displayTimePoint(stamp);
-      printf(
+      RCUTILS_LOG_WARN(
         "TF_OLD_DATA ignoring data from the past for frame %s at time %s according to authority"
-        " %s\nPossible reasons are listed at http://wiki.ros.org/tf/Errors%%20explained\n",
+        " %s\nPossible reasons are listed at http://wiki.ros.org/tf/Errors%%20explained",
         stripped_child_frame_id.c_str(), stamp_str.c_str(), authority.c_str());
       return false;
     }
@@ -350,6 +355,8 @@ tf2::TF2Error BufferCore::walkToTopParent(
   CompactFrameID top_parent = frame;
   uint32_t depth = 0;
 
+  TF2Error error_code = TF2Error::TF2_NO_ERROR;
+  TF2Error extrapolation_error_code = TF2Error::TF2_NO_ERROR;
   std::string extrapolation_error_string;
   bool extrapolation_might_have_occurred = false;
 
@@ -365,7 +372,9 @@ tf2::TF2Error BufferCore::walkToTopParent(
       break;
     }
 
-    CompactFrameID parent = f.gather(cache, time, &extrapolation_error_string);
+    CompactFrameID parent = f.gather(
+      cache, time, &extrapolation_error_string,
+      &extrapolation_error_code);
     if (parent == 0) {
       // Just break out here... there may still be a path from source -> target
       top_parent = frame;
@@ -411,7 +420,7 @@ tf2::TF2Error BufferCore::walkToTopParent(
       break;
     }
 
-    CompactFrameID parent = f.gather(cache, time, error_string);
+    CompactFrameID parent = f.gather(cache, time, error_string, &error_code);
     if (parent == 0) {
       if (error_string) {
         std::stringstream ss;
@@ -420,7 +429,7 @@ tf2::TF2Error BufferCore::walkToTopParent(
         *error_string = ss.str();
       }
 
-      return tf2::TF2Error::TF2_EXTRAPOLATION_ERROR;
+      return error_code;
     }
 
     // Early out... source frame is a direct parent of the target frame
@@ -456,7 +465,7 @@ tf2::TF2Error BufferCore::walkToTopParent(
           lookupFrameString(source_id) << "] to frame [" << lookupFrameString(target_id) << "]";
         *error_string = ss.str();
       }
-      return tf2::TF2Error::TF2_EXTRAPOLATION_ERROR;
+      return extrapolation_error_code;
     }
     createConnectivityErrorString(source_id, target_id, error_string);
     return tf2::TF2Error::TF2_CONNECTIVITY_ERROR;
@@ -503,9 +512,11 @@ struct TransformAccum
   {
   }
 
-  CompactFrameID gather(TimeCacheInterfacePtr cache, TimePoint time, std::string * error_string)
+  CompactFrameID gather(
+    TimeCacheInterfacePtr cache, TimePoint time,
+    std::string * error_string, TF2Error * error_code)
   {
-    if (!cache->getData(time, st, error_string)) {
+    if (!cache->getData(time, st, error_string, error_code)) {
       return 0;
     }
 
@@ -564,6 +575,123 @@ struct TransformAccum
   tf2::Quaternion result_quat;
   tf2::Vector3 result_vec;
 };
+
+geometry_msgs::msg::VelocityStamped BufferCore::lookupVelocity(
+  const std::string & tracking_frame, const std::string & observation_frame,
+  const TimePoint & time, const tf2::Duration & averaging_interval) const
+{
+  // ref point is origin of tracking_frame, ref_frame = obs_frame
+  return lookupVelocity(
+    tracking_frame, observation_frame, observation_frame, tf2::Vector3(
+      0, 0,
+      0), tracking_frame, time,
+    averaging_interval);
+}
+
+geometry_msgs::msg::VelocityStamped BufferCore::lookupVelocity(
+  const std::string & tracking_frame, const std::string & observation_frame,
+  const std::string & reference_frame, const tf2::Vector3 & reference_point,
+  const std::string & reference_point_frame,
+  const TimePoint & time, const tf2::Duration & averaging_interval) const
+{
+  tf2::TimePoint latest_time;
+  // TODO(anyone): This is incorrect, but better than nothing.  Really we want the latest time for
+  // any of the frames
+  getLatestCommonTime(
+    lookupFrameNumber(observation_frame),
+    lookupFrameNumber(tracking_frame),
+    latest_time,
+    0);
+
+  auto time_seconds = tf2::timeToSec(time);
+  auto averaging_interval_seconds = std::chrono::duration<double>(averaging_interval).count();
+
+  auto end_time =
+    std::min(time_seconds + averaging_interval_seconds * 0.5, tf2::timeToSec(latest_time));
+
+  auto start_time =
+    std::max(0.00001 + averaging_interval_seconds, end_time) - averaging_interval_seconds;
+  // correct for the possiblity that start time was truncated above.
+  auto corrected_averaging_interval = end_time - start_time;
+
+  tf2::Transform start, end;
+  TimePoint time_out;
+  lookupTransformImpl(
+    observation_frame, tracking_frame, tf2::timeFromSec(
+      start_time), start, time_out);
+  lookupTransformImpl(observation_frame, tracking_frame, tf2::timeFromSec(end_time), end, time_out);
+
+  auto temp = start.getBasis().inverse() * end.getBasis();
+  tf2::Quaternion quat_temp;
+  temp.getRotation(quat_temp);
+  auto o = start.getBasis() * quat_temp.getAxis();
+  auto ang = quat_temp.getAngle();
+
+  double delta_x = end.getOrigin().getX() - start.getOrigin().getX();
+  double delta_y = end.getOrigin().getY() - start.getOrigin().getY();
+  double delta_z = end.getOrigin().getZ() - start.getOrigin().getZ();
+
+  tf2::Vector3 twist_vel((delta_x) / corrected_averaging_interval,
+    (delta_y) / corrected_averaging_interval,
+    (delta_z) / corrected_averaging_interval);
+  tf2::Vector3 twist_rot = o * (ang / corrected_averaging_interval);
+
+  // correct for the position of the reference frame
+  tf2::Transform inverse;
+  lookupTransformImpl(
+    reference_frame, tracking_frame, tf2::timeFromSec(
+      time_seconds), inverse, time_out);
+  tf2::Vector3 out_rot = inverse.getBasis() * twist_rot;
+  tf2::Vector3 out_vel = inverse.getBasis() * twist_vel + inverse.getOrigin().cross(out_rot);
+
+  auto transform_point = [this](
+    const std::string & target_frame,
+    const std::string & source_frame,
+    const tf2::Vector3 & point_in,
+    double time_transform)
+    {
+      // transform point
+      tf2::Transform transform;
+      tf2::TimePoint time_out;
+      lookupTransformImpl(
+        target_frame, source_frame, tf2::timeFromSec(time_transform), transform, time_out);
+
+      tf2::Vector3 out;
+      out = transform * point_in;
+      return out;
+    };
+
+  // Rereference the twist about a new reference point
+  // Start by computing the original reference point in the reference frame:
+  tf2::Vector3 p = tf2::Vector3(0, 0, 0);
+  tf2::Vector3 rp_orig = transform_point(
+    reference_frame, tracking_frame, p, time_seconds);
+
+  tf2::Vector3 rp_desired = transform_point(
+    reference_frame, reference_point_frame, reference_point, time_seconds);
+
+  tf2::Vector3 delta = rp_desired - rp_orig;
+  out_vel = out_vel + out_rot * delta;
+
+  std::chrono::nanoseconds ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+    tf2::timeFromSec(start_time + averaging_interval_seconds * 0.5).time_since_epoch());
+  std::chrono::seconds s = std::chrono::duration_cast<std::chrono::seconds>(
+    tf2::timeFromSec(start_time + averaging_interval_seconds * 0.5).time_since_epoch());
+  geometry_msgs::msg::VelocityStamped velocity;
+  velocity.header().stamp().sec() = static_cast<int32_t>(s.count());
+  velocity.header().stamp().nanosec() = static_cast<uint32_t>(ns.count() % 1000000000ull);
+  velocity.header().frame_id() = reference_frame;
+  velocity.body_frame_id() = tracking_frame;
+
+  velocity.velocity().linear().x() = out_vel.x();
+  velocity.velocity().linear().y() = out_vel.y();
+  velocity.velocity().linear().z() = out_vel.z();
+  velocity.velocity().angular().x() = out_rot.x();
+  velocity.velocity().angular().y() = out_rot.y();
+  velocity.velocity().angular().z() = out_rot.z();
+
+  return velocity;
+}
 
 geometry_msgs::msg::TransformStamped
 BufferCore::lookupTransform(
@@ -660,12 +788,18 @@ void BufferCore::lookupTransformImpl(
     switch (retval) {
       case tf2::TF2Error::TF2_CONNECTIVITY_ERROR:
         throw ConnectivityException(error_string);
+      case tf2::TF2Error::TF2_BACKWARD_EXTRAPOLATION_ERROR:
+        throw BackwardExtrapolationException(error_string);
+      case tf2::TF2Error::TF2_FORWARD_EXTRAPOLATION_ERROR:
+        throw ForwardExtrapolationException(error_string);
+      case tf2::TF2Error::TF2_NO_DATA_FOR_EXTRAPOLATION_ERROR:
+        throw NoDataForExtrapolationException(error_string);
       case tf2::TF2Error::TF2_EXTRAPOLATION_ERROR:
         throw ExtrapolationException(error_string);
       case tf2::TF2Error::TF2_LOOKUP_ERROR:
         throw LookupException(error_string);
       default:
-        printf("Unknown error code: %d\n", retval);
+        RCUTILS_LOG_ERROR("Unknown error code: %u", static_cast<std::uint8_t>(retval));
         assert(0);
     }
   }
@@ -697,9 +831,11 @@ void BufferCore::lookupTransformImpl(
 
 struct CanTransformAccum
 {
-  CompactFrameID gather(TimeCacheInterfacePtr cache, TimePoint time, std::string * error_string)
+  CompactFrameID gather(
+    TimeCacheInterfacePtr cache, TimePoint time,
+    std::string * error_string, TF2Error * error_code)
   {
-    return cache->getParent(time, error_string);
+    return cache->getParent(time, error_string, error_code);
   }
 
   void accum(bool source)
@@ -1211,9 +1347,9 @@ void BufferCore::cancelTransformableRequest(TransformableRequestHandle handle)
   std::unique_lock<std::mutex> tr_lock(transformable_requests_mutex_);
   std::unique_lock<std::mutex> tc_lock(transformable_callbacks_mutex_);
 
-  V_TransformableRequest::iterator remove_it = std::remove_if(
+  V_TransformableRequest::iterator remove_it = std::stable_partition(
     transformable_requests_.begin(), transformable_requests_.end(),
-    [handle](TransformableRequest req) {return handle == req.request_handle;});
+    [handle](TransformableRequest req) {return handle != req.request_handle;});
   for (V_TransformableRequest::iterator it = remove_it; it != transformable_requests_.end(); ++it) {
     transformable_callbacks_.erase(it->cb_handle);
   }
@@ -1436,7 +1572,6 @@ void BufferCore::_chainAsVector(
 
   output.clear();  // empty vector
 
-  std::stringstream mstream;
   std::unique_lock<std::mutex> lock(frame_mutex_);
 
   TransformAccum accum;
@@ -1454,12 +1589,18 @@ void BufferCore::_chainAsVector(
     switch (retval) {
       case tf2::TF2Error::TF2_CONNECTIVITY_ERROR:
         throw ConnectivityException(error_string);
+      case tf2::TF2Error::TF2_BACKWARD_EXTRAPOLATION_ERROR:
+        throw BackwardExtrapolationException(error_string);
+      case tf2::TF2Error::TF2_FORWARD_EXTRAPOLATION_ERROR:
+        throw ForwardExtrapolationException(error_string);
+      case tf2::TF2Error::TF2_NO_DATA_FOR_EXTRAPOLATION_ERROR:
+        throw NoDataForExtrapolationException(error_string);
       case tf2::TF2Error::TF2_EXTRAPOLATION_ERROR:
         throw ExtrapolationException(error_string);
       case tf2::TF2Error::TF2_LOOKUP_ERROR:
         throw LookupException(error_string);
       default:
-        printf("Unknown error code: %d\n", retval);
+        RCUTILS_LOG_ERROR("Unknown error code: %u", static_cast<std::uint8_t>(retval));
         assert(0);
     }
   }
@@ -1474,12 +1615,18 @@ void BufferCore::_chainAsVector(
       switch (retval) {
         case tf2::TF2Error::TF2_CONNECTIVITY_ERROR:
           throw ConnectivityException(error_string);
+        case tf2::TF2Error::TF2_BACKWARD_EXTRAPOLATION_ERROR:
+          throw BackwardExtrapolationException(error_string);
+        case tf2::TF2Error::TF2_FORWARD_EXTRAPOLATION_ERROR:
+          throw ForwardExtrapolationException(error_string);
+        case tf2::TF2Error::TF2_NO_DATA_FOR_EXTRAPOLATION_ERROR:
+          throw NoDataForExtrapolationException(error_string);
         case tf2::TF2Error::TF2_EXTRAPOLATION_ERROR:
           throw ExtrapolationException(error_string);
         case tf2::TF2Error::TF2_LOOKUP_ERROR:
           throw LookupException(error_string);
         default:
-          printf("Unknown error code: %d\n", retval);
+          RCUTILS_LOG_ERROR("Unknown error code: %u", static_cast<std::uint8_t>(retval));
           assert(0);
       }
     }

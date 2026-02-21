@@ -9,6 +9,7 @@ JOBS=$(nproc 2>/dev/null || echo 4)
 
 if [ "$BACKEND" = "fastdds" ]; then
     DDS_PREFIX="/opt/fast-dds"
+    FASTDDS_GEN_PREFIX="${FASTDDS_GEN_PREFIX:-/opt/fast-dds-gen}"
     LWRCL_PREFIX="/opt/fast-dds-libs"
 elif [ "$BACKEND" = "cyclonedds" ]; then
     DDS_PREFIX="/opt/cyclonedds"
@@ -72,6 +73,11 @@ CMAKE_ARGS=(
 )
 
 if [ "$BACKEND" = "fastdds" ]; then
+    export PATH="${FASTDDS_GEN_PREFIX}/bin:${PATH}"
+    if ! command -v fastddsgen >/dev/null 2>&1; then
+        echo "fastddsgen not found. Set FASTDDS_GEN_PREFIX or install Fast DDS Gen (expected: ${FASTDDS_GEN_PREFIX}/bin/fastddsgen)."
+        exit 1
+    fi
     CMAKE_ARGS+=(
         -DCMAKE_SYSTEM_PREFIX_PATH="$DDS_PREFIX"
         -DCMAKE_PREFIX_PATH="$DDS_PREFIX"
