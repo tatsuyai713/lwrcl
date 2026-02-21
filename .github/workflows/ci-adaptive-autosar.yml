@@ -1,0 +1,118 @@
+name: CI (Adaptive AUTOSAR)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CYCLONEDDS_VERSION: "0.10.5"
+  ADAPTIVE_AUTOSAR_REF: "main"
+  DDS_PREFIX: /opt/cyclonedds
+  AUTOSAR_AP_PREFIX: /opt/autosar_ap
+  LWRCL_PREFIX: /opt/autosar-ap-libs
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake automake autoconf git curl \
+            libasio-dev libssl-dev libyaml-cpp-dev \
+            libboost-dev libopencv-dev \
+            python3 python3-pip
+
+      - name: Cache Cyclone DDS
+        id: cache-cyclonedds
+        uses: actions/cache@v4
+        with:
+          path: /opt/cyclonedds
+          key: cyclonedds-${{ env.CYCLONEDDS_VERSION }}-ubuntu2404-v2
+
+      - name: Build & install Cyclone DDS
+        if: steps.cache-cyclonedds.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/dds_build"
+          mkdir -p "$WORK" && cd "$WORK"
+
+          sudo mkdir -p $DDS_PREFIX
+
+          git clone https://github.com/eclipse-cyclonedds/cyclonedds.git --depth 1
+          cd cyclonedds && git fetch --tags && git checkout ${CYCLONEDDS_VERSION}
+          cmake -S . -B build \
+            -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX \
+            -DBUILD_SHARED_LIBS=ON \
+            -DENABLE_SHM=OFF
+          cmake --build build -j$(nproc)
+          sudo cmake --install build
+          cd "$WORK"
+
+          git clone https://github.com/eclipse-cyclonedds/cyclonedds-cxx.git --depth 1
+          cd cyclonedds-cxx && git fetch --tags && git checkout ${CYCLONEDDS_VERSION}
+          cmake -B build \
+            -DCMAKE_PREFIX_PATH=$DDS_PREFIX \
+            -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX \
+            -DBUILD_IDLCPP_GENERATOR=ON \
+            -DCYCLONEDDS_CXX_BLD_IDLCPP=ON \
+            -DENABLE_TOPIC_DISCOVERY=OFF \
+            -DDDSCXX_NO_STD_OPTIONAL=ON \
+            -DBUILD_SHARED_LIBS=ON
+          cmake --build build -j$(nproc)
+          sudo cmake --install build
+
+      - name: Cache Adaptive AUTOSAR runtime
+        id: cache-adaptive-autosar
+        uses: actions/cache@v4
+        with:
+          path: /opt/autosar_ap
+          key: adaptive-autosar-${{ env.ADAPTIVE_AUTOSAR_REF }}-cyclonedds-${{ env.CYCLONEDDS_VERSION }}-ubuntu2404-v1
+
+      - name: Build & install Adaptive AUTOSAR runtime
+        if: steps.cache-adaptive-autosar.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/adaptive_autosar_build"
+          mkdir -p "$WORK" && cd "$WORK"
+          git clone --depth 1 --branch ${ADAPTIVE_AUTOSAR_REF} https://github.com/tatsuyai713/Adaptive-AUTOSAR.git
+          cd Adaptive-AUTOSAR
+          ./scripts/build_and_install_autosar_ap.sh \
+            --prefix ${AUTOSAR_AP_PREFIX} \
+            --build-dir build-ci \
+            --without-vsomeip \
+            --without-iceoryx \
+            --cyclonedds-prefix ${DDS_PREFIX}
+
+      - name: Configure environment
+        run: |
+          echo "$DDS_PREFIX/bin" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=$DDS_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib" >> $GITHUB_ENV
+
+      - name: Build & install lwrcl (Adaptive AUTOSAR)
+        run: |
+          sudo ldconfig
+          ./build_libraries.sh adaptive-autosar install
+          ./build_data_types.sh adaptive-autosar install
+          ./build_lwrcl.sh adaptive-autosar install
+          ./build_apps.sh adaptive-autosar install
+
+      - name: Smoke check installed artifacts
+        run: |
+          test -f /opt/autosar-ap-libs/lib/liblwrcl.so
+          test -x apps/install-adaptive-autosar/bin/example_spin
+          test -x apps/install-adaptive-autosar/bin/example_service_server
