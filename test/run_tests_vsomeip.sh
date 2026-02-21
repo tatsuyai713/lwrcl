@@ -13,6 +13,7 @@ LWRCL_PREFIX="/opt/vsomeip-libs"
 BUILD_DIR="${SCRIPT_DIR}/build-vsomeip"
 JOBS=$(nproc 2>/dev/null || echo 4)
 ACTION="${1:-all}"
+CTEST_JOBS="${CTEST_JOBS:-1}"
 
 export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 export PATH="${VSOMEIP_PREFIX}/bin:${DDS_PREFIX}/bin:${PATH}"
@@ -50,7 +51,9 @@ do_run() {
 
     echo "=== [vsomeip] Running tests ==="
     cd "${BUILD_DIR}"
-    ctest --output-on-failure -j "${JOBS}"
+    # vsomeip tests share a global routing endpoint; parallel ctest causes flaky
+    # reconnect races. Use serial execution by default (override with CTEST_JOBS).
+    ctest --output-on-failure -j "${CTEST_JOBS}"
     RESULT=$?
     echo ""
     if [ $RESULT -eq 0 ]; then
