@@ -161,13 +161,14 @@ Built binaries are placed in `apps/install-fastdds/`.
 
 > **To use CycloneDDS, replace `fastdds` with `cyclonedds` in the commands above.**
 > **To use vsomeip, replace `fastdds` with `vsomeip` in the commands above.**
-> **For Adaptive AUTOSAR, run the backend-specific steps below instead of `build_libraries.sh`.**
+> **For Adaptive AUTOSAR, run the backend-specific steps below.**
 
 ### Adaptive AUTOSAR Build Flow
 
-Adaptive AUTOSAR backend uses `ara::com` APIs and does not require `build_libraries.sh`.
+Adaptive AUTOSAR backend uses `ara::com` APIs. It still requires `yaml-cpp`, so run `build_libraries.sh adaptive-autosar install` first.
 
 ```bash
+./build_libraries.sh adaptive-autosar install
 ./build_data_types.sh adaptive-autosar install
 ./build_lwrcl.sh adaptive-autosar install
 ./build_apps.sh adaptive-autosar install
@@ -190,7 +191,7 @@ Built sample binaries are placed in `apps/install-adaptive-autosar/`.
 | FastDDS | `/opt/fast-dds` | `/opt/fast-dds-libs` |
 | CycloneDDS | `/opt/cyclonedds` | `/opt/cyclonedds-libs` |
 | vsomeip | `/opt/vsomeip` | `/opt/vsomeip-libs` |
-| Adaptive AUTOSAR | `/opt/autosar_ap` | `/opt/autosar-ap-libs` |
+| Adaptive AUTOSAR | `/opt/autosar_ap` | `/opt/autosar-ap-libs` (includes `yaml-cpp` via `build_libraries.sh adaptive-autosar`) |
 
 ---
 
@@ -241,7 +242,7 @@ Then build and run with `cyclonedds` backend (`example_zero_copy_pub` / `example
 Set up QNX SDP environment variables (`QNX_TARGET`, etc.) before building.
 
 ```bash
-source ~/qnx803/qnxsdp-env.sh
+source ~/qnx800/qnxsdp-env.sh
 # Optional (default: aarch64le)
 export AUTOSAR_QNX_ARCH=aarch64le
 ```

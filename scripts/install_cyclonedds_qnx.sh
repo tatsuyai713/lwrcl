@@ -14,15 +14,7 @@ PATCH_THREADS_FOR_QNX="ON"
 SKIP_SYSTEM_DEPS="OFF"
 FORCE_REINSTALL="OFF"
 QNX_ENV_FILE=""
-QNX_PATH=""
-
-if [[ -d "${HOME}/qnx803" ]]; then
-  QNX_PATH="qnx803"
-elif [[ -d "${HOME}/qnx800" ]]; then
-  QNX_PATH="qnx800"
-else
-  QNX_PATH="qnx803"
-fi
+QNX_PATH="qnx800"
 
 _nproc="$(nproc 2>/dev/null || echo 4)"
 _mem_kb="$(grep -i MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0)"
@@ -58,7 +50,7 @@ Options:
   --iceoryx-prefix <path>      QNX iceoryx prefix (default: ${ICEORYX_PREFIX})
   --build-dir <path>           Build directory (default: ${BUILD_DIR})
   --toolchain-file <path>      QNX toolchain file (default: ${DEFAULT_TOOLCHAIN_FILE})
-  --qnx-path <name>            QNX SDP directory name in HOME (default: auto)
+  --qnx-path <name>            QNX SDP directory name in HOME (default: ${QNX_PATH})
   --qnx-env <file>             qnxsdp-env.sh path (overrides --qnx-path)
   --jobs <N>                   Parallel jobs (default: auto)
   --enable-shm                 Force CycloneDDS SHM ON (requires QNX iceoryx)

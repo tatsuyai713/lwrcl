@@ -6,6 +6,7 @@ ACTION="${2:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JOBS=$(nproc 2>/dev/null || echo 4)
+CMAKE_DDS_BACKEND="$BACKEND"
 
 if [ "$BACKEND" = "fastdds" ]; then
     DDS_PREFIX="/opt/fast-dds"
@@ -13,11 +14,17 @@ if [ "$BACKEND" = "fastdds" ]; then
 elif [ "$BACKEND" = "cyclonedds" ]; then
     DDS_PREFIX="/opt/cyclonedds"
     LWRCL_PREFIX="/opt/cyclonedds-libs"
+elif [ "$BACKEND" = "adaptive-autosar" ]; then
+    # libraries/CMakeLists.txt has no adaptive-autosar backend.
+    # Build yaml-cpp with CycloneDDS settings and install it into autosar-ap-libs.
+    DDS_PREFIX="/opt/cyclonedds"
+    LWRCL_PREFIX="/opt/autosar-ap-libs"
+    CMAKE_DDS_BACKEND="cyclonedds"
 elif [ "$BACKEND" = "vsomeip" ]; then
     VSOMEIP_PREFIX="/opt/vsomeip"
     LWRCL_PREFIX="/opt/vsomeip-libs"
 else
-    echo "Usage: $0 <fastdds|cyclonedds|vsomeip> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|adaptive-autosar|vsomeip> [install|clean]"
     exit 1
 fi
 
@@ -39,10 +46,12 @@ CMAKE_ARGS=(
     -S "${SCRIPT_DIR}/libraries"
     -B "$BUILD_DIR"
     -DCMAKE_BUILD_TYPE=Release
-    -DDDS_BACKEND="$BACKEND"
+    -DDDS_BACKEND="$CMAKE_DDS_BACKEND"
     -DCMAKE_INSTALL_PREFIX="$LWRCL_PREFIX"
     -DYAML_BUILD_SHARED_LIBS=ON
     -DYAML_CPP_INSTALL=ON
+    -DYAML_CPP_BUILD_TOOLS=OFF
+    -DYAML_CPP_BUILD_TESTS=OFF
 )
 
 if [ "$BACKEND" = "fastdds" ]; then
@@ -54,7 +63,7 @@ if [ "$BACKEND" = "fastdds" ]; then
         -Dfoonathan_memory_DIR="${DDS_PREFIX}/lib/foonathan_memory/cmake/"
         -Dtinyxml2_DIR="${DDS_PREFIX}/lib/cmake/tinyxml2/"
     )
-elif [ "$BACKEND" = "cyclonedds" ]; then
+elif [ "$BACKEND" = "cyclonedds" ] || [ "$BACKEND" = "adaptive-autosar" ]; then
     export PATH="${DDS_PREFIX}/bin:${PATH}"
     CMAKE_ARGS+=(
         -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"

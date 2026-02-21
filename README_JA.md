@@ -161,13 +161,14 @@ ROS 2 互換のメッセージ型（`std_msgs`, `sensor_msgs`, `geometry_msgs` �
 
 > **CycloneDDS を使う場合は、上記コマンドの `fastdds` を `cyclonedds` に置き換えてください。**
 > **vsomeip を使う場合は、上記コマンドの `fastdds` を `vsomeip` に置き換えてください。**
-> **Adaptive AUTOSAR の場合は `build_libraries.sh` を使わず、以下の専用手順を実行してください。**
+> **Adaptive AUTOSAR の場合は、以下の専用手順を実行してください。**
 
 ### Adaptive AUTOSAR バックエンドのビルド手順
 
-Adaptive AUTOSAR バックエンドは `ara::com` API を使用するため、`build_libraries.sh` は不要です。
+Adaptive AUTOSAR バックエンドは `ara::com` API を使用しますが、`yaml-cpp` は必要です。最初に `build_libraries.sh adaptive-autosar install` を実行してください。
 
 ```bash
+./build_libraries.sh adaptive-autosar install
 ./build_data_types.sh adaptive-autosar install
 ./build_lwrcl.sh adaptive-autosar install
 ./build_apps.sh adaptive-autosar install
@@ -190,7 +191,7 @@ Adaptive AUTOSAR バックエンドは `ara::com` API を使用するため、`b
 | FastDDS | `/opt/fast-dds` | `/opt/fast-dds-libs` |
 | CycloneDDS | `/opt/cyclonedds` | `/opt/cyclonedds-libs` |
 | vsomeip | `/opt/vsomeip` | `/opt/vsomeip-libs` |
-| Adaptive AUTOSAR | `/opt/autosar_ap` | `/opt/autosar-ap-libs` |
+| Adaptive AUTOSAR | `/opt/autosar_ap` | `/opt/autosar-ap-libs`（`build_libraries.sh adaptive-autosar` で `yaml-cpp` も導入） |
 
 ---
 
@@ -241,7 +242,7 @@ services:
 QNX SDP の環境変数（`QNX_TARGET` 等）を事前に設定してください。
 
 ```bash
-source ~/qnx803/qnxsdp-env.sh
+source ~/qnx800/qnxsdp-env.sh
 # 任意（デフォルト: aarch64le）
 export AUTOSAR_QNX_ARCH=aarch64le
 ```
