@@ -265,6 +265,7 @@ cd ../Adaptive-AUTOSAR
 
 # 2) lwrcl を adaptive-autosar でビルド
 cd ../lwrcl-unified
+./build_libraries_qnx.sh adaptive-autosar install
 ./build_data_types_qnx.sh adaptive-autosar install
 ./build_lwrcl_qnx.sh adaptive-autosar install
 ./build_apps_qnx.sh adaptive-autosar install
@@ -276,7 +277,7 @@ QNX の既定インストール先:
 |-------------|-------------------------|-------|
 | FastDDS | `/opt/qnx/fast-dds` | `/opt/qnx/fast-dds-libs` |
 | CycloneDDS | `/opt/qnx/cyclonedds`（+ iceoryx: `/opt/qnx/iceoryx`） | `/opt/qnx/cyclonedds-libs` |
-| Adaptive AUTOSAR | AUTOSAR AP: `/opt/qnx/autosar_ap/aarch64le`、CycloneDDS: `/opt/qnx/cyclonedds` | `/opt/qnx/autosar-ap-libs` |
+| Adaptive AUTOSAR | AUTOSAR AP: `/opt/qnx/autosar_ap/aarch64le`、CycloneDDS: `/opt/qnx/cyclonedds` | `/opt/qnx/autosar-ap-libs`（`build_libraries_qnx.sh adaptive-autosar` で `yaml-cpp` も導入） |
 
 ---
 
