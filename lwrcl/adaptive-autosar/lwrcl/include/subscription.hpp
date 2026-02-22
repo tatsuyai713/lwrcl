@@ -2,18 +2,21 @@
 #define LWRCL_SUBSCRIBER_HPP_
 
 #include <atomic>
+#include <chrono>
+#include <deque>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <thread>
-#include <deque>
 #include <vector>
 
-#include <ara/com/dds/dds_pubsub.h>
-#include "qos.hpp"
-#include "channel.hpp"
 #include "adaptive_autosar_header.hpp"
+#include "channel.hpp"
+#include "lwrcl_autosar_proxy_skeleton.hpp"
+#include "qos.hpp"
 
 #define MAX_POLLABLE_BUFFER_SIZE 100
 
@@ -101,7 +104,7 @@ namespace lwrcl
         CallbackChannel::SharedPtr channel)
         : callback_function_(callback_function),
           channel_(channel),
-          subscriber_(nullptr),
+          proxy_(nullptr),
           stop_flag_(false),
           waitset_thread_(),
           lwrcl_subscriber_mutex_(std::make_shared<std::mutex>()),
@@ -117,9 +120,9 @@ namespace lwrcl
     SubscriberWaitSet(SubscriberWaitSet &&) = delete;
     SubscriberWaitSet &operator=(SubscriberWaitSet &&) = delete;
 
-    void ready(std::unique_ptr<ara::com::dds::DdsSubscriber<T>> subscriber)
+    void ready(std::unique_ptr<lwrcl::autosar_generated::TopicEventProxy<T>> proxy)
     {
-      subscriber_ = std::move(subscriber);
+      proxy_ = std::move(proxy);
       stop_flag_.store(false);
     }
 
@@ -134,6 +137,11 @@ namespace lwrcl
       if (waitset_thread_.joinable())
       {
         waitset_thread_.join();
+      }
+      if (proxy_)
+      {
+        proxy_->Event.UnsetReceiveHandler();
+        proxy_->Event.Unsubscribe();
       }
     }
 
@@ -174,55 +182,68 @@ namespace lwrcl
     }
 
   private:
+    void push_message(std::shared_ptr<T> message)
+    {
+      channel_->produce(std::make_shared<SubscriberCallback<T>>(
+          callback_function_, message, lwrcl_subscriber_mutex_));
+
+      lwrcl::MessageInfo new_info;
+      new_info.source_timestamp = std::chrono::system_clock::now();
+      new_info.from_intra_process = false;
+
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+      pollable_buffer_.emplace_back(message, new_info);
+
+      if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
+      {
+        pollable_buffer_.pop_front();
+      }
+    }
+
+    void run_once()
+    {
+      if (!proxy_)
+      {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return;
+      }
+
+      const auto state = proxy_->Event.GetSubscriptionState();
+      count_.store(state == ara::com::SubscriptionState::kSubscribed ? 1 : 0);
+      (void)proxy_->Event.GetNewSamples(
+          [this](ara::com::SamplePtr<T> payload_sample)
+          {
+            if (!payload_sample)
+            {
+              return;
+            }
+
+            auto message = std::make_shared<T>(*payload_sample);
+            push_message(message);
+          },
+          10);
+    }
+
     void run()
     {
       while (!stop_flag_.load())
       {
-        try {
-          if (!subscriber_) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            continue;
-          }
-
-          // Check matched publications
-          auto match_result = subscriber_->GetMatchedPublicationCount();
-          if (match_result.HasValue()) {
-            count_.store(match_result.Value());
-          }
-
-          // Take available samples via Adaptive AUTOSAR DDS API
-          auto take_result = subscriber_->Take(
-              10, // maxSamples per poll
-              [this](const T &sample) {
-                auto message = std::make_shared<T>(sample);
-
-                channel_->produce(std::make_shared<SubscriberCallback<T>>(
-                    callback_function_, message, lwrcl_subscriber_mutex_));
-
-                lwrcl::MessageInfo new_info;
-                new_info.source_timestamp = std::chrono::system_clock::now();
-                new_info.from_intra_process = false;
-
-                std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
-                pollable_buffer_.emplace_back(message, new_info);
-
-                if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE) {
-                  pollable_buffer_.pop_front();
-                }
-              });
+        try
+        {
+          run_once();
         }
-        catch (const std::exception& e) {
+        catch (const std::exception &e)
+        {
           std::cerr << "Exception in SubscriberWaitSet: " << e.what() << std::endl;
         }
 
-        // Small sleep to prevent busy waiting
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
       }
     }
 
     std::function<void(std::shared_ptr<T>)> callback_function_;
     CallbackChannel::SharedPtr channel_;
-    std::unique_ptr<ara::com::dds::DdsSubscriber<T>> subscriber_;
+    std::unique_ptr<lwrcl::autosar_generated::TopicEventProxy<T>> proxy_;
     std::atomic<bool> stop_flag_;
     std::thread waitset_thread_;
 
@@ -251,24 +272,20 @@ namespace lwrcl
         AutosarDomainParticipant *participant, const std::string &topic_name,
         const QoS &qos, std::function<void(std::shared_ptr<T>)> callback_function,
         CallbackChannel::SharedPtr channel)
-        : participant_(participant),
-          waitset_(callback_function, channel)
+        : waitset_(callback_function, channel),
+          topic_name_(topic_name)
     {
+      (void)participant;
       (void)qos; // QoS is fixed in Adaptive AUTOSAR DDS layer
-      try {
-        auto subscriber = std::make_unique<ara::com::dds::DdsSubscriber<T>>(
-            topic_name, participant->domain_id());
-        if (!subscriber->IsBindingActive()) {
-          throw std::runtime_error("Adaptive AUTOSAR subscriber binding not active for topic: " + topic_name);
-        }
 
-        topic_name_ = topic_name;
+      try
+      {
+        initialize_adapter();
 
-        // Initialize and start the waitset
-        waitset_.ready(std::move(subscriber));
         waitset_.start();
-
-      } catch (const std::exception& e) {
+      }
+      catch (const std::exception &e)
+      {
         throw std::runtime_error("Failed to create subscription: " + std::string(e.what()));
       }
     }
@@ -318,14 +335,19 @@ namespace lwrcl
       return 0;
     }
 
-    // Get the topic name
     std::string get_topic_name() const
     {
       return topic_name_;
     }
 
   private:
-    AutosarDomainParticipant *participant_;
+    void initialize_adapter()
+    {
+      auto proxy = std::make_unique<lwrcl::autosar_generated::TopicEventProxy<T>>(topic_name_);
+      proxy->Event.Subscribe(MAX_POLLABLE_BUFFER_SIZE);
+      waitset_.ready(std::move(proxy));
+    }
+
     SubscriberWaitSet<T> waitset_;
     std::string topic_name_;
   };

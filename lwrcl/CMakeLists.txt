@@ -176,17 +176,20 @@ elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
         set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/qnx/autosar-ap-libs)
         set(AUTOSAR_AP_PREFIX_DEFAULT /opt/qnx/autosar_ap/${AUTOSAR_QNX_ARCH_DEFAULT})
         set(DDS_PREFIX_DEFAULT /opt/qnx/cyclonedds)
+        set(VSOMEIP_PREFIX_DEFAULT /opt/qnx/vsomeip)
         set(ICEORYX_PREFIX_DEFAULT /opt/qnx/iceoryx)
     else()
         set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/autosar-ap-libs)
         set(AUTOSAR_AP_PREFIX_DEFAULT /opt/autosar_ap)
         set(DDS_PREFIX_DEFAULT /opt/cyclonedds)
+        set(VSOMEIP_PREFIX_DEFAULT /opt/vsomeip)
         set(ICEORYX_PREFIX_DEFAULT /opt/iceoryx)
     endif()
 
     set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix (include/lib)")
     set(AUTOSAR_AP_PREFIX "${AUTOSAR_AP_PREFIX_DEFAULT}" CACHE PATH "Adaptive AUTOSAR AP install prefix")
     set(DDS_PREFIX "${DDS_PREFIX_DEFAULT}" CACHE PATH "CycloneDDS install prefix (transitive dep)")
+    set(VSOMEIP_PREFIX "${VSOMEIP_PREFIX_DEFAULT}" CACHE PATH "vsomeip install prefix (transitive dep)")
 
     # Find Adaptive AUTOSAR package
     list(APPEND CMAKE_PREFIX_PATH "${AUTOSAR_AP_PREFIX}/lib/cmake/AdaptiveAutosarAP")
@@ -212,20 +215,29 @@ elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
 
     # Adaptive AUTOSAR headers
     include_directories(${AUTOSAR_AP_PREFIX}/include)
+    # Prefer workspace lwrcl headers over installed copies in /opt.
+    include_directories(BEFORE ${CMAKE_SOURCE_DIR}/adaptive-autosar/lwrcl/include)
     # CycloneDDS headers (needed by data types and tf2, transitive dep)
     include_directories(${DDS_PREFIX}/include)
     include_directories(${DDS_PREFIX}/include/ddscxx)
+    # vsomeip headers (needed by ara::com extension adapter)
+    if(EXISTS "${VSOMEIP_PREFIX}/include")
+        include_directories(AFTER SYSTEM ${VSOMEIP_PREFIX}/include)
+    endif()
     # Data type headers
     include_directories(${LWRCL_INSTALL_PREFIX}/include)
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
     link_directories(${AUTOSAR_AP_PREFIX}/lib)
     link_directories(${DDS_PREFIX}/lib)
+    if(EXISTS "${VSOMEIP_PREFIX}/lib")
+        link_directories(${VSOMEIP_PREFIX}/lib)
+    endif()
 
     # Enable CycloneDDS binding in ara::com headers
     add_compile_definitions(ARA_COM_USE_CYCLONEDDS=1)
 
     # lwrcl only uses ara::com APIs; ddsc/ddscxx are for data types and tf2
-    set(DDS_LIBRARIES AdaptiveAutosarAP::ara_com ddsc ddscxx CACHE INTERNAL "DDS link libraries")
+    set(DDS_LIBRARIES AdaptiveAutosarAP::ara_com ddsc ddscxx vsomeip3 CACHE INTERNAL "DDS link libraries")
 
     add_subdirectory(adaptive-autosar/tf2)
     add_subdirectory(adaptive-autosar/tf2_ros)

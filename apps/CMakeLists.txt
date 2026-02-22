@@ -246,17 +246,21 @@ elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
         set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/qnx/autosar-ap-libs)
         set(AUTOSAR_AP_PREFIX_DEFAULT /opt/qnx/autosar_ap/${AUTOSAR_QNX_ARCH_DEFAULT})
         set(DDS_PREFIX_DEFAULT /opt/qnx/cyclonedds)
+        set(VSOMEIP_PREFIX_DEFAULT /opt/qnx/vsomeip)
         set(ICEORYX_PREFIX_DEFAULT /opt/qnx/iceoryx)
     else()
         set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/autosar-ap-libs)
         set(AUTOSAR_AP_PREFIX_DEFAULT /opt/autosar_ap)
         set(DDS_PREFIX_DEFAULT /opt/cyclonedds)
+        set(VSOMEIP_PREFIX_DEFAULT /opt/vsomeip)
         set(ICEORYX_PREFIX_DEFAULT /opt/iceoryx)
     endif()
 
     set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix")
     set(AUTOSAR_AP_PREFIX "${AUTOSAR_AP_PREFIX_DEFAULT}" CACHE PATH "Adaptive AUTOSAR AP install prefix")
     set(DDS_PREFIX "${DDS_PREFIX_DEFAULT}" CACHE PATH "CycloneDDS install prefix (transitive dep)")
+    set(VSOMEIP_PREFIX "${VSOMEIP_PREFIX_DEFAULT}" CACHE PATH "vsomeip install prefix (transitive dep)")
+    set(AUTOSAR_GENERATED_PROXY_SKELETON_DIR "${AUTOSAR_GENERATED_PROXY_SKELETON_DIR}" CACHE PATH "Generated Adaptive AUTOSAR proxy/skeleton header directory")
 
     # Find Adaptive AUTOSAR package
     list(APPEND CMAKE_PREFIX_PATH "${AUTOSAR_AP_PREFIX}/lib/cmake/AdaptiveAutosarAP")
@@ -285,15 +289,30 @@ elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
     # CycloneDDS headers (transitive dependency)
     include_directories(${DDS_PREFIX}/include)
     include_directories(${DDS_PREFIX}/include/ddscxx)
+    # vsomeip headers (required when generated proxy/skeleton support is enabled)
+    if(EXISTS "${VSOMEIP_PREFIX}/include")
+        # Keep vsomeip include after CycloneDDS includes to avoid dds/* header shadowing.
+        include_directories(AFTER SYSTEM ${VSOMEIP_PREFIX}/include)
+    endif()
     # Data type headers
     include_directories(${LWRCL_INSTALL_PREFIX}/include)
+    if(NOT AUTOSAR_GENERATED_PROXY_SKELETON_DIR OR
+       NOT EXISTS "${AUTOSAR_GENERATED_PROXY_SKELETON_DIR}/lwrcl_autosar_proxy_skeleton.hpp")
+        message(FATAL_ERROR
+            "Adaptive AUTOSAR requires generated proxy/skeleton header: "
+            "${AUTOSAR_GENERATED_PROXY_SKELETON_DIR}/lwrcl_autosar_proxy_skeleton.hpp")
+    endif()
+    include_directories(BEFORE ${AUTOSAR_GENERATED_PROXY_SKELETON_DIR})
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
     link_directories(${AUTOSAR_AP_PREFIX}/lib)
     link_directories(${DDS_PREFIX}/lib)
+    if(EXISTS "${VSOMEIP_PREFIX}/lib")
+        link_directories(${VSOMEIP_PREFIX}/lib)
+    endif()
 
     add_compile_definitions(ARA_COM_USE_CYCLONEDDS=1)
 
-    set(DDS_LIBRARIES AdaptiveAutosarAP::ara_com ddsc ddscxx CACHE INTERNAL "DDS link libraries")
+    set(DDS_LIBRARIES AdaptiveAutosarAP::ara_com ddsc ddscxx vsomeip3 CACHE INTERNAL "DDS link libraries")
 
     # Common apps
     add_subdirectory(lwrcl_example)

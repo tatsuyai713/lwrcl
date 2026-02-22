@@ -14,6 +14,7 @@ env:
   CYCLONEDDS_VERSION: "0.10.5"
   ADAPTIVE_AUTOSAR_REF: "main"
   DDS_PREFIX: /opt/cyclonedds
+  VSOMEIP_PREFIX: /opt/vsomeip
   AUTOSAR_AP_PREFIX: /opt/autosar_ap
   LWRCL_PREFIX: /opt/autosar-ap-libs
 
@@ -81,7 +82,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /opt/autosar_ap
-          key: adaptive-autosar-${{ env.ADAPTIVE_AUTOSAR_REF }}-cyclonedds-${{ env.CYCLONEDDS_VERSION }}-ubuntu2404-v1
+          key: adaptive-autosar-${{ env.ADAPTIVE_AUTOSAR_REF }}-cyclonedds-${{ env.CYCLONEDDS_VERSION }}-ubuntu2404-v2
 
       - name: Build & install Adaptive AUTOSAR runtime
         if: steps.cache-adaptive-autosar.outputs.cache-hit != 'true'
@@ -94,14 +95,17 @@ jobs:
           ./scripts/build_and_install_autosar_ap.sh \
             --prefix ${AUTOSAR_AP_PREFIX} \
             --build-dir build-ci \
-            --without-vsomeip \
             --without-iceoryx \
             --cyclonedds-prefix ${DDS_PREFIX}
 
       - name: Configure environment
         run: |
           echo "$DDS_PREFIX/bin" >> $GITHUB_PATH
-          echo "LD_LIBRARY_PATH=$DDS_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$DDS_PREFIX/lib:$VSOMEIP_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib" >> $GITHUB_ENV
+
+      - name: Install Python dependency for ARXML generation
+        run: |
+          python3 -m pip install --user pyyaml
 
       - name: Build & install lwrcl (Adaptive AUTOSAR)
         run: |
@@ -114,5 +118,27 @@ jobs:
       - name: Smoke check installed artifacts
         run: |
           test -f /opt/autosar-ap-libs/lib/liblwrcl.so
+          test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest.arxml
+          test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_topic_mapping.yaml
           test -x apps/install-adaptive-autosar/bin/example_spin
           test -x apps/install-adaptive-autosar/bin/example_service_server
+
+      - name: Smoke check runtime backend selection (DDS / vsomeip)
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="$DDS_PREFIX/lib:$VSOMEIP_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+
+          # DDS mode (default)
+          unset ARA_COM_EVENT_BINDING
+          timeout 4s apps/install-adaptive-autosar/bin/example_class_pub > /tmp/lwrcl_autosar_dds.log 2>&1 || true
+          grep -q "Publishing: 'Hello, world!" /tmp/lwrcl_autosar_dds.log
+
+          # vsomeip mode
+          export ARA_COM_EVENT_BINDING=vsomeip
+          export VSOMEIP_CONFIGURATION="${AUTOSAR_AP_PREFIX}/configuration/vsomeip-rpi.json"
+          timeout 8s "${AUTOSAR_AP_PREFIX}/bin/autosar_vsomeip_routing_manager" > /tmp/lwrcl_autosar_vsomeip_rm.log 2>&1 &
+          RM_PID=$!
+          sleep 1
+          timeout 4s apps/install-adaptive-autosar/bin/example_class_pub > /tmp/lwrcl_autosar_vsomeip.log 2>&1 || true
+          wait "$RM_PID" || true
+          grep -q "Publishing: 'Hello, world!" /tmp/lwrcl_autosar_vsomeip.log

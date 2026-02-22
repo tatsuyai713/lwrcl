@@ -18,7 +18,6 @@
 #include <vector>
 #include <cstring>  // for memcpy/memset used by SerializedMessage/Serialization
 
-#include <ara/com/dds/dds_pubsub.h>
 #include <ara/core/initialization.h>
 #include "qos.hpp"
 #include "clock_time_duration.hpp"

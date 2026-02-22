@@ -1,14 +1,15 @@
 #ifndef LWRCL_PUBLISHER_HPP_
 #define LWRCL_PUBLISHER_HPP_
 
+#include <atomic>
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <atomic>
 
-#include <ara/com/dds/dds_pubsub.h>
-#include "qos.hpp"
 #include "adaptive_autosar_header.hpp"
+#include "lwrcl_autosar_proxy_skeleton.hpp"
+#include "qos.hpp"
 
 namespace lwrcl
 {
@@ -35,21 +36,41 @@ namespace lwrcl
     Publisher(AutosarDomainParticipant *participant, const std::string &topic_name, const QoS &qos)
         : IPublisher(),
           std::enable_shared_from_this<Publisher<T>>(),
-          topic_name_(topic_name)
+          topic_name_(topic_name),
+          subscriber_count_(0)
     {
+      (void)participant;
       (void)qos; // QoS is fixed in Adaptive AUTOSAR DDS layer
-      try {
-        publisher_ = std::make_unique<ara::com::dds::DdsPublisher<T>>(
-            topic_name, participant->domain_id());
-        if (!publisher_->IsBindingActive()) {
-          throw std::runtime_error("Adaptive AUTOSAR publisher binding not active for topic: " + topic_name);
+
+      try
+      {
+        skeleton_ = std::make_unique<lwrcl::autosar_generated::TopicEventSkeleton<T>>(topic_name_);
+
+        auto offer_service_result = skeleton_->OfferService();
+        if (!offer_service_result.HasValue())
+        {
+          throw std::runtime_error("Failed to offer AUTOSAR event service.");
         }
-      } catch (const std::exception &e) {
+        auto offer_event_result = skeleton_->Event.Offer();
+        if (!offer_event_result.HasValue())
+        {
+          throw std::runtime_error("Failed to offer AUTOSAR event.");
+        }
+      }
+      catch (const std::exception &e)
+      {
         throw std::runtime_error("Failed to create publisher: " + std::string(e.what()));
       }
     }
 
-    ~Publisher() = default;
+    ~Publisher()
+    {
+      if (skeleton_)
+      {
+        skeleton_->Event.StopOffer();
+        skeleton_->StopOfferService();
+      }
+    }
 
     Publisher(const Publisher &) = delete;
     Publisher &operator=(const Publisher &) = delete;
@@ -58,34 +79,25 @@ namespace lwrcl
 
     void publish(const std::shared_ptr<T> &message) const
     {
-      if (publisher_ && message) {
-        publisher_->Write(*message);
+      if (message)
+      {
+        publish_impl(*message);
       }
     }
 
     void publish(T &message) const
     {
-      if (publisher_) {
-        publisher_->Write(message);
-      }
+      publish_impl(message);
     }
 
     void publish(const T &message) const
     {
-      if (publisher_) {
-        publisher_->Write(message);
-      }
+      publish_impl(message);
     }
 
     int32_t get_subscriber_count() override
     {
-      if (publisher_) {
-        auto result = publisher_->GetMatchedSubscriptionCount();
-        if (result.HasValue()) {
-          return result.Value();
-        }
-      }
-      return 0;
+      return subscriber_count_.load();
     }
 
     // Alias for rclcpp compatibility
@@ -94,7 +106,6 @@ namespace lwrcl
       return get_subscriber_count();
     }
 
-    // Get the topic name
     std::string get_topic_name() const
     {
       return topic_name_;
@@ -109,8 +120,17 @@ namespace lwrcl
     using SharedPtr = std::shared_ptr<Publisher<T>>;
 
   private:
+    void publish_impl(const T &message) const
+    {
+        if (skeleton_)
+        {
+        skeleton_->Event.Send(message);
+        }
+      }
+
     std::string topic_name_;
-    std::unique_ptr<ara::com::dds::DdsPublisher<T>> publisher_;
+    std::unique_ptr<lwrcl::autosar_generated::TopicEventSkeleton<T>> skeleton_;
+    mutable std::atomic<int32_t> subscriber_count_;
   };
 
 } // namespace lwrcl

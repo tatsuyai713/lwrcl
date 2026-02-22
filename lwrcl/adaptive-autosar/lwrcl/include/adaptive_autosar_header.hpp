@@ -17,12 +17,8 @@ namespace lwrcl
   // -----------------------------------------------------------------------
   // Lightweight DomainParticipant wrapper for Adaptive AUTOSAR backend.
   //
-  // Unlike the raw CycloneDDS backend where a real DDS participant is
-  // shared across all publishers/subscribers on a Node, the Adaptive
-  // AUTOSAR ara::com::dds layer creates its own DomainParticipant
-  // internally for each publisher/subscriber.  This wrapper simply
-  // stores the domain_id that is forwarded to DdsPublisher/DdsSubscriber
-  // constructors.
+  // The communication endpoint is resolved by the Adaptive AUTOSAR runtime.
+  // This wrapper keeps only domain_id as node-level context.
   // -----------------------------------------------------------------------
   class AutosarDomainParticipant
   {
@@ -37,31 +33,6 @@ namespace lwrcl
   };
 
   using DomainParticipant = AutosarDomainParticipant;
-
-  // -----------------------------------------------------------------------
-  // Compatibility types (kept for API parity with other backends)
-  // -----------------------------------------------------------------------
-  namespace dds
-  {
-    using DomainId_t = uint32_t;
-  }
-
-  namespace rtps
-  {
-    enum class MemoryManagementPolicy_t
-    {
-      PREALLOCATED_WITH_REALLOC_MEMORY_MODE
-    };
-
-    enum class DiscoveryProtocol_t
-    {
-      SIMPLE,
-      EXTERNAL
-    };
-
-    static const MemoryManagementPolicy_t PREALLOCATED_WITH_REALLOC_MEMORY_MODE =
-        MemoryManagementPolicy_t::PREALLOCATED_WITH_REALLOC_MEMORY_MODE;
-  } // namespace rtps
 
   class MessageType : public std::enable_shared_from_this<MessageType>
   {

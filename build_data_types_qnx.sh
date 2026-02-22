@@ -10,6 +10,86 @@ ACTION="${2:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JOBS=$(nproc 2>/dev/null || echo 4)
 
+generate_adaptive_autosar_artifacts_qnx() {
+    local manifest_input mapping_input output_dir output_arxml output_mapping output_manifest
+    local apps_root mapping_generator_cmd
+    local generator=""
+    manifest_input="${AUTOSAR_ARXML_MANIFEST_YAML:-}"
+    mapping_input="${AUTOSAR_TOPIC_MAPPING_YAML:-}"
+    apps_root="${AUTOSAR_APP_SOURCE_ROOT:-${SCRIPT_DIR}/apps}"
+    mapping_generator_cmd="${AUTOSAR_COMM_MANIFEST_GENERATOR:-autosar-generate-comm-manifest}"
+    output_dir="${BUILD_DIR}/autosar"
+    output_arxml="${output_dir}/lwrcl_autosar_manifest.arxml"
+    output_mapping="${output_dir}/lwrcl_autosar_topic_mapping.yaml"
+    output_manifest="${output_dir}/lwrcl_autosar_manifest.yaml"
+
+    mkdir -p "${output_dir}"
+
+    if [ -n "${manifest_input}" ] && [ -f "${manifest_input}" ] && [ -n "${mapping_input}" ] && [ -f "${mapping_input}" ]; then
+        cp "${mapping_input}" "${output_mapping}"
+        cp "${manifest_input}" "${output_manifest}"
+    else
+        if ! command -v "${mapping_generator_cmd}" >/dev/null 2>&1; then
+            echo "Adaptive AUTOSAR mapping generator command not found: ${mapping_generator_cmd}"
+            echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar_ap/bin."
+            exit 1
+        fi
+        "${mapping_generator_cmd}" \
+          --apps-root "${apps_root}" \
+          --output-mapping "${output_mapping}" \
+          --output-manifest "${output_manifest}" \
+          --print-summary
+    fi
+
+    if [ "${AUTOSAR_SKIP_ARXML_GEN:-0}" = "1" ]; then
+        echo "Skipping ARXML generation (AUTOSAR_SKIP_ARXML_GEN=1)."
+        return
+    fi
+
+    if [ -n "${AUTOSAR_ARXML_GENERATOR:-}" ] && [ -f "${AUTOSAR_ARXML_GENERATOR}" ]; then
+        generator="${AUTOSAR_ARXML_GENERATOR}"
+    elif [ -f "${AUTOSAR_AP_PREFIX}/tools/arxml_generator/generate_arxml.py" ]; then
+        generator="${AUTOSAR_AP_PREFIX}/tools/arxml_generator/generate_arxml.py"
+    elif [ -f "/opt/autosar_ap/tools/arxml_generator/generate_arxml.py" ]; then
+        generator="/opt/autosar_ap/tools/arxml_generator/generate_arxml.py"
+    fi
+
+    if [ -z "${generator}" ]; then
+        echo "ARXML generator not found."
+        echo "Set AUTOSAR_ARXML_GENERATOR or install Adaptive AUTOSAR tools under ${AUTOSAR_AP_PREFIX}/tools/arxml_generator."
+        exit 1
+    fi
+
+    if ! python3 -c "import yaml" >/dev/null 2>&1; then
+        echo "python3 module 'yaml' is required for ARXML generation."
+        echo "Install it with: python3 -m pip install pyyaml"
+        exit 1
+    fi
+
+    python3 "${generator}" \
+      --input "${output_manifest}" \
+      --output "${output_arxml}" \
+      --overwrite \
+      --print-summary
+}
+
+install_adaptive_autosar_artifacts_qnx() {
+    local output_dir install_dir
+    output_dir="${BUILD_DIR}/autosar"
+    install_dir="${LWRCL_PREFIX}/share/lwrcl/autosar"
+    sudo mkdir -p "${install_dir}"
+
+    if [ -f "${output_dir}/lwrcl_autosar_manifest.arxml" ]; then
+        sudo cp "${output_dir}/lwrcl_autosar_manifest.arxml" "${install_dir}/"
+    fi
+    if [ -f "${output_dir}/lwrcl_autosar_topic_mapping.yaml" ]; then
+        sudo cp "${output_dir}/lwrcl_autosar_topic_mapping.yaml" "${install_dir}/"
+    fi
+    if [ -f "${output_dir}/lwrcl_autosar_manifest.yaml" ]; then
+        sudo cp "${output_dir}/lwrcl_autosar_manifest.yaml" "${install_dir}/"
+    fi
+}
+
 if [ -z "${QNX_TARGET:-}" ] || [ -z "${QNX_HOST:-}" ]; then
     echo "Please source QNX SDP environment (QNX_HOST/QNX_TARGET)."
     exit 1
@@ -60,6 +140,13 @@ if [ -d "${HOST_ICEORYX_PREFIX}/lib" ]; then
 fi
 if [ "$BACKEND" = "adaptive-autosar" ] && [ -d "${AUTOSAR_AP_PREFIX}/lib" ]; then
     export LD_LIBRARY_PATH="${AUTOSAR_AP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
+if [ "$BACKEND" = "adaptive-autosar" ] && [ -d "${AUTOSAR_AP_PREFIX}/bin" ]; then
+    export PATH="${AUTOSAR_AP_PREFIX}/bin:${PATH}"
+fi
+
+if [ "$BACKEND" = "adaptive-autosar" ]; then
+    generate_adaptive_autosar_artifacts_qnx
 fi
 
 CMAKE_ARGS=(
@@ -123,4 +210,7 @@ cmake --build "$BUILD_DIR" -j "$JOBS"
 
 if [ "$ACTION" = "install" ]; then
     sudo cmake --install "$BUILD_DIR" --prefix "$LWRCL_PREFIX"
+    if [ "$BACKEND" = "adaptive-autosar" ]; then
+        install_adaptive_autosar_artifacts_qnx
+    fi
 fi
