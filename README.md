@@ -185,9 +185,12 @@ Adaptive AUTOSAR backend is now ARXML-mediated:
 - Generated artifacts are installed to:
   - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest.arxml`
   - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_topic_mapping.yaml`
+  - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest.yaml`
+  - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml`
+  - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml`
 - Generated app-local proxy/skeleton header:
   - `apps/build-adaptive-autosar/autosar/generated/lwrcl_autosar_proxy_skeleton.hpp`
-- Runtime `adaptive-autosar` Publisher/Subscription resolve DDS topic bindings and payload CDR conversion inside `ara::com` implementation (`event_binding_adapter.h`), with direct-topic fallback by default.
+- Runtime `adaptive-autosar` Publisher/Subscription use generated `ara::com` Proxy/Skeleton classes, and transport selection is driven by `ARA_COM_BINDING_MANIFEST` profile manifest.
 
 Required Adaptive-AUTOSAR codegen commands:
 
@@ -203,27 +206,31 @@ Adaptive AUTOSAR mapping-related environment variables:
 | `ARA_COM_TOPIC_MAPPING` | Runtime path override for topic mapping YAML |
 | `ARA_COM_REQUIRE_TOPIC_MAPPING=1` | Fail when topic is not found in mapping |
 | `ARA_COM_DISABLE_TOPIC_MAPPING=1` | Disable mapping and use direct DDS topic names |
-| `ARA_COM_EVENT_BINDING` | Runtime transport selection: `dds` / `cyclonedds` (default), `vsomeip`, `someip`, `auto` |
-| `ARA_COM_PREFER_SOMEIP=1` | Prefer SOME/IP when `ARA_COM_EVENT_BINDING=auto` |
+| `ARA_COM_BINDING_MANIFEST` | Runtime binding profile manifest path (`event_binding: dds` or `event_binding: vsomeip`) |
 | `AUTOSAR_APP_SOURCE_ROOT` | App source root to scan for topic/service usage |
 | `AUTOSAR_ARXML_GENERATOR` | Build-time override for ARXML generator script path |
 | `AUTOSAR_COMM_MANIFEST_GENERATOR` | Build-time override for mapping generator command (default: `autosar-generate-comm-manifest`) |
 | `AUTOSAR_PROXY_SKELETON_GENERATOR` | Build-time override for proxy/skeleton generator command (default: `autosar-generate-proxy-skeleton`) |
+| `AUTOSAR_EVENT_BINDING` | Build-time default `event_binding` for `lwrcl_autosar_manifest.yaml` (default: `auto`) |
+| `AUTOSAR_GENERATE_BINDING_PROFILES=1` | Also generate/install `lwrcl_autosar_manifest_dds.yaml` and `lwrcl_autosar_manifest_vsomeip.yaml` |
 | `VSOMEIP_PREFIX` | Build-time vsomeip install prefix override (default: `/opt/vsomeip`) |
 | `VSOMEIP_CONFIGURATION` | Runtime vsomeip configuration file path |
-
-Legacy `LWRCL_AUTOSAR_*` mapping environment variables are still accepted for backward compatibility.
 
 Adaptive AUTOSAR runtime transport switch (same app binary, no app code change):
 
 ```bash
-# CycloneDDS transport (default; `dds` and `cyclonedds` are both accepted)
-export ARA_COM_EVENT_BINDING=dds
+# CycloneDDS transport profile
+# (current Adaptive-AUTOSAR reference runtime requires routing manager process)
+unset ARA_COM_EVENT_BINDING
+export ARA_COM_BINDING_MANIFEST=/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml
+export VSOMEIP_CONFIGURATION=/opt/autosar_ap/configuration/vsomeip-rpi.json
+/opt/autosar_ap/bin/autosar_vsomeip_routing_manager &
 apps/install-adaptive-autosar/bin/example_class_sub &
 apps/install-adaptive-autosar/bin/example_class_pub
 
-# SOME/IP transport (requires routing manager)
-export ARA_COM_EVENT_BINDING=vsomeip
+# SOME/IP transport profile
+unset ARA_COM_EVENT_BINDING
+export ARA_COM_BINDING_MANIFEST=/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml
 export VSOMEIP_CONFIGURATION=/opt/autosar_ap/configuration/vsomeip-rpi.json
 /opt/autosar_ap/bin/autosar_vsomeip_routing_manager &
 apps/install-adaptive-autosar/bin/example_class_sub &
@@ -232,8 +239,8 @@ apps/install-adaptive-autosar/bin/example_class_pub
 
 Switch verification checklist:
 
-- CycloneDDS mode: no vsomeip/routing logs, and subscriber prints `I heard: 'Hello, world! ...'`.
-- SOME/IP mode: vsomeip/routing logs appear (for example `REGISTER EVENT`, `SUBSCRIBE`) and subscriber prints the same `I heard: ...` messages.
+- DDS profile: subscriber prints `I heard: 'Hello, world! ...'`, and routing manager log does not show `REGISTER EVENT`.
+- SOME/IP profile: subscriber prints `I heard: 'Hello, world! ...'`, and routing manager log shows `REGISTER EVENT` / `SUBSCRIBE`.
 
 ### Cleaning Build Directories
 

@@ -12,11 +12,12 @@ JOBS=$(nproc 2>/dev/null || echo 4)
 
 generate_adaptive_autosar_artifacts_qnx() {
     local manifest_input mapping_input output_dir output_arxml output_mapping output_manifest
-    local apps_root mapping_generator_cmd
+    local apps_root mapping_generator_cmd event_binding
     local generator=""
     manifest_input="${AUTOSAR_ARXML_MANIFEST_YAML:-}"
     mapping_input="${AUTOSAR_TOPIC_MAPPING_YAML:-}"
     apps_root="${AUTOSAR_APP_SOURCE_ROOT:-${SCRIPT_DIR}/apps}"
+    event_binding="${AUTOSAR_EVENT_BINDING:-auto}"
     mapping_generator_cmd="${AUTOSAR_COMM_MANIFEST_GENERATOR:-autosar-generate-comm-manifest}"
     output_dir="${BUILD_DIR}/autosar"
     output_arxml="${output_dir}/lwrcl_autosar_manifest.arxml"
@@ -38,6 +39,7 @@ generate_adaptive_autosar_artifacts_qnx() {
           --apps-root "${apps_root}" \
           --output-mapping "${output_mapping}" \
           --output-manifest "${output_manifest}" \
+          --event-binding "${event_binding}" \
           --print-summary
     fi
 

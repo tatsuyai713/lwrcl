@@ -120,7 +120,7 @@ namespace lwrcl
     SubscriberWaitSet(SubscriberWaitSet &&) = delete;
     SubscriberWaitSet &operator=(SubscriberWaitSet &&) = delete;
 
-    void ready(std::unique_ptr<lwrcl::autosar_generated::TopicEventProxy<T>> proxy)
+    void ready(std::unique_ptr<autosar_generated::TopicEventProxy<T>> proxy)
     {
       proxy_ = std::move(proxy);
       stop_flag_.store(false);
@@ -243,7 +243,7 @@ namespace lwrcl
 
     std::function<void(std::shared_ptr<T>)> callback_function_;
     CallbackChannel::SharedPtr channel_;
-    std::unique_ptr<lwrcl::autosar_generated::TopicEventProxy<T>> proxy_;
+    std::unique_ptr<autosar_generated::TopicEventProxy<T>> proxy_;
     std::atomic<bool> stop_flag_;
     std::thread waitset_thread_;
 
@@ -343,7 +343,7 @@ namespace lwrcl
   private:
     void initialize_adapter()
     {
-      auto proxy = std::make_unique<lwrcl::autosar_generated::TopicEventProxy<T>>(topic_name_);
+      auto proxy = std::make_unique<autosar_generated::TopicEventProxy<T>>(topic_name_);
       proxy->Event.Subscribe(MAX_POLLABLE_BUFFER_SIZE);
       waitset_.ready(std::move(proxy));
     }

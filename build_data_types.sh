@@ -13,9 +13,11 @@ generate_adaptive_autosar_artifacts() {
     local output_proxy_dir output_proxy_header apps_root
     local mapping_generator_cmd proxy_skeleton_generator_cmd
     local generator=""
+    local event_binding
     manifest_input="${AUTOSAR_ARXML_MANIFEST_YAML:-}"
     mapping_input="${AUTOSAR_TOPIC_MAPPING_YAML:-}"
     apps_root="${AUTOSAR_APP_SOURCE_ROOT:-${SCRIPT_DIR}/apps}"
+    event_binding="${AUTOSAR_EVENT_BINDING:-auto}"
     mapping_generator_cmd="${AUTOSAR_COMM_MANIFEST_GENERATOR:-autosar-generate-comm-manifest}"
     proxy_skeleton_generator_cmd="${AUTOSAR_PROXY_SKELETON_GENERATOR:-autosar-generate-proxy-skeleton}"
     output_dir="${BUILD_DIR}/autosar"
@@ -40,6 +42,7 @@ generate_adaptive_autosar_artifacts() {
           --apps-root "${apps_root}" \
           --output-mapping "${output_mapping}" \
           --output-manifest "${output_manifest}" \
+          --event-binding "${event_binding}" \
           --print-summary
     fi
 
@@ -52,6 +55,7 @@ generate_adaptive_autosar_artifacts() {
     "${proxy_skeleton_generator_cmd}" \
       --mapping "${output_mapping}" \
       --output "${output_proxy_header}" \
+      --namespace "autosar_generated" \
       --print-summary
 
     if [ "${AUTOSAR_SKIP_ARXML_GEN:-0}" = "1" ]; then

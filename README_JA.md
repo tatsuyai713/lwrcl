@@ -185,9 +185,12 @@ Adaptive AUTOSAR バックエンドは ARXML 介在構成に対応していま�
 - 生成/配置される成果物:
   - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest.arxml`
   - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_topic_mapping.yaml`
+  - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest.yaml`
+  - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml`
+  - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml`
 - アプリビルド時に生成される proxy/skeleton ヘッダ:
   - `apps/build-adaptive-autosar/autosar/generated/lwrcl_autosar_proxy_skeleton.hpp`
-- 実行時の `adaptive-autosar` Publisher/Subscription はこの mapping を参照して DDS topic を解決します（既定は未定義トピックを direct DDS でフォールバック）。
+- 実行時の `adaptive-autosar` Publisher/Subscription は生成済み `ara::com` Proxy/Skeleton を利用し、`ARA_COM_BINDING_MANIFEST` の profile manifest でトランスポートを切り替えます。
 
 必要な Adaptive-AUTOSAR codegen コマンド:
 
@@ -200,28 +203,34 @@ Adaptive AUTOSAR mapping 関連の環境変数:
 
 | 環境変数 | 用途 |
 |---------|------|
-| `LWRCL_AUTOSAR_TOPIC_MAPPING` | 実行時 topic mapping YAML のパス上書き |
-| `LWRCL_AUTOSAR_REQUIRE_MAPPING=1` | mapping 未登録トピックをエラー扱い |
-| `LWRCL_AUTOSAR_DISABLE_TOPIC_MAPPING=1` | mapping を無効化して direct DDS 名を使用 |
-| `ARA_COM_EVENT_BINDING` | 実行時トランスポート選択: `dds` / `cyclonedds`（既定）/ `vsomeip` / `someip` / `auto` |
-| `ARA_COM_PREFER_SOMEIP=1` | `ARA_COM_EVENT_BINDING=auto` 時に SOME/IP 優先 |
+| `ARA_COM_TOPIC_MAPPING` | 実行時 topic mapping YAML のパス上書き |
+| `ARA_COM_REQUIRE_TOPIC_MAPPING=1` | mapping 未登録トピックをエラー扱い |
+| `ARA_COM_DISABLE_TOPIC_MAPPING=1` | mapping を無効化して direct DDS 名を使用 |
+| `ARA_COM_BINDING_MANIFEST` | 実行時 binding profile manifest のパス（`event_binding: dds` または `event_binding: vsomeip`） |
 | `AUTOSAR_APP_SOURCE_ROOT` | topic/service 抽出対象のアプリソースルート |
 | `AUTOSAR_ARXML_GENERATOR` | ビルド時 ARXML 生成スクリプトのパス上書き |
 | `AUTOSAR_COMM_MANIFEST_GENERATOR` | ビルド時 mapping 生成コマンドの上書き（既定: `autosar-generate-comm-manifest`） |
 | `AUTOSAR_PROXY_SKELETON_GENERATOR` | ビルド時 proxy/skeleton 生成コマンドの上書き（既定: `autosar-generate-proxy-skeleton`） |
+| `AUTOSAR_EVENT_BINDING` | `lwrcl_autosar_manifest.yaml` の build 時既定 `event_binding`（既定: `auto`） |
+| `AUTOSAR_GENERATE_BINDING_PROFILES=1` | `lwrcl_autosar_manifest_dds.yaml` / `lwrcl_autosar_manifest_vsomeip.yaml` も生成・インストール |
 | `VSOMEIP_PREFIX` | ビルド時 vsomeip インストール先の上書き（既定: `/opt/vsomeip`） |
 | `VSOMEIP_CONFIGURATION` | 実行時 vsomeip 設定ファイルパス |
 
 Adaptive AUTOSAR 実行時トランスポート切り替え（同一バイナリ、アプリコード変更不要）:
 
 ```bash
-# CycloneDDS トランスポート（既定。`dds` と `cyclonedds` の両方を受け付け）
-export ARA_COM_EVENT_BINDING=dds
+# CycloneDDS トランスポート profile
+# （現行の Adaptive-AUTOSAR 参照実装では routing manager プロセスが必要）
+unset ARA_COM_EVENT_BINDING
+export ARA_COM_BINDING_MANIFEST=/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml
+export VSOMEIP_CONFIGURATION=/opt/autosar_ap/configuration/vsomeip-rpi.json
+/opt/autosar_ap/bin/autosar_vsomeip_routing_manager &
 apps/install-adaptive-autosar/bin/example_class_sub &
 apps/install-adaptive-autosar/bin/example_class_pub
 
-# SOME/IP トランスポート（routing manager が必要）
-export ARA_COM_EVENT_BINDING=vsomeip
+# SOME/IP トランスポート profile
+unset ARA_COM_EVENT_BINDING
+export ARA_COM_BINDING_MANIFEST=/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml
 export VSOMEIP_CONFIGURATION=/opt/autosar_ap/configuration/vsomeip-rpi.json
 /opt/autosar_ap/bin/autosar_vsomeip_routing_manager &
 apps/install-adaptive-autosar/bin/example_class_sub &
@@ -230,8 +239,8 @@ apps/install-adaptive-autosar/bin/example_class_pub
 
 切り替え確認の観点:
 
-- CycloneDDS モード: vsomeip/routing ログが出ず、Subscriber が `I heard: 'Hello, world! ...'` を出力する。
-- SOME/IP モード: `REGISTER EVENT` / `SUBSCRIBE` など vsomeip/routing ログが出て、Subscriber でも同じ `I heard: ...` が出力される。
+- DDS profile: Subscriber が `I heard: 'Hello, world! ...'` を出力し、routing manager ログに `REGISTER EVENT` が出ないこと。
+- SOME/IP profile: Subscriber が `I heard: 'Hello, world! ...'` を出力し、routing manager ログに `REGISTER EVENT` / `SUBSCRIBE` が出ること。
 
 ### ビルドディレクトリのクリーン
 

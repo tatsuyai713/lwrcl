@@ -44,7 +44,7 @@ namespace lwrcl
 
       try
       {
-        skeleton_ = std::make_unique<lwrcl::autosar_generated::TopicEventSkeleton<T>>(topic_name_);
+        skeleton_ = std::make_unique<autosar_generated::TopicEventSkeleton<T>>(topic_name_);
 
         auto offer_service_result = skeleton_->OfferService();
         if (!offer_service_result.HasValue())
@@ -129,7 +129,7 @@ namespace lwrcl
       }
 
     std::string topic_name_;
-    std::unique_ptr<lwrcl::autosar_generated::TopicEventSkeleton<T>> skeleton_;
+    std::unique_ptr<autosar_generated::TopicEventSkeleton<T>> skeleton_;
     mutable std::atomic<int32_t> subscriber_count_;
   };
 

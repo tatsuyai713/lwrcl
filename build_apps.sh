@@ -80,14 +80,18 @@ elif [ "$BACKEND" = "vsomeip" ]; then
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
     export PATH="${AUTOSAR_AP_PREFIX}/bin:${DDS_PREFIX}/bin:${PATH}"
     export LD_LIBRARY_PATH="${AUTOSAR_AP_PREFIX}/lib:${DDS_PREFIX}/lib:${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    AUTOSAR_EVENT_BINDING="${AUTOSAR_EVENT_BINDING:-auto}"
     AUTOSAR_GEN_DIR="${BUILD_DIR}/autosar"
     AUTOSAR_GEN_MAPPING="${AUTOSAR_GEN_DIR}/lwrcl_autosar_topic_mapping.yaml"
     AUTOSAR_GEN_MANIFEST_YAML="${AUTOSAR_GEN_DIR}/lwrcl_autosar_manifest.yaml"
+    AUTOSAR_GEN_MANIFEST_DDS_YAML="${AUTOSAR_GEN_DIR}/lwrcl_autosar_manifest_dds.yaml"
+    AUTOSAR_GEN_MANIFEST_VSOMEIP_YAML="${AUTOSAR_GEN_DIR}/lwrcl_autosar_manifest_vsomeip.yaml"
     AUTOSAR_GEN_ARXML="${AUTOSAR_GEN_DIR}/lwrcl_autosar_manifest.arxml"
     AUTOSAR_GEN_PROXY_SKELETON_DIR="${AUTOSAR_GEN_DIR}/generated"
     AUTOSAR_GEN_PROXY_SKELETON_HEADER="${AUTOSAR_GEN_PROXY_SKELETON_DIR}/lwrcl_autosar_proxy_skeleton.hpp"
     AUTOSAR_MAPPING_GENERATOR_CMD="${AUTOSAR_COMM_MANIFEST_GENERATOR:-autosar-generate-comm-manifest}"
     AUTOSAR_PROXY_SKELETON_GENERATOR_CMD="${AUTOSAR_PROXY_SKELETON_GENERATOR:-autosar-generate-proxy-skeleton}"
+    AUTOSAR_GENERATE_BINDING_PROFILES="${AUTOSAR_GENERATE_BINDING_PROFILES:-1}"
 
     mkdir -p "${AUTOSAR_GEN_DIR}"
     if ! command -v "${AUTOSAR_MAPPING_GENERATOR_CMD}" >/dev/null 2>&1; then
@@ -99,7 +103,20 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
       --apps-root "${AUTOSAR_APP_SOURCE_ROOT}" \
       --output-mapping "${AUTOSAR_GEN_MAPPING}" \
       --output-manifest "${AUTOSAR_GEN_MANIFEST_YAML}" \
+      --event-binding "${AUTOSAR_EVENT_BINDING}" \
       --print-summary
+    if [ "${AUTOSAR_GENERATE_BINDING_PROFILES}" = "1" ]; then
+        "${AUTOSAR_MAPPING_GENERATOR_CMD}" \
+          --apps-root "${AUTOSAR_APP_SOURCE_ROOT}" \
+          --output-mapping "${AUTOSAR_GEN_MAPPING}" \
+          --output-manifest "${AUTOSAR_GEN_MANIFEST_DDS_YAML}" \
+          --event-binding "dds"
+        "${AUTOSAR_MAPPING_GENERATOR_CMD}" \
+          --apps-root "${AUTOSAR_APP_SOURCE_ROOT}" \
+          --output-mapping "${AUTOSAR_GEN_MAPPING}" \
+          --output-manifest "${AUTOSAR_GEN_MANIFEST_VSOMEIP_YAML}" \
+          --event-binding "vsomeip"
+    fi
     if ! command -v "${AUTOSAR_PROXY_SKELETON_GENERATOR_CMD}" >/dev/null 2>&1; then
         echo "Adaptive AUTOSAR proxy/skeleton generator command not found: ${AUTOSAR_PROXY_SKELETON_GENERATOR_CMD}"
         echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar_ap/bin."
@@ -108,6 +125,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     "${AUTOSAR_PROXY_SKELETON_GENERATOR_CMD}" \
       --mapping "${AUTOSAR_GEN_MAPPING}" \
       --output "${AUTOSAR_GEN_PROXY_SKELETON_HEADER}" \
+      --namespace "autosar_generated" \
       --print-summary
 
     AUTOSAR_ARXML_GENERATOR="${AUTOSAR_ARXML_GENERATOR:-${AUTOSAR_AP_PREFIX}/tools/arxml_generator/generate_arxml.py}"
@@ -145,6 +163,12 @@ if [ "$ACTION" = "install" ]; then
         sudo mkdir -p "${AUTOSAR_INSTALL_DIR}"
         sudo cp "${AUTOSAR_GEN_MAPPING}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_topic_mapping.yaml"
         sudo cp "${AUTOSAR_GEN_MANIFEST_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest.yaml"
+        if [ -f "${AUTOSAR_GEN_MANIFEST_DDS_YAML}" ]; then
+            sudo cp "${AUTOSAR_GEN_MANIFEST_DDS_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest_dds.yaml"
+        fi
+        if [ -f "${AUTOSAR_GEN_MANIFEST_VSOMEIP_YAML}" ]; then
+            sudo cp "${AUTOSAR_GEN_MANIFEST_VSOMEIP_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest_vsomeip.yaml"
+        fi
         if [ -f "${AUTOSAR_GEN_ARXML}" ]; then
             sudo cp "${AUTOSAR_GEN_ARXML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest.arxml"
         fi

@@ -119,6 +119,9 @@ jobs:
         run: |
           test -f /opt/autosar-ap-libs/lib/liblwrcl.so
           test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest.arxml
+          test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest.yaml
+          test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml
+          test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml
           test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_topic_mapping.yaml
           test -x apps/install-adaptive-autosar/bin/example_spin
           test -x apps/install-adaptive-autosar/bin/example_service_server
@@ -126,19 +129,39 @@ jobs:
       - name: Smoke check runtime backend selection (DDS / vsomeip)
         run: |
           set -euo pipefail
-          export LD_LIBRARY_PATH="$DDS_PREFIX/lib:$VSOMEIP_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib:${LD_LIBRARY_PATH:-}"
-
-          # DDS mode (default)
-          unset ARA_COM_EVENT_BINDING
-          timeout 4s apps/install-adaptive-autosar/bin/example_class_pub > /tmp/lwrcl_autosar_dds.log 2>&1 || true
-          grep -q "Publishing: 'Hello, world!" /tmp/lwrcl_autosar_dds.log
-
-          # vsomeip mode
-          export ARA_COM_EVENT_BINDING=vsomeip
+          export LD_LIBRARY_PATH="/opt/iceoryx/lib:$DDS_PREFIX/lib:$VSOMEIP_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+          DDS_MANIFEST="${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml"
+          VSOMEIP_MANIFEST="${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml"
           export VSOMEIP_CONFIGURATION="${AUTOSAR_AP_PREFIX}/configuration/vsomeip-rpi.json"
-          timeout 8s "${AUTOSAR_AP_PREFIX}/bin/autosar_vsomeip_routing_manager" > /tmp/lwrcl_autosar_vsomeip_rm.log 2>&1 &
+
+          # DDS profile mode
+          unset ARA_COM_EVENT_BINDING
+          export ARA_COM_BINDING_MANIFEST="${DDS_MANIFEST}"
+          timeout 10s "${AUTOSAR_AP_PREFIX}/bin/autosar_vsomeip_routing_manager" > /tmp/lwrcl_autosar_dds_rm.log 2>&1 &
+          DDS_RM_PID=$!
+          sleep 1
+          timeout 6s apps/install-adaptive-autosar/bin/example_class_sub > /tmp/lwrcl_autosar_dds_sub.log 2>&1 &
+          DDS_SUB_PID=$!
+          sleep 1
+          timeout 4s apps/install-adaptive-autosar/bin/example_class_pub > /tmp/lwrcl_autosar_dds_pub.log 2>&1 || true
+          wait "${DDS_SUB_PID}" || true
+          wait "${DDS_RM_PID}" || true
+          grep -q "Publishing: 'Hello, world!" /tmp/lwrcl_autosar_dds_pub.log
+          grep -q "I heard: 'Hello, world!" /tmp/lwrcl_autosar_dds_sub.log
+          ! grep -q "REGISTER EVENT" /tmp/lwrcl_autosar_dds_rm.log
+
+          # vsomeip profile mode
+          unset ARA_COM_EVENT_BINDING
+          export ARA_COM_BINDING_MANIFEST="${VSOMEIP_MANIFEST}"
+          timeout 10s "${AUTOSAR_AP_PREFIX}/bin/autosar_vsomeip_routing_manager" > /tmp/lwrcl_autosar_vsomeip_rm.log 2>&1 &
           RM_PID=$!
           sleep 1
-          timeout 4s apps/install-adaptive-autosar/bin/example_class_pub > /tmp/lwrcl_autosar_vsomeip.log 2>&1 || true
+          timeout 6s apps/install-adaptive-autosar/bin/example_class_sub > /tmp/lwrcl_autosar_vsomeip_sub.log 2>&1 &
+          VSOMEIP_SUB_PID=$!
+          sleep 1
+          timeout 4s apps/install-adaptive-autosar/bin/example_class_pub > /tmp/lwrcl_autosar_vsomeip_pub.log 2>&1 || true
+          wait "${VSOMEIP_SUB_PID}" || true
           wait "$RM_PID" || true
-          grep -q "Publishing: 'Hello, world!" /tmp/lwrcl_autosar_vsomeip.log
+          grep -q "Publishing: 'Hello, world!" /tmp/lwrcl_autosar_vsomeip_pub.log
+          grep -q "I heard: 'Hello, world!" /tmp/lwrcl_autosar_vsomeip_sub.log
+          grep -q "REGISTER EVENT" /tmp/lwrcl_autosar_vsomeip_rm.log
