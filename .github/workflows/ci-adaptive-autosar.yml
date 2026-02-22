@@ -129,11 +129,12 @@ jobs:
           test -x apps/install-adaptive-autosar/bin/example_spin
           test -x apps/install-adaptive-autosar/bin/example_service_server
 
-      - name: Smoke check runtime backend selection (DDS / vsomeip)
+      - name: Smoke check runtime backend selection (DDS / vsomeip / iceoryx)
         run: |
           set -euo pipefail
           export LD_LIBRARY_PATH="/opt/iceoryx/lib:$DDS_PREFIX/lib:$VSOMEIP_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib:${LD_LIBRARY_PATH:-}"
           DDS_MANIFEST="${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml"
+          ICEORYX_MANIFEST="${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_manifest_iceoryx.yaml"
           VSOMEIP_MANIFEST="${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml"
           export VSOMEIP_CONFIGURATION="${AUTOSAR_AP_PREFIX}/configuration/vsomeip-rpi.json"
 
@@ -168,3 +169,21 @@ jobs:
           grep -q "Publishing: 'Hello, world!" /tmp/lwrcl_autosar_vsomeip_pub.log
           grep -q "I heard: 'Hello, world!" /tmp/lwrcl_autosar_vsomeip_sub.log
           grep -q "REGISTER EVENT" /tmp/lwrcl_autosar_vsomeip_rm.log
+
+          # iceoryx profile mode
+          # Run pub/sub in one process to avoid zero-copy runtime-name collision
+          # between separate publisher/subscriber executables.
+          if [ -x /opt/iceoryx/bin/iox-roudi ] && [ -f "${ICEORYX_MANIFEST}" ]; then
+            unset ARA_COM_EVENT_BINDING
+            export ARA_COM_BINDING_MANIFEST="${ICEORYX_MANIFEST}"
+            timeout 10s /opt/iceoryx/bin/iox-roudi > /tmp/lwrcl_autosar_iceoryx_roudi.log 2>&1 &
+            ROUDI_PID=$!
+            sleep 1
+            timeout 6s apps/install-adaptive-autosar/bin/example_class_pubsub_executor > /tmp/lwrcl_autosar_iceoryx_exec.log 2>&1 || true
+            wait "${ROUDI_PID}" || true
+            grep -q "Publishing: 'Hello, world!" /tmp/lwrcl_autosar_iceoryx_exec.log
+            grep -q "I heard: 'Hello, world!" /tmp/lwrcl_autosar_iceoryx_exec.log
+            ! grep -Eiq "error|fatal|panic" /tmp/lwrcl_autosar_iceoryx_roudi.log
+          else
+            echo "Skip iceoryx runtime smoke (iox-roudi or iceoryx manifest is unavailable)."
+          fi
