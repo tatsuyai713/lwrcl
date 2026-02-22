@@ -187,6 +187,7 @@ Adaptive AUTOSAR バックエンドは ARXML 介在構成に対応していま�
   - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_topic_mapping.yaml`
   - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest.yaml`
   - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml`
+  - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_iceoryx.yaml`（codegen が `event_binding: iceoryx` に対応している場合）
   - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml`
 - アプリビルド時に生成される proxy/skeleton ヘッダ:
   - `apps/build-adaptive-autosar/autosar/generated/lwrcl_autosar_proxy_skeleton.hpp`
@@ -198,6 +199,7 @@ Adaptive AUTOSAR バックエンドは ARXML 介在構成に対応していま�
 - `autosar-generate-proxy-skeleton`
 - 既定のインストール先: `/opt/autosar_ap/bin`（Adaptive AUTOSAR ビルドスクリプトで PATH に追加）
 - Adaptive-AUTOSAR プロジェクト側のスクリプト配置先: `tools/ara_com_codegen/`
+- `autosar-generate-comm-manifest --help` に `iceoryx` が出ない場合は、Adaptive-AUTOSAR codegen ツールを更新するか `AUTOSAR_COMM_MANIFEST_GENERATOR` を上書きしてください。
 
 Adaptive AUTOSAR mapping 関連の環境変数:
 
@@ -206,13 +208,13 @@ Adaptive AUTOSAR mapping 関連の環境変数:
 | `ARA_COM_TOPIC_MAPPING` | 実行時 topic mapping YAML のパス上書き |
 | `ARA_COM_REQUIRE_TOPIC_MAPPING=1` | mapping 未登録トピックをエラー扱い |
 | `ARA_COM_DISABLE_TOPIC_MAPPING=1` | mapping を無効化して direct DDS 名を使用 |
-| `ARA_COM_BINDING_MANIFEST` | 実行時 binding profile manifest のパス（`event_binding: dds` または `event_binding: vsomeip`） |
+| `ARA_COM_BINDING_MANIFEST` | 実行時 binding profile manifest のパス（`event_binding: dds` / `iceoryx` / `vsomeip`） |
 | `AUTOSAR_APP_SOURCE_ROOT` | topic/service 抽出対象のアプリソースルート |
 | `AUTOSAR_ARXML_GENERATOR` | ビルド時 ARXML 生成スクリプトのパス上書き |
 | `AUTOSAR_COMM_MANIFEST_GENERATOR` | ビルド時 mapping 生成コマンドの上書き（既定: `autosar-generate-comm-manifest`） |
 | `AUTOSAR_PROXY_SKELETON_GENERATOR` | ビルド時 proxy/skeleton 生成コマンドの上書き（既定: `autosar-generate-proxy-skeleton`） |
 | `AUTOSAR_EVENT_BINDING` | `lwrcl_autosar_manifest.yaml` の build 時既定 `event_binding`（既定: `auto`） |
-| `AUTOSAR_GENERATE_BINDING_PROFILES=1` | `lwrcl_autosar_manifest_dds.yaml` / `lwrcl_autosar_manifest_vsomeip.yaml` も生成・インストール |
+| `AUTOSAR_GENERATE_BINDING_PROFILES=1` | `lwrcl_autosar_manifest_dds.yaml` / `lwrcl_autosar_manifest_iceoryx.yaml` / `lwrcl_autosar_manifest_vsomeip.yaml` も生成・インストール |
 | `VSOMEIP_PREFIX` | ビルド時 vsomeip インストール先の上書き（既定: `/opt/vsomeip`） |
 | `VSOMEIP_CONFIGURATION` | 実行時 vsomeip 設定ファイルパス |
 
@@ -228,6 +230,13 @@ export VSOMEIP_CONFIGURATION=/opt/autosar_ap/configuration/vsomeip-rpi.json
 apps/install-adaptive-autosar/bin/example_class_sub &
 apps/install-adaptive-autosar/bin/example_class_pub
 
+# iceoryx トランスポート profile
+unset ARA_COM_EVENT_BINDING
+export ARA_COM_BINDING_MANIFEST=/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_iceoryx.yaml
+iox-roudi &
+apps/install-adaptive-autosar/bin/example_class_sub &
+apps/install-adaptive-autosar/bin/example_class_pub
+
 # SOME/IP トランスポート profile
 unset ARA_COM_EVENT_BINDING
 export ARA_COM_BINDING_MANIFEST=/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml
@@ -240,6 +249,7 @@ apps/install-adaptive-autosar/bin/example_class_pub
 切り替え確認の観点:
 
 - DDS profile: Subscriber が `I heard: 'Hello, world! ...'` を出力し、routing manager ログに `REGISTER EVENT` が出ないこと。
+- iceoryx profile: `iox-roudi` 起動下で Subscriber が `I heard: 'Hello, world! ...'` を出力し、トランスポートエラーが出ないこと。
 - SOME/IP profile: Subscriber が `I heard: 'Hello, world! ...'` を出力し、routing manager ログに `REGISTER EVENT` / `SUBSCRIBE` が出ること。
 
 ### ビルドディレクトリのクリーン

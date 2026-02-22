@@ -121,6 +121,9 @@ jobs:
           test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest.arxml
           test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest.yaml
           test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml
+          if /opt/autosar_ap/bin/autosar-generate-comm-manifest --help 2>&1 | grep -q "iceoryx"; then
+            test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_iceoryx.yaml
+          fi
           test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml
           test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_topic_mapping.yaml
           test -x apps/install-adaptive-autosar/bin/example_spin

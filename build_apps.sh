@@ -85,6 +85,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     AUTOSAR_GEN_MAPPING="${AUTOSAR_GEN_DIR}/lwrcl_autosar_topic_mapping.yaml"
     AUTOSAR_GEN_MANIFEST_YAML="${AUTOSAR_GEN_DIR}/lwrcl_autosar_manifest.yaml"
     AUTOSAR_GEN_MANIFEST_DDS_YAML="${AUTOSAR_GEN_DIR}/lwrcl_autosar_manifest_dds.yaml"
+    AUTOSAR_GEN_MANIFEST_ICEORYX_YAML="${AUTOSAR_GEN_DIR}/lwrcl_autosar_manifest_iceoryx.yaml"
     AUTOSAR_GEN_MANIFEST_VSOMEIP_YAML="${AUTOSAR_GEN_DIR}/lwrcl_autosar_manifest_vsomeip.yaml"
     AUTOSAR_GEN_ARXML="${AUTOSAR_GEN_DIR}/lwrcl_autosar_manifest.arxml"
     AUTOSAR_GEN_PROXY_SKELETON_DIR="${AUTOSAR_GEN_DIR}/generated"
@@ -99,6 +100,11 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
         echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar_ap/bin."
         exit 1
     fi
+    AUTOSAR_MAPPING_GENERATOR_HELP="$("${AUTOSAR_MAPPING_GENERATOR_CMD}" --help 2>&1 || true)"
+    AUTOSAR_SUPPORTS_ICEORYX_BINDING=0
+    if printf "%s\n" "${AUTOSAR_MAPPING_GENERATOR_HELP}" | grep -Eq "(^|[^[:alnum:]_])iceoryx([^[:alnum:]_]|$)"; then
+        AUTOSAR_SUPPORTS_ICEORYX_BINDING=1
+    fi
     "${AUTOSAR_MAPPING_GENERATOR_CMD}" \
       --apps-root "${AUTOSAR_APP_SOURCE_ROOT}" \
       --output-mapping "${AUTOSAR_GEN_MAPPING}" \
@@ -106,11 +112,25 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
       --event-binding "${AUTOSAR_EVENT_BINDING}" \
       --print-summary
     if [ "${AUTOSAR_GENERATE_BINDING_PROFILES}" = "1" ]; then
+        rm -f "${AUTOSAR_GEN_MANIFEST_DDS_YAML}" \
+              "${AUTOSAR_GEN_MANIFEST_ICEORYX_YAML}" \
+              "${AUTOSAR_GEN_MANIFEST_VSOMEIP_YAML}"
         "${AUTOSAR_MAPPING_GENERATOR_CMD}" \
           --apps-root "${AUTOSAR_APP_SOURCE_ROOT}" \
           --output-mapping "${AUTOSAR_GEN_MAPPING}" \
           --output-manifest "${AUTOSAR_GEN_MANIFEST_DDS_YAML}" \
           --event-binding "dds"
+        if [ "${AUTOSAR_SUPPORTS_ICEORYX_BINDING}" = "1" ]; then
+            "${AUTOSAR_MAPPING_GENERATOR_CMD}" \
+              --apps-root "${AUTOSAR_APP_SOURCE_ROOT}" \
+              --output-mapping "${AUTOSAR_GEN_MAPPING}" \
+              --output-manifest "${AUTOSAR_GEN_MANIFEST_ICEORYX_YAML}" \
+              --event-binding "iceoryx"
+        else
+            echo "Warning: ${AUTOSAR_MAPPING_GENERATOR_CMD} does not support 'iceoryx' event binding."
+            echo "Update Adaptive-AUTOSAR codegen tools or set AUTOSAR_COMM_MANIFEST_GENERATOR to an iceoryx-capable command."
+            rm -f "${AUTOSAR_GEN_MANIFEST_ICEORYX_YAML}"
+        fi
         "${AUTOSAR_MAPPING_GENERATOR_CMD}" \
           --apps-root "${AUTOSAR_APP_SOURCE_ROOT}" \
           --output-mapping "${AUTOSAR_GEN_MAPPING}" \
@@ -165,6 +185,9 @@ if [ "$ACTION" = "install" ]; then
         sudo cp "${AUTOSAR_GEN_MANIFEST_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest.yaml"
         if [ -f "${AUTOSAR_GEN_MANIFEST_DDS_YAML}" ]; then
             sudo cp "${AUTOSAR_GEN_MANIFEST_DDS_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest_dds.yaml"
+        fi
+        if [ -f "${AUTOSAR_GEN_MANIFEST_ICEORYX_YAML}" ]; then
+            sudo cp "${AUTOSAR_GEN_MANIFEST_ICEORYX_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest_iceoryx.yaml"
         fi
         if [ -f "${AUTOSAR_GEN_MANIFEST_VSOMEIP_YAML}" ]; then
             sudo cp "${AUTOSAR_GEN_MANIFEST_VSOMEIP_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest_vsomeip.yaml"

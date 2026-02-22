@@ -187,6 +187,7 @@ Adaptive AUTOSAR backend is now ARXML-mediated:
   - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_topic_mapping.yaml`
   - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest.yaml`
   - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml`
+  - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_iceoryx.yaml` (when codegen supports `event_binding: iceoryx`)
   - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml`
 - Generated app-local proxy/skeleton header:
   - `apps/build-adaptive-autosar/autosar/generated/lwrcl_autosar_proxy_skeleton.hpp`
@@ -198,6 +199,7 @@ Required Adaptive-AUTOSAR codegen commands:
 - `autosar-generate-proxy-skeleton`
 - Default install location: `/opt/autosar_ap/bin` (added to `PATH` by Adaptive AUTOSAR build scripts)
 - Script source location in Adaptive-AUTOSAR project: `tools/ara_com_codegen/`
+- If `autosar-generate-comm-manifest --help` does not list `iceoryx` in `--event-binding`, update Adaptive-AUTOSAR codegen tools or override `AUTOSAR_COMM_MANIFEST_GENERATOR`.
 
 Adaptive AUTOSAR mapping-related environment variables:
 
@@ -206,13 +208,13 @@ Adaptive AUTOSAR mapping-related environment variables:
 | `ARA_COM_TOPIC_MAPPING` | Runtime path override for topic mapping YAML |
 | `ARA_COM_REQUIRE_TOPIC_MAPPING=1` | Fail when topic is not found in mapping |
 | `ARA_COM_DISABLE_TOPIC_MAPPING=1` | Disable mapping and use direct DDS topic names |
-| `ARA_COM_BINDING_MANIFEST` | Runtime binding profile manifest path (`event_binding: dds` or `event_binding: vsomeip`) |
+| `ARA_COM_BINDING_MANIFEST` | Runtime binding profile manifest path (`event_binding: dds`, `iceoryx`, or `vsomeip`) |
 | `AUTOSAR_APP_SOURCE_ROOT` | App source root to scan for topic/service usage |
 | `AUTOSAR_ARXML_GENERATOR` | Build-time override for ARXML generator script path |
 | `AUTOSAR_COMM_MANIFEST_GENERATOR` | Build-time override for mapping generator command (default: `autosar-generate-comm-manifest`) |
 | `AUTOSAR_PROXY_SKELETON_GENERATOR` | Build-time override for proxy/skeleton generator command (default: `autosar-generate-proxy-skeleton`) |
 | `AUTOSAR_EVENT_BINDING` | Build-time default `event_binding` for `lwrcl_autosar_manifest.yaml` (default: `auto`) |
-| `AUTOSAR_GENERATE_BINDING_PROFILES=1` | Also generate/install `lwrcl_autosar_manifest_dds.yaml` and `lwrcl_autosar_manifest_vsomeip.yaml` |
+| `AUTOSAR_GENERATE_BINDING_PROFILES=1` | Also generate/install `lwrcl_autosar_manifest_dds.yaml`, `lwrcl_autosar_manifest_iceoryx.yaml`, and `lwrcl_autosar_manifest_vsomeip.yaml` |
 | `VSOMEIP_PREFIX` | Build-time vsomeip install prefix override (default: `/opt/vsomeip`) |
 | `VSOMEIP_CONFIGURATION` | Runtime vsomeip configuration file path |
 
@@ -228,6 +230,13 @@ export VSOMEIP_CONFIGURATION=/opt/autosar_ap/configuration/vsomeip-rpi.json
 apps/install-adaptive-autosar/bin/example_class_sub &
 apps/install-adaptive-autosar/bin/example_class_pub
 
+# iceoryx transport profile
+unset ARA_COM_EVENT_BINDING
+export ARA_COM_BINDING_MANIFEST=/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_iceoryx.yaml
+iox-roudi &
+apps/install-adaptive-autosar/bin/example_class_sub &
+apps/install-adaptive-autosar/bin/example_class_pub
+
 # SOME/IP transport profile
 unset ARA_COM_EVENT_BINDING
 export ARA_COM_BINDING_MANIFEST=/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml
@@ -240,6 +249,7 @@ apps/install-adaptive-autosar/bin/example_class_pub
 Switch verification checklist:
 
 - DDS profile: subscriber prints `I heard: 'Hello, world! ...'`, and routing manager log does not show `REGISTER EVENT`.
+- iceoryx profile: subscriber prints `I heard: 'Hello, world! ...'` with `iox-roudi` running and no runtime transport errors.
 - SOME/IP profile: subscriber prints `I heard: 'Hello, world! ...'`, and routing manager log shows `REGISTER EVENT` / `SUBSCRIBE`.
 
 ### Cleaning Build Directories
