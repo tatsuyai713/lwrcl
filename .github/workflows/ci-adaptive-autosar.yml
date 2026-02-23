@@ -11,9 +11,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CYCLONEDDS_VERSION: "0.10.5"
   ADAPTIVE_AUTOSAR_REF: "master"
   DDS_PREFIX: /opt/cyclonedds
+  ICEORYX_PREFIX: /opt/iceoryx
   VSOMEIP_PREFIX: /opt/vsomeip
   AUTOSAR_AP_PREFIX: /opt/autosar_ap
   LWRCL_PREFIX: /opt/autosar-ap-libs
@@ -38,51 +38,38 @@ jobs:
             libboost-dev libopencv-dev \
             python3 python3-pip
 
-      - name: Cache Cyclone DDS
-        id: cache-cyclonedds
+      - name: Cache middleware stack
+        id: cache-middleware-stack
         uses: actions/cache@v4
         with:
-          path: /opt/cyclonedds
-          key: cyclonedds-${{ env.CYCLONEDDS_VERSION }}-ubuntu2404-v2
+          path: |
+            /opt/cyclonedds
+            /opt/iceoryx
+            /opt/vsomeip
+          key: adaptive-autosar-middleware-${{ env.ADAPTIVE_AUTOSAR_REF }}-ubuntu2404-v1
 
-      - name: Build & install Cyclone DDS
-        if: steps.cache-cyclonedds.outputs.cache-hit != 'true'
+      - name: Build & install middleware stack (Adaptive-AUTOSAR script)
+        if: steps.cache-middleware-stack.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          WORK="$RUNNER_TEMP/dds_build"
+          WORK="$RUNNER_TEMP/adaptive_autosar_build"
           mkdir -p "$WORK" && cd "$WORK"
-
-          sudo mkdir -p $DDS_PREFIX
-
-          git clone https://github.com/eclipse-cyclonedds/cyclonedds.git --depth 1
-          cd cyclonedds && git fetch --tags && git checkout ${CYCLONEDDS_VERSION}
-          cmake -S . -B build \
-            -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX \
-            -DBUILD_SHARED_LIBS=ON \
-            -DENABLE_SHM=OFF
-          cmake --build build -j$(nproc)
-          sudo cmake --install build
-          cd "$WORK"
-
-          git clone https://github.com/eclipse-cyclonedds/cyclonedds-cxx.git --depth 1
-          cd cyclonedds-cxx && git fetch --tags && git checkout ${CYCLONEDDS_VERSION}
-          cmake -B build \
-            -DCMAKE_PREFIX_PATH=$DDS_PREFIX \
-            -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX \
-            -DBUILD_IDLCPP_GENERATOR=ON \
-            -DCYCLONEDDS_CXX_BLD_IDLCPP=ON \
-            -DENABLE_TOPIC_DISCOVERY=OFF \
-            -DDDSCXX_NO_STD_OPTIONAL=ON \
-            -DBUILD_SHARED_LIBS=ON
-          cmake --build build -j$(nproc)
-          sudo cmake --install build
+          if [ ! -d Adaptive-AUTOSAR ]; then
+            git clone --depth 1 --branch ${ADAPTIVE_AUTOSAR_REF} https://github.com/tatsuyai713/Adaptive-AUTOSAR.git
+          fi
+          cd Adaptive-AUTOSAR
+          ./scripts/install_middleware_stack.sh \
+            --install-base-deps \
+            --cyclonedds-prefix ${DDS_PREFIX} \
+            --iceoryx-prefix ${ICEORYX_PREFIX} \
+            --vsomeip-prefix ${VSOMEIP_PREFIX}
 
       - name: Cache Adaptive AUTOSAR runtime
         id: cache-adaptive-autosar
         uses: actions/cache@v4
         with:
           path: /opt/autosar_ap
-          key: adaptive-autosar-${{ env.ADAPTIVE_AUTOSAR_REF }}-cyclonedds-${{ env.CYCLONEDDS_VERSION }}-ubuntu2404-v2
+          key: adaptive-autosar-runtime-${{ env.ADAPTIVE_AUTOSAR_REF }}-ubuntu2404-v4
 
       - name: Build & install Adaptive AUTOSAR runtime
         if: steps.cache-adaptive-autosar.outputs.cache-hit != 'true'
@@ -90,18 +77,21 @@ jobs:
           set -euo pipefail
           WORK="$RUNNER_TEMP/adaptive_autosar_build"
           mkdir -p "$WORK" && cd "$WORK"
-          git clone --depth 1 --branch ${ADAPTIVE_AUTOSAR_REF} https://github.com/tatsuyai713/Adaptive-AUTOSAR.git
+          if [ ! -d Adaptive-AUTOSAR ]; then
+            git clone --depth 1 --branch ${ADAPTIVE_AUTOSAR_REF} https://github.com/tatsuyai713/Adaptive-AUTOSAR.git
+          fi
           cd Adaptive-AUTOSAR
           ./scripts/build_and_install_autosar_ap.sh \
             --prefix ${AUTOSAR_AP_PREFIX} \
             --build-dir build-ci \
-            --without-iceoryx \
+            --vsomeip-prefix ${VSOMEIP_PREFIX} \
+            --iceoryx-prefix ${ICEORYX_PREFIX} \
             --cyclonedds-prefix ${DDS_PREFIX}
 
       - name: Configure environment
         run: |
           echo "$DDS_PREFIX/bin" >> $GITHUB_PATH
-          echo "LD_LIBRARY_PATH=$DDS_PREFIX/lib:$VSOMEIP_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$ICEORYX_PREFIX/lib:$DDS_PREFIX/lib:$VSOMEIP_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib" >> $GITHUB_ENV
 
       - name: Install Python dependency for ARXML generation
         run: |
