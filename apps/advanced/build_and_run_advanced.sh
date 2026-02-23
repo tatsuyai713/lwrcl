@@ -17,7 +17,7 @@ JOBS=$(nproc 2>/dev/null || echo 4)
 # ---------------------------------------------------------------------------
 show_usage() {
     cat <<EOF
-Usage: $0 <fastdds|cyclonedds> [action] [target]
+Usage: $0 <fastdds|cyclonedds|adaptive-autosar> [action] [target]
 
 Actions:
   build              – Configure & build advanced examples
@@ -33,7 +33,7 @@ Targets (for 'run'):
   state_machine_controller
 
 Examples:
-  $0 fastdds build
+    $0 fastdds build
   $0 fastdds run video_stream_pipeline
   $0 cyclonedds run diagnostic_aggregator -- --params-file config/diagnostic_aggregator.yaml
   $0 fastdds clean
@@ -52,8 +52,14 @@ if [ "$BACKEND" = "fastdds" ]; then
 elif [ "$BACKEND" = "cyclonedds" ]; then
     DDS_PREFIX="/opt/cyclonedds"
     LWRCL_PREFIX="/opt/cyclonedds-libs"
+elif [ "$BACKEND" = "adaptive-autosar" ]; then
+    AUTOSAR_AP_PREFIX="/opt/autosar_ap"
+    DDS_PREFIX="/opt/cyclonedds"
+    VSOMEIP_PREFIX="/opt/vsomeip"
+    ICEORYX_PREFIX="/opt/iceoryx"
+    LWRCL_PREFIX="/opt/autosar-ap-libs"
 else
-    echo "ERROR: Unknown backend '$BACKEND'. Use 'fastdds' or 'cyclonedds'."
+    echo "ERROR: Unknown backend '$BACKEND'. Use 'fastdds', 'cyclonedds' or 'adaptive-autosar'."
     show_usage
     exit 1
 fi
@@ -62,6 +68,21 @@ BUILD_DIR="${APPS_DIR}/build-advanced-${BACKEND}"
 
 export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 export PATH="${DDS_PREFIX}/bin:${PATH}"
+
+if [ "$BACKEND" = "adaptive-autosar" ]; then
+    export LD_LIBRARY_PATH="${AUTOSAR_AP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    if [ -d "${VSOMEIP_PREFIX}/lib" ]; then
+        export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    fi
+    if [ -d "${AUTOSAR_AP_PREFIX}/bin" ]; then
+        export PATH="${AUTOSAR_AP_PREFIX}/bin:${PATH}"
+    fi
+fi
+
+# Ensure iceoryx libraries are available for build-time tools (idlc)
+if [ -n "${ICEORYX_PREFIX:-}" ] && [ -d "${ICEORYX_PREFIX}/lib" ]; then
+    export LD_LIBRARY_PATH="${ICEORYX_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
 
 # ---------------------------------------------------------------------------
 do_build() {
@@ -88,6 +109,16 @@ do_build() {
         CMAKE_ARGS+=(
             -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
             -Dyaml-cpp_DIR="${LWRCL_PREFIX}/lib/cmake/yaml-cpp/"
+        )
+    elif [ "$BACKEND" = "adaptive-autosar" ]; then
+        # Adaptive AUTOSAR: provide AP prefix, CycloneDDS prefix and generated proxy header dir
+        AUTOSAR_GENERATED_DIR="${ROOT_DIR}/data_types/build-adaptive-autosar/autosar/generated"
+        CMAKE_ARGS+=(
+            -DAUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX}"
+            -DDDS_PREFIX="${DDS_PREFIX}"
+            -DAUTOSAR_GENERATED_PROXY_SKELETON_DIR="${AUTOSAR_GENERATED_DIR}"
+            -DICEORYX_PREFIX="${ICEORYX_PREFIX}"
+            -DCMAKE_PREFIX_PATH="${AUTOSAR_AP_PREFIX}/lib/cmake/AdaptiveAutosarAP;${DDS_PREFIX}/lib/cmake;${ICEORYX_PREFIX}/lib/cmake"
         )
     fi
 

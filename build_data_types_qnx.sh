@@ -12,17 +12,20 @@ JOBS=$(nproc 2>/dev/null || echo 4)
 
 generate_adaptive_autosar_artifacts_qnx() {
     local manifest_input mapping_input output_dir output_arxml output_mapping output_manifest
-    local apps_root mapping_generator_cmd event_binding
+    local output_proxy_dir output_proxy_header apps_root mapping_generator_cmd proxy_skeleton_generator_cmd proxy_skeleton_patcher event_binding
     local generator=""
     manifest_input="${AUTOSAR_ARXML_MANIFEST_YAML:-}"
     mapping_input="${AUTOSAR_TOPIC_MAPPING_YAML:-}"
     apps_root="${AUTOSAR_APP_SOURCE_ROOT:-${SCRIPT_DIR}/apps}"
     event_binding="${AUTOSAR_EVENT_BINDING:-auto}"
     mapping_generator_cmd="${AUTOSAR_COMM_MANIFEST_GENERATOR:-autosar-generate-comm-manifest}"
+    proxy_skeleton_generator_cmd="${AUTOSAR_PROXY_SKELETON_GENERATOR:-autosar-generate-proxy-skeleton}"
     output_dir="${BUILD_DIR}/autosar"
     output_arxml="${output_dir}/lwrcl_autosar_manifest.arxml"
     output_mapping="${output_dir}/lwrcl_autosar_topic_mapping.yaml"
     output_manifest="${output_dir}/lwrcl_autosar_manifest.yaml"
+    output_proxy_dir="${output_dir}/generated"
+    output_proxy_header="${output_proxy_dir}/lwrcl_autosar_proxy_skeleton.hpp"
 
     mkdir -p "${output_dir}"
 
@@ -35,13 +38,26 @@ generate_adaptive_autosar_artifacts_qnx() {
             echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar_ap/bin."
             exit 1
         fi
-        "${mapping_generator_cmd}" \
-          --apps-root "${apps_root}" \
-          --output-mapping "${output_mapping}" \
-          --output-manifest "${output_manifest}" \
-          --event-binding "${event_binding}" \
-          --print-summary
+                "${mapping_generator_cmd}" \
+                    --apps-root "${apps_root}" \
+                    --output-mapping "${output_mapping}" \
+                    --output-manifest "${output_manifest}" \
+                    --event-binding "${event_binding}" \
+                    --print-summary
     fi
+
+        if ! command -v "${proxy_skeleton_generator_cmd}" >/dev/null 2>&1; then
+            echo "Adaptive AUTOSAR proxy/skeleton generator command not found: ${proxy_skeleton_generator_cmd}"
+            echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar_ap/bin."
+            exit 1
+        fi
+        mkdir -p "${output_proxy_dir}"
+        "${proxy_skeleton_generator_cmd}" \
+          --mapping "${output_mapping}" \
+          --output "${output_proxy_header}" \
+          --namespace "autosar_generated" \
+          --print-summary
+        # No post-generation patch required; modern generator includes runtime-name handling.
 
     if [ "${AUTOSAR_SKIP_ARXML_GEN:-0}" = "1" ]; then
         echo "Skipping ARXML generation (AUTOSAR_SKIP_ARXML_GEN=1)."
@@ -89,6 +105,11 @@ install_adaptive_autosar_artifacts_qnx() {
     fi
     if [ -f "${output_dir}/lwrcl_autosar_manifest.yaml" ]; then
         sudo cp "${output_dir}/lwrcl_autosar_manifest.yaml" "${install_dir}/"
+    fi
+    if [ -f "${output_dir}/generated/lwrcl_autosar_proxy_skeleton.hpp" ]; then
+        sudo mkdir -p "${LWRCL_PREFIX}/include"
+        sudo cp "${output_dir}/generated/lwrcl_autosar_proxy_skeleton.hpp" \
+          "${LWRCL_PREFIX}/include/lwrcl_autosar_proxy_skeleton.hpp"
     fi
 }
 

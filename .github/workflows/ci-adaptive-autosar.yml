@@ -215,6 +215,41 @@ jobs:
 
           cleanup_runtime_processes
 
+      - name: Smoke check service request/response
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="/opt/iceoryx/lib:$DDS_PREFIX/lib:$VSOMEIP_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+
+          cleanup_sr_processes() {
+            pkill -x autosar_vsomeip_routing_manager || true
+            pkill -x iox-roudi || true
+            pkill -x example_service_server || true
+            pkill -x example_service_client || true
+          }
+
+          hard_timeout() { timeout --signal=TERM --kill-after=2s "$@"; }
+
+          trap cleanup_sr_processes EXIT INT TERM
+          cleanup_sr_processes
+
+          hard_timeout 12s "${AUTOSAR_AP_PREFIX}/bin/autosar_vsomeip_routing_manager" > /tmp/lwrcl_autosar_sr_rm.log 2>&1 &
+          RM_PID=$!
+          sleep 1
+
+          hard_timeout 8s apps/install-adaptive-autosar/bin/example_service_server > /tmp/lwrcl_autosar_service_server.log 2>&1 &
+          SRV_PID=$!
+          sleep 1
+
+          hard_timeout 6s apps/install-adaptive-autosar/bin/example_service_client > /tmp/lwrcl_autosar_service_client.log 2>&1 || true
+          wait "${SRV_PID}" || true
+          wait "${RM_PID}" || true
+
+          grep -q "Create CameraInfo service server." /tmp/lwrcl_autosar_service_server.log
+          grep -q "Received request." /tmp/lwrcl_autosar_service_server.log
+          grep -q "Success to call service." /tmp/lwrcl_autosar_service_client.log
+
+          cleanup_sr_processes
+
       - name: Smoke check Adaptive AUTOSAR loaned-message API
         run: |
           set -euo pipefail

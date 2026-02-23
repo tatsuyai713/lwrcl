@@ -7,6 +7,7 @@
 #   ./run_build_test.sh fastdds          # Build only FastDDS backend
 #   ./run_build_test.sh cyclonedds       # Build only CycloneDDS backend
 #   ./run_build_test.sh vsomeip          # Build only vsomeip backend
+#   ./run_build_test.sh adaptive-autosar # Build only Adaptive AUTOSAR backend
 #   ./run_build_test.sh --clean          # Clean all build dirs first
 #   ./run_build_test.sh fastdds --clean  # Clean then build FastDDS only
 # ===========================================================================
@@ -28,17 +29,18 @@ CLEAN=false
 # Parse args
 for arg in "$@"; do
     case "$arg" in
-        fastdds)     BACKENDS+=(fastdds) ;;
-        cyclonedds)  BACKENDS+=(cyclonedds) ;;
-        vsomeip)     BACKENDS+=(vsomeip) ;;
+        fastdds)        BACKENDS+=(fastdds) ;;
+        cyclonedds)     BACKENDS+=(cyclonedds) ;;
+        vsomeip)        BACKENDS+=(vsomeip) ;;
+        adaptive-autosar) BACKENDS+=(adaptive-autosar) ;;
         --clean)     CLEAN=true ;;
         *)           echo "Unknown arg: $arg"; exit 1 ;;
     esac
 done
 
-# Default: both backends
+# Default: build all supported backends
 if [ ${#BACKENDS[@]} -eq 0 ]; then
-    BACKENDS=(fastdds cyclonedds vsomeip)
+    BACKENDS=(fastdds cyclonedds vsomeip adaptive-autosar)
 fi
 
 PASS=0
@@ -80,6 +82,8 @@ check_dds_installed() {
         [ -d "/opt/cyclonedds" ]
     elif [ "$backend" = "vsomeip" ]; then
         [ -d "/opt/vsomeip" ] && [ -d "/opt/cyclonedds" ]
+    elif [ "$backend" = "adaptive-autosar" ]; then
+        [ -d "/opt/autosar_ap" ] && [ -d "/opt/cyclonedds" ]
     fi
 }
 
