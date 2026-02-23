@@ -213,8 +213,11 @@ Adaptive AUTOSAR mapping-related environment variables:
 | `AUTOSAR_ARXML_GENERATOR` | Build-time override for ARXML generator script path |
 | `AUTOSAR_COMM_MANIFEST_GENERATOR` | Build-time override for mapping generator command (default: `autosar-generate-comm-manifest`) |
 | `AUTOSAR_PROXY_SKELETON_GENERATOR` | Build-time override for proxy/skeleton generator command (default: `autosar-generate-proxy-skeleton`) |
+| `AUTOSAR_PROXY_SKELETON_PATCHER` | Build-time override for generated proxy/skeleton post-patcher script (default: `scripts/patch_autosar_proxy_skeleton_runtime_name.py`) |
 | `AUTOSAR_EVENT_BINDING` | Build-time default `event_binding` for `lwrcl_autosar_manifest.yaml` (default: `auto`) |
 | `AUTOSAR_GENERATE_BINDING_PROFILES=1` | Also generate/install `lwrcl_autosar_manifest_dds.yaml`, `lwrcl_autosar_manifest_iceoryx.yaml`, and `lwrcl_autosar_manifest_vsomeip.yaml` |
+| `ARA_COM_ICEORYX_RUNTIME_NAME` | Runtime fixed iceoryx app name override (if unset, lwrcl appends PID to avoid collisions) |
+| `ARA_COM_ICEORYX_RUNTIME_PREFIX` | Runtime prefix for auto-generated iceoryx app name (`<prefix>_<pid>`) |
 | `VSOMEIP_PREFIX` | Build-time vsomeip install prefix override (default: `/opt/vsomeip`) |
 | `VSOMEIP_CONFIGURATION` | Runtime vsomeip configuration file path |
 

@@ -11,7 +11,7 @@ JOBS=$(nproc 2>/dev/null || echo 4)
 generate_adaptive_autosar_artifacts() {
     local manifest_input mapping_input output_dir output_arxml output_mapping output_manifest
     local output_proxy_dir output_proxy_header apps_root
-    local mapping_generator_cmd proxy_skeleton_generator_cmd
+    local mapping_generator_cmd proxy_skeleton_generator_cmd proxy_skeleton_patcher
     local generator=""
     local event_binding
     manifest_input="${AUTOSAR_ARXML_MANIFEST_YAML:-}"
@@ -20,6 +20,7 @@ generate_adaptive_autosar_artifacts() {
     event_binding="${AUTOSAR_EVENT_BINDING:-auto}"
     mapping_generator_cmd="${AUTOSAR_COMM_MANIFEST_GENERATOR:-autosar-generate-comm-manifest}"
     proxy_skeleton_generator_cmd="${AUTOSAR_PROXY_SKELETON_GENERATOR:-autosar-generate-proxy-skeleton}"
+    proxy_skeleton_patcher="${AUTOSAR_PROXY_SKELETON_PATCHER:-${SCRIPT_DIR}/scripts/patch_autosar_proxy_skeleton_runtime_name.py}"
     output_dir="${BUILD_DIR}/autosar"
     output_arxml="${output_dir}/lwrcl_autosar_manifest.arxml"
     output_mapping="${output_dir}/lwrcl_autosar_topic_mapping.yaml"
@@ -57,6 +58,12 @@ generate_adaptive_autosar_artifacts() {
       --output "${output_proxy_header}" \
       --namespace "autosar_generated" \
       --print-summary
+    if [ -f "${proxy_skeleton_patcher}" ]; then
+        python3 "${proxy_skeleton_patcher}" --header "${output_proxy_header}"
+    else
+        echo "Warning: proxy/skeleton patcher not found: ${proxy_skeleton_patcher}"
+        echo "iceoryx runtime-name collision mitigation will be skipped."
+    fi
 
     if [ "${AUTOSAR_SKIP_ARXML_GEN:-0}" = "1" ]; then
         echo "Skipping ARXML generation (AUTOSAR_SKIP_ARXML_GEN=1)."

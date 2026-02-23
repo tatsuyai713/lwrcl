@@ -213,8 +213,11 @@ Adaptive AUTOSAR mapping 関連の環境変数:
 | `AUTOSAR_ARXML_GENERATOR` | ビルド時 ARXML 生成スクリプトのパス上書き |
 | `AUTOSAR_COMM_MANIFEST_GENERATOR` | ビルド時 mapping 生成コマンドの上書き（既定: `autosar-generate-comm-manifest`） |
 | `AUTOSAR_PROXY_SKELETON_GENERATOR` | ビルド時 proxy/skeleton 生成コマンドの上書き（既定: `autosar-generate-proxy-skeleton`） |
+| `AUTOSAR_PROXY_SKELETON_PATCHER` | 生成済み proxy/skeleton ヘッダの後処理パッチスクリプト上書き（既定: `scripts/patch_autosar_proxy_skeleton_runtime_name.py`） |
 | `AUTOSAR_EVENT_BINDING` | `lwrcl_autosar_manifest.yaml` の build 時既定 `event_binding`（既定: `auto`） |
 | `AUTOSAR_GENERATE_BINDING_PROFILES=1` | `lwrcl_autosar_manifest_dds.yaml` / `lwrcl_autosar_manifest_iceoryx.yaml` / `lwrcl_autosar_manifest_vsomeip.yaml` も生成・インストール |
+| `ARA_COM_ICEORYX_RUNTIME_NAME` | 実行時 iceoryx アプリ名の固定上書き（未指定時は PID 付きで自動生成して衝突回避） |
+| `ARA_COM_ICEORYX_RUNTIME_PREFIX` | iceoryx アプリ名自動生成時の prefix（`<prefix>_<pid>`） |
 | `VSOMEIP_PREFIX` | ビルド時 vsomeip インストール先の上書き（既定: `/opt/vsomeip`） |
 | `VSOMEIP_CONFIGURATION` | 実行時 vsomeip 設定ファイルパス |
 

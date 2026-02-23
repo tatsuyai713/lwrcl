@@ -171,18 +171,25 @@ jobs:
           grep -q "REGISTER EVENT" /tmp/lwrcl_autosar_vsomeip_rm.log
 
           # iceoryx profile mode
-          # Run pub/sub in one process to avoid zero-copy runtime-name collision
-          # between separate publisher/subscriber executables.
           if [ -x /opt/iceoryx/bin/iox-roudi ] && [ -f "${ICEORYX_MANIFEST}" ]; then
             unset ARA_COM_EVENT_BINDING
             export ARA_COM_BINDING_MANIFEST="${ICEORYX_MANIFEST}"
             timeout 10s /opt/iceoryx/bin/iox-roudi > /tmp/lwrcl_autosar_iceoryx_roudi.log 2>&1 &
             ROUDI_PID=$!
+            timeout 10s "${AUTOSAR_AP_PREFIX}/bin/autosar_vsomeip_routing_manager" > /tmp/lwrcl_autosar_iceoryx_rm.log 2>&1 &
+            ICEORYX_RM_PID=$!
             sleep 1
-            timeout 6s apps/install-adaptive-autosar/bin/example_class_pubsub_executor > /tmp/lwrcl_autosar_iceoryx_exec.log 2>&1 || true
+            timeout 6s apps/install-adaptive-autosar/bin/example_class_sub > /tmp/lwrcl_autosar_iceoryx_sub.log 2>&1 &
+            ICEORYX_SUB_PID=$!
+            sleep 1
+            timeout 4s apps/install-adaptive-autosar/bin/example_class_pub > /tmp/lwrcl_autosar_iceoryx_pub.log 2>&1 || true
+            wait "${ICEORYX_SUB_PID}" || true
+            wait "${ICEORYX_RM_PID}" || true
             wait "${ROUDI_PID}" || true
-            grep -q "Publishing: 'Hello, world!" /tmp/lwrcl_autosar_iceoryx_exec.log
-            grep -q "I heard: 'Hello, world!" /tmp/lwrcl_autosar_iceoryx_exec.log
+            grep -q "Publishing: 'Hello, world!" /tmp/lwrcl_autosar_iceoryx_pub.log
+            grep -q "I heard: 'Hello, world!" /tmp/lwrcl_autosar_iceoryx_sub.log
+            ! grep -q "APP_WITH_SAME_NAME_STILL_RUNNING" /tmp/lwrcl_autosar_iceoryx_sub.log
+            ! grep -q "APP_WITH_SAME_NAME_STILL_RUNNING" /tmp/lwrcl_autosar_iceoryx_pub.log
             ! grep -Eiq "error|fatal|panic" /tmp/lwrcl_autosar_iceoryx_roudi.log
           else
             echo "Skip iceoryx runtime smoke (iox-roudi or iceoryx manifest is unavailable)."

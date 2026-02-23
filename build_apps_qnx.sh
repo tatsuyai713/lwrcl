@@ -117,6 +117,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     AUTOSAR_GEN_PROXY_SKELETON_HEADER="${AUTOSAR_GEN_PROXY_SKELETON_DIR}/lwrcl_autosar_proxy_skeleton.hpp"
     AUTOSAR_MAPPING_GENERATOR_CMD="${AUTOSAR_COMM_MANIFEST_GENERATOR:-autosar-generate-comm-manifest}"
     AUTOSAR_PROXY_SKELETON_GENERATOR_CMD="${AUTOSAR_PROXY_SKELETON_GENERATOR:-autosar-generate-proxy-skeleton}"
+    AUTOSAR_PROXY_SKELETON_PATCHER="${AUTOSAR_PROXY_SKELETON_PATCHER:-${SCRIPT_DIR}/scripts/patch_autosar_proxy_skeleton_runtime_name.py}"
     AUTOSAR_GENERATE_BINDING_PROFILES="${AUTOSAR_GENERATE_BINDING_PROFILES:-1}"
 
     mkdir -p "${AUTOSAR_GEN_DIR}"
@@ -172,6 +173,12 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
       --output "${AUTOSAR_GEN_PROXY_SKELETON_HEADER}" \
       --namespace "autosar_generated" \
       --print-summary
+    if [ -f "${AUTOSAR_PROXY_SKELETON_PATCHER}" ]; then
+        python3 "${AUTOSAR_PROXY_SKELETON_PATCHER}" --header "${AUTOSAR_GEN_PROXY_SKELETON_HEADER}"
+    else
+        echo "Warning: proxy/skeleton patcher not found: ${AUTOSAR_PROXY_SKELETON_PATCHER}"
+        echo "iceoryx runtime-name collision mitigation will be skipped."
+    fi
 
     AUTOSAR_ARXML_GENERATOR_DEFAULT=""
     if [ -f "${AUTOSAR_AP_PREFIX}/tools/arxml_generator/generate_arxml.py" ]; then
