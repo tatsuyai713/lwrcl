@@ -191,7 +191,7 @@ Adaptive AUTOSAR backend is now ARXML-mediated:
   - `/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml`
 - Generated app-local proxy/skeleton header:
   - `apps/build-adaptive-autosar/autosar/generated/lwrcl_autosar_proxy_skeleton.hpp`
-- Runtime `adaptive-autosar` Publisher/Subscription use generated `ara::com` Proxy/Skeleton classes, and transport selection is driven by `ARA_COM_BINDING_MANIFEST` profile manifest.
+- Runtime `adaptive-autosar` Publisher/Subscription use generated `ara::com` Proxy/Skeleton classes, and transport selection is driven by `ARA_COM_EVENT_BINDING` (preferred). `ARA_COM_BINDING_MANIFEST` remains available as a fallback.
 
 Required Adaptive-AUTOSAR codegen commands:
 
@@ -208,7 +208,8 @@ Adaptive AUTOSAR mapping-related environment variables:
 | `ARA_COM_TOPIC_MAPPING` | Runtime path override for topic mapping YAML |
 | `ARA_COM_REQUIRE_TOPIC_MAPPING=1` | Fail when topic is not found in mapping |
 | `ARA_COM_DISABLE_TOPIC_MAPPING=1` | Disable mapping and use direct DDS topic names |
-| `ARA_COM_BINDING_MANIFEST` | Runtime binding profile manifest path (`event_binding: dds`, `iceoryx`, or `vsomeip`) |
+| `ARA_COM_EVENT_BINDING` | Runtime transport selection (`dds`, `iceoryx`, `vsomeip`, `auto`) |
+| `ARA_COM_BINDING_MANIFEST` | Runtime fallback manifest path when `ARA_COM_EVENT_BINDING` is unset |
 | `AUTOSAR_APP_SOURCE_ROOT` | App source root to scan for topic/service usage |
 | `AUTOSAR_ARXML_GENERATOR` | Build-time override for ARXML generator script path |
 | `AUTOSAR_COMM_MANIFEST_GENERATOR` | Build-time override for mapping generator command (default: `autosar-generate-comm-manifest`) |
@@ -226,28 +227,30 @@ Adaptive AUTOSAR runtime transport switch (same app binary, no app code change):
 ```bash
 # CycloneDDS transport profile
 # (current Adaptive-AUTOSAR reference runtime requires routing manager process)
-unset ARA_COM_EVENT_BINDING
-export ARA_COM_BINDING_MANIFEST=/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml
+unset ARA_COM_BINDING_MANIFEST
+export ARA_COM_EVENT_BINDING=dds
 export VSOMEIP_CONFIGURATION=/opt/autosar_ap/configuration/vsomeip-rpi.json
 /opt/autosar_ap/bin/autosar_vsomeip_routing_manager &
 apps/install-adaptive-autosar/bin/example_class_sub &
 apps/install-adaptive-autosar/bin/example_class_pub
 
 # iceoryx transport profile
-unset ARA_COM_EVENT_BINDING
-export ARA_COM_BINDING_MANIFEST=/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_iceoryx.yaml
+unset ARA_COM_BINDING_MANIFEST
+export ARA_COM_EVENT_BINDING=iceoryx
 iox-roudi &
 apps/install-adaptive-autosar/bin/example_class_sub &
 apps/install-adaptive-autosar/bin/example_class_pub
 
 # SOME/IP transport profile
-unset ARA_COM_EVENT_BINDING
-export ARA_COM_BINDING_MANIFEST=/opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml
+unset ARA_COM_BINDING_MANIFEST
+export ARA_COM_EVENT_BINDING=vsomeip
 export VSOMEIP_CONFIGURATION=/opt/autosar_ap/configuration/vsomeip-rpi.json
 /opt/autosar_ap/bin/autosar_vsomeip_routing_manager &
 apps/install-adaptive-autosar/bin/example_class_sub &
 apps/install-adaptive-autosar/bin/example_class_pub
 ```
+
+If both variables are set, `ARA_COM_EVENT_BINDING` takes precedence over `ARA_COM_BINDING_MANIFEST`.
 
 Switch verification checklist:
 

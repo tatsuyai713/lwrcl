@@ -123,9 +123,6 @@ jobs:
         run: |
           set -euo pipefail
           export LD_LIBRARY_PATH="/opt/iceoryx/lib:$DDS_PREFIX/lib:$VSOMEIP_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib:${LD_LIBRARY_PATH:-}"
-          DDS_MANIFEST="${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml"
-          ICEORYX_MANIFEST="${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_manifest_iceoryx.yaml"
-          VSOMEIP_MANIFEST="${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml"
           export VSOMEIP_CONFIGURATION="${AUTOSAR_AP_PREFIX}/configuration/vsomeip-rpi.json"
 
           cleanup_runtime_processes() {
@@ -140,15 +137,15 @@ jobs:
           }
 
           run_dds_or_vsomeip_profile() {
-            local manifest="$1"
+            local binding="$1"
             local pub_log="$2"
             local sub_log="$3"
             local rm_log="$4"
             local expect_register_event="$5"
 
             cleanup_runtime_processes
-            unset ARA_COM_EVENT_BINDING
-            export ARA_COM_BINDING_MANIFEST="${manifest}"
+            unset ARA_COM_BINDING_MANIFEST
+            export ARA_COM_EVENT_BINDING="${binding}"
 
             hard_timeout 12s "${AUTOSAR_AP_PREFIX}/bin/autosar_vsomeip_routing_manager" > "${rm_log}" 2>&1 &
             local rm_pid=$!
@@ -174,23 +171,23 @@ jobs:
           trap cleanup_runtime_processes EXIT INT TERM
 
           run_dds_or_vsomeip_profile \
-            "${DDS_MANIFEST}" \
+            dds \
             /tmp/lwrcl_autosar_dds_pub.log \
             /tmp/lwrcl_autosar_dds_sub.log \
             /tmp/lwrcl_autosar_dds_rm.log \
             no
 
           run_dds_or_vsomeip_profile \
-            "${VSOMEIP_MANIFEST}" \
+            vsomeip \
             /tmp/lwrcl_autosar_vsomeip_pub.log \
             /tmp/lwrcl_autosar_vsomeip_sub.log \
             /tmp/lwrcl_autosar_vsomeip_rm.log \
             yes
 
-          if [ -x /opt/iceoryx/bin/iox-roudi ] && [ -f "${ICEORYX_MANIFEST}" ]; then
+          if [ -x /opt/iceoryx/bin/iox-roudi ]; then
             cleanup_runtime_processes
-            unset ARA_COM_EVENT_BINDING
-            export ARA_COM_BINDING_MANIFEST="${ICEORYX_MANIFEST}"
+            unset ARA_COM_BINDING_MANIFEST
+            export ARA_COM_EVENT_BINDING=iceoryx
 
             hard_timeout 12s /opt/iceoryx/bin/iox-roudi > /tmp/lwrcl_autosar_iceoryx_roudi.log 2>&1 &
             ROUDI_PID=$!
@@ -213,7 +210,7 @@ jobs:
             ! grep -q "APP_WITH_SAME_NAME_STILL_RUNNING" /tmp/lwrcl_autosar_iceoryx_pub.log
             ! grep -Eiq "error|fatal|panic" /tmp/lwrcl_autosar_iceoryx_roudi.log
           else
-            echo "Skip iceoryx runtime smoke (iox-roudi or iceoryx manifest is unavailable)."
+            echo "Skip iceoryx runtime smoke (iox-roudi is unavailable)."
           fi
 
           cleanup_runtime_processes

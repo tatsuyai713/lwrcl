@@ -11,6 +11,8 @@ This patch injects:
   - `ARA_COM_ICEORYX_RUNTIME_NAME`
   - `ARA_COM_ICEORYX_RUNTIME_PREFIX`
 - process-id suffix fallback to guarantee uniqueness across processes
+- runtime transport selection override via `ARA_COM_EVENT_BINDING` when
+  generated headers do not provide it yet
 """
 
 from __future__ import annotations
@@ -41,6 +43,33 @@ inline std::string ResolveIceoryxRuntimeName()
 
 """
 
+EVENT_BINDING_HELPER = """  // lwrcl patch: prefer explicit runtime binding selection when available.
+  const char *env_binding = std::getenv("ARA_COM_EVENT_BINDING");
+  if (env_binding != nullptr && env_binding[0] != '\\0')
+  {
+    std::string token{env_binding};
+    std::transform(
+        token.begin(),
+        token.end(),
+        token.begin(),
+        [](unsigned char c)
+        {
+          return static_cast<char>(std::tolower(c));
+        });
+    if (token == "auto")
+    {
+      return ara::com::internal::TransportBinding::kCycloneDds;
+    }
+
+    ara::com::internal::TransportBinding env_transport{};
+    if (ParseTransportBindingToken(token, env_transport))
+    {
+      return env_transport;
+    }
+  }
+
+"""
+
 
 def apply_patch_to_text(text: str) -> str:
     updated = text
@@ -62,6 +91,12 @@ def apply_patch_to_text(text: str) -> str:
             raise RuntimeError("Failed to inject runtime-name helper: BuildIceoryxChannel marker not found.")
         updated = updated.replace(marker, RUNTIME_HELPER + marker, 1)
 
+    if "ARA_COM_EVENT_BINDING" not in updated:
+        transport_marker = "inline ara::com::internal::TransportBinding ResolveTransportBindingFromManifest()\n{"
+        if transport_marker not in updated:
+            raise RuntimeError("Failed to patch transport binding resolution: ResolveTransportBindingFromManifest marker not found.")
+        updated = updated.replace(transport_marker, transport_marker + "\n" + EVENT_BINDING_HELPER, 1)
+
     updated = updated.replace(
         "publisher_(BuildIceoryxChannel(binding))",
         "publisher_(BuildIceoryxChannel(binding), ResolveIceoryxRuntimeName())",
@@ -75,6 +110,8 @@ def apply_patch_to_text(text: str) -> str:
         raise RuntimeError("Failed to patch iceoryx publisher runtime-name initialization.")
     if "subscriber_(BuildIceoryxChannel(binding), ResolveIceoryxRuntimeName())" not in updated:
         raise RuntimeError("Failed to patch iceoryx subscriber runtime-name initialization.")
+    if "ARA_COM_EVENT_BINDING" not in updated:
+        raise RuntimeError("Failed to patch runtime event-binding environment support.")
 
     return updated
 
@@ -101,4 +138,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
