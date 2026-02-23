@@ -127,10 +127,10 @@ jobs:
           export VSOMEIP_CONFIGURATION="${AUTOSAR_AP_PREFIX}/configuration/vsomeip-rpi.json"
 
           cleanup_runtime_processes() {
-            pkill -x autosar_vsomeip_routing_manager || true
-            pkill -x iox-roudi || true
-            pkill -x example_class_sub || true
-            pkill -x example_class_pub || true
+            pkill -f autosar_vsomeip_routing_manager >/dev/null 2>&1 || true
+            pkill -f iox-roudi >/dev/null 2>&1 || true
+            pkill -f example_class_sub >/dev/null 2>&1 || true
+            pkill -f example_class_pub >/dev/null 2>&1 || true
           }
 
           hard_timeout() {
@@ -222,10 +222,10 @@ jobs:
           export LD_LIBRARY_PATH="/opt/iceoryx/lib:$DDS_PREFIX/lib:$VSOMEIP_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib:${LD_LIBRARY_PATH:-}"
 
           cleanup_sr_processes() {
-            pkill -x autosar_vsomeip_routing_manager || true
-            pkill -x iox-roudi || true
-            pkill -x example_service_server || true
-            pkill -x example_service_client || true
+            pkill -f autosar_vsomeip_routing_manager >/dev/null 2>&1 || true
+            pkill -f iox-roudi >/dev/null 2>&1 || true
+            pkill -f example_service_server >/dev/null 2>&1 || true
+            pkill -f example_service_client >/dev/null 2>&1 || true
           }
 
           hard_timeout() { timeout --signal=TERM --kill-after=2s "$@"; }
@@ -258,10 +258,10 @@ jobs:
           export VSOMEIP_CONFIGURATION="${AUTOSAR_AP_PREFIX}/configuration/vsomeip-rpi.json"
 
           cleanup_zero_copy_processes() {
-            pkill -x autosar_vsomeip_routing_manager || true
-            pkill -x iox-roudi || true
-            pkill -x example_zero_copy_sub || true
-            pkill -x example_zero_copy_pub || true
+            pkill -f autosar_vsomeip_routing_manager >/dev/null 2>&1 || true
+            pkill -f iox-roudi >/dev/null 2>&1 || true
+            pkill -f example_zero_copy_sub >/dev/null 2>&1 || true
+            pkill -f example_zero_copy_pub >/dev/null 2>&1 || true
           }
 
           hard_timeout() {
