@@ -22,6 +22,125 @@
 
 namespace lwrcl
 {
+  template <typename T>
+  class LoanedSubscriptionMessage
+  {
+  public:
+    struct SampleInfo
+    {
+      bool valid_data = false;
+    };
+
+    LoanedSubscriptionMessage() = default;
+
+    explicit LoanedSubscriptionMessage(ara::com::SamplePtr<T> sample) noexcept
+        : sample_(std::move(sample)),
+          is_valid_(sample_ != nullptr)
+    {
+    }
+
+    ~LoanedSubscriptionMessage() = default;
+
+    LoanedSubscriptionMessage(const LoanedSubscriptionMessage &) = delete;
+    LoanedSubscriptionMessage &operator=(const LoanedSubscriptionMessage &) = delete;
+
+    LoanedSubscriptionMessage(LoanedSubscriptionMessage &&other) noexcept
+        : sample_(std::move(other.sample_)),
+          mutable_copy_(std::move(other.mutable_copy_)),
+          is_valid_(other.is_valid_)
+    {
+      other.is_valid_ = false;
+    }
+
+    LoanedSubscriptionMessage &operator=(LoanedSubscriptionMessage &&other) noexcept
+    {
+      if (this != &other)
+      {
+        sample_ = std::move(other.sample_);
+        mutable_copy_ = std::move(other.mutable_copy_);
+        is_valid_ = other.is_valid_;
+        other.is_valid_ = false;
+      }
+      return *this;
+    }
+
+    bool is_valid() const
+    {
+      return is_valid_ && sample_ != nullptr;
+    }
+
+    explicit operator bool() const
+    {
+      return is_valid();
+    }
+
+    T &get()
+    {
+      if (!is_valid())
+      {
+        throw std::runtime_error("Attempting to access invalid loaned message");
+      }
+      if (!mutable_copy_)
+      {
+        if (!sample_)
+        {
+          throw std::runtime_error("Attempting to access invalid loaned message");
+        }
+        mutable_copy_ = std::unique_ptr<T>(new T(*sample_));
+      }
+      return *mutable_copy_;
+    }
+
+    const T &get() const
+    {
+      if (!is_valid())
+      {
+        throw std::runtime_error("Attempting to access invalid loaned message");
+      }
+      if (mutable_copy_)
+      {
+        return *mutable_copy_;
+      }
+      return *sample_;
+    }
+
+    T *operator->()
+    {
+      return &get();
+    }
+
+    const T *operator->() const
+    {
+      return &get();
+    }
+
+    T &operator*()
+    {
+      return get();
+    }
+
+    const T &operator*() const
+    {
+      return get();
+    }
+
+    SampleInfo get_sample_info() const
+    {
+      return SampleInfo{is_valid()};
+    }
+
+    void release()
+    {
+      sample_.reset();
+      mutable_copy_.reset();
+      is_valid_ = false;
+    }
+
+  private:
+    ara::com::SamplePtr<T> sample_;
+    std::unique_ptr<T> mutable_copy_;
+    bool is_valid_ = false;
+  };
 
   struct MessageInfo
   {
@@ -107,8 +226,10 @@ namespace lwrcl
           proxy_(nullptr),
           stop_flag_(false),
           waitset_thread_(),
+          proxy_mutex_(),
           lwrcl_subscriber_mutex_(std::make_shared<std::mutex>()),
           pollable_buffer_(),
+          loaned_buffer_(),
           count_(0)
     {
     }
@@ -181,8 +302,46 @@ namespace lwrcl
       return !pollable_buffer_.empty();
     }
 
+    bool take_loaned(LoanedSubscriptionMessage<T> &out_loaned)
+    {
+      {
+        std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+        if (!loaned_buffer_.empty())
+        {
+          auto sample = std::move(loaned_buffer_.front());
+          loaned_buffer_.pop_front();
+          out_loaned = LoanedSubscriptionMessage<T>(std::move(sample));
+          return out_loaned.is_valid();
+        }
+      }
+
+      std::lock_guard<std::mutex> proxy_lock(proxy_mutex_);
+      if (!proxy_)
+      {
+        return false;
+      }
+
+      const auto state = proxy_->Event.GetSubscriptionState();
+      count_.store(state == ara::com::SubscriptionState::kSubscribed ? 1 : 0);
+
+      bool taken = false;
+      auto result = proxy_->Event.GetNewSamples(
+          [&out_loaned, &taken](ara::com::SamplePtr<T> payload_sample)
+          {
+            if (taken || !payload_sample)
+            {
+              return;
+            }
+            out_loaned = LoanedSubscriptionMessage<T>(std::move(payload_sample));
+            taken = out_loaned.is_valid();
+          },
+          1);
+
+      return result.HasValue() && taken;
+    }
+
   private:
-    void push_message(std::shared_ptr<T> message)
+    void push_message(std::shared_ptr<T> message, ara::com::SamplePtr<T> loaned_sample)
     {
       channel_->produce(std::make_shared<SubscriberCallback<T>>(
           callback_function_, message, lwrcl_subscriber_mutex_));
@@ -193,10 +352,18 @@ namespace lwrcl
 
       std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
       pollable_buffer_.emplace_back(message, new_info);
+      if (loaned_sample)
+      {
+        loaned_buffer_.emplace_back(std::move(loaned_sample));
+      }
 
       if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
       {
         pollable_buffer_.pop_front();
+      }
+      if (loaned_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
+      {
+        loaned_buffer_.pop_front();
       }
     }
 
@@ -205,6 +372,12 @@ namespace lwrcl
       if (!proxy_)
       {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return;
+      }
+
+      std::lock_guard<std::mutex> proxy_lock(proxy_mutex_);
+      if (!proxy_)
+      {
         return;
       }
 
@@ -219,7 +392,7 @@ namespace lwrcl
             }
 
             auto message = std::make_shared<T>(*payload_sample);
-            push_message(message);
+            push_message(message, std::move(payload_sample));
           },
           10);
     }
@@ -246,9 +419,11 @@ namespace lwrcl
     std::unique_ptr<autosar_generated::TopicEventProxy<T>> proxy_;
     std::atomic<bool> stop_flag_;
     std::thread waitset_thread_;
+    std::mutex proxy_mutex_;
 
     std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
     std::deque<std::pair<std::shared_ptr<T>, lwrcl::MessageInfo>> pollable_buffer_;
+    std::deque<ara::com::SamplePtr<T>> loaned_buffer_;
     std::atomic<int32_t> count_{0};
   };
 
@@ -323,10 +498,15 @@ namespace lwrcl
     // Alias for rclcpp compatibility
     bool has_data() { return has_message(); }
 
-    // No zero-copy support in Adaptive AUTOSAR backend
+    bool take_loaned_message(LoanedSubscriptionMessage<T> &out_loaned)
+    {
+      return waitset_.take_loaned(out_loaned);
+    }
+
+    // Loaned API is always available; runtime binding decides copy/zero-copy path.
     bool can_loan_messages() const
     {
-      return false;
+      return true;
     }
 
     // Get the number of messages waiting (approximation)

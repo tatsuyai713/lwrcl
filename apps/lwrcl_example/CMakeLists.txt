@@ -26,8 +26,8 @@ target_link_libraries(example_class_pubsub_executor PRIVATE ${DDS_LIBRARIES} ${L
 target_link_libraries(example_service_server PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
 target_link_libraries(example_service_client PRIVATE ${DDS_LIBRARIES} ${LWRCL_EXAMPLE_MESSAGE_LIBS} lwrcl yaml-cpp)
 
-# Fast DDS / CycloneDDS zero-copy examples
-if(DDS_BACKEND STREQUAL "fastdds" OR DDS_BACKEND STREQUAL "cyclonedds")
+# Fast DDS / CycloneDDS / Adaptive AUTOSAR zero-copy examples
+if(DDS_BACKEND STREQUAL "fastdds" OR DDS_BACKEND STREQUAL "cyclonedds" OR DDS_BACKEND STREQUAL "adaptive-autosar")
     add_executable(example_zero_copy_pub src/example_zero_copy_pub.cpp)
     add_executable(example_zero_copy_sub src/example_zero_copy_sub.cpp)
 
@@ -58,7 +58,7 @@ if(DDS_BACKEND STREQUAL "fastdds")
             example_zero_copy_pub example_zero_copy_sub example_timer_control
             LIBRARY DESTINATION lib
             RUNTIME DESTINATION bin)
-elseif(DDS_BACKEND STREQUAL "cyclonedds")
+elseif(DDS_BACKEND STREQUAL "cyclonedds" OR DDS_BACKEND STREQUAL "adaptive-autosar")
     install(TARGETS ${COMMON_TARGETS}
             example_zero_copy_pub example_zero_copy_sub
             LIBRARY DESTINATION lib

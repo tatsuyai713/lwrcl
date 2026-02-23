@@ -6,6 +6,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 #include "adaptive_autosar_header.hpp"
 #include "lwrcl_autosar_proxy_skeleton.hpp"
@@ -13,6 +14,8 @@
 
 namespace lwrcl
 {
+  template <typename T>
+  class LoanedMessage;
 
   class IPublisher
   {
@@ -95,6 +98,9 @@ namespace lwrcl
       publish_impl(message);
     }
 
+    // Publish a loaned message (zero-copy when supported by runtime binding)
+    void publish(LoanedMessage<T> &&loaned_message);
+
     int32_t get_subscriber_count() override
     {
       return subscriber_count_.load();
@@ -111,27 +117,233 @@ namespace lwrcl
       return topic_name_;
     }
 
-    // No zero-copy support in Adaptive AUTOSAR backend
+    // Loaned API is always available; runtime binding decides copy/zero-copy path.
+    LoanedMessage<T> borrow_loaned_message();
+
     bool can_loan_messages() const
     {
-      return false;
+      return true;
     }
 
     using SharedPtr = std::shared_ptr<Publisher<T>>;
 
   private:
+    friend class LoanedMessage<T>;
+
+    bool try_allocate_loaned_sample(ara::com::SampleAllocateePtr<T> &out_sample) const
+    {
+      if (!skeleton_)
+      {
+        return false;
+      }
+
+      auto alloc_result = skeleton_->Event.Allocate();
+      if (!alloc_result.HasValue())
+      {
+        return false;
+      }
+
+      out_sample = std::move(alloc_result).Value();
+      return static_cast<bool>(out_sample);
+    }
+
     void publish_impl(const T &message) const
     {
-        if (skeleton_)
-        {
+      if (skeleton_)
+      {
         skeleton_->Event.Send(message);
-        }
       }
+    }
 
     std::string topic_name_;
     std::unique_ptr<autosar_generated::TopicEventSkeleton<T>> skeleton_;
     mutable std::atomic<int32_t> subscriber_count_;
   };
+
+  template <typename T>
+  class LoanedMessage
+  {
+  public:
+    using MessageType = T;
+
+    explicit LoanedMessage(Publisher<T> &publisher)
+        : publisher_(&publisher),
+          message_(nullptr),
+          is_valid_(false),
+          backend_allocated_(false)
+    {
+      if (publisher_ != nullptr && publisher_->try_allocate_loaned_sample(loaned_sample_))
+      {
+        message_ = loaned_sample_.Get();
+        is_valid_ = message_ != nullptr;
+        backend_allocated_ = is_valid_;
+        return;
+      }
+
+      heap_message_ = std::unique_ptr<T>(new T());
+      message_ = heap_message_.get();
+      is_valid_ = message_ != nullptr;
+      backend_allocated_ = false;
+    }
+
+    LoanedMessage(LoanedMessage &&other) noexcept
+        : publisher_(other.publisher_),
+          loaned_sample_(std::move(other.loaned_sample_)),
+          heap_message_(std::move(other.heap_message_)),
+          message_(other.message_),
+          is_valid_(other.is_valid_),
+          backend_allocated_(other.backend_allocated_)
+    {
+      other.publisher_ = nullptr;
+      other.message_ = nullptr;
+      other.is_valid_ = false;
+      other.backend_allocated_ = false;
+    }
+
+    LoanedMessage &operator=(LoanedMessage &&other) noexcept
+    {
+      if (this != &other)
+      {
+        publisher_ = other.publisher_;
+        loaned_sample_ = std::move(other.loaned_sample_);
+        heap_message_ = std::move(other.heap_message_);
+        message_ = other.message_;
+        is_valid_ = other.is_valid_;
+        backend_allocated_ = other.backend_allocated_;
+
+        other.publisher_ = nullptr;
+        other.message_ = nullptr;
+        other.is_valid_ = false;
+        other.backend_allocated_ = false;
+      }
+      return *this;
+    }
+
+    ~LoanedMessage() = default;
+
+    LoanedMessage(const LoanedMessage &) = delete;
+    LoanedMessage &operator=(const LoanedMessage &) = delete;
+
+    bool is_valid() const
+    {
+      return is_valid_ && message_ != nullptr;
+    }
+
+    // true when allocated via ara::com::SkeletonEvent::Allocate().
+    bool is_loaned() const
+    {
+      return backend_allocated_;
+    }
+
+    T &get()
+    {
+      return *message_;
+    }
+
+    const T &get() const
+    {
+      return *message_;
+    }
+
+    T *operator->()
+    {
+      return message_;
+    }
+
+    const T *operator->() const
+    {
+      return message_;
+    }
+
+    T &operator*()
+    {
+      return *message_;
+    }
+
+    const T &operator*() const
+    {
+      return *message_;
+    }
+
+    T *release_heap_sample()
+    {
+      if (backend_allocated_)
+      {
+        return nullptr;
+      }
+
+      is_valid_ = false;
+      message_ = nullptr;
+      return heap_message_.release();
+    }
+
+    ara::com::SampleAllocateePtr<T> release_loaned_sample()
+    {
+      if (!backend_allocated_)
+      {
+        return ara::com::SampleAllocateePtr<T>();
+      }
+
+      is_valid_ = false;
+      message_ = nullptr;
+      backend_allocated_ = false;
+      return std::move(loaned_sample_);
+    }
+
+  private:
+    Publisher<T> *publisher_;
+    ara::com::SampleAllocateePtr<T> loaned_sample_;
+    std::unique_ptr<T> heap_message_;
+    T *message_;
+    bool is_valid_;
+    bool backend_allocated_;
+  };
+
+  template <typename T>
+  LoanedMessage<T> Publisher<T>::borrow_loaned_message()
+  {
+    return LoanedMessage<T>(*this);
+  }
+
+  template <typename T>
+  void Publisher<T>::publish(LoanedMessage<T> &&loaned_message)
+  {
+    if (!loaned_message.is_valid())
+    {
+      throw std::runtime_error("Cannot publish invalid loaned message");
+    }
+
+    if (!skeleton_)
+    {
+      throw std::runtime_error("Failed to publish loaned message: skeleton is null");
+    }
+
+    if (loaned_message.is_loaned())
+    {
+      // Generated bindings currently route SendAllocated as raw bytes.
+      // For non-trivially-copyable ROS messages, use safe typed Send().
+      if (!std::is_trivially_copyable<T>::value)
+      {
+        skeleton_->Event.Send(loaned_message.get());
+        return;
+      }
+
+      auto sample = loaned_message.release_loaned_sample();
+      if (!sample)
+      {
+        throw std::runtime_error("Failed to publish loaned message: allocated sample is invalid");
+      }
+      skeleton_->Event.Send(std::move(sample));
+      return;
+    }
+
+    std::unique_ptr<T> sample_guard(loaned_message.release_heap_sample());
+    if (!sample_guard)
+    {
+      throw std::runtime_error("Failed to publish loaned message: heap sample is invalid");
+    }
+    skeleton_->Event.Send(*sample_guard);
+  }
 
 } // namespace lwrcl
 

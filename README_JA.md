@@ -258,6 +258,14 @@ apps/install-adaptive-autosar/bin/example_class_pub
 - iceoryx profile: `iox-roudi` 起動下で Subscriber が `I heard: 'Hello, world! ...'` を出力し、トランスポートエラーが出ないこと。
 - SOME/IP profile: Subscriber が `I heard: 'Hello, world! ...'` を出力し、routing manager ログに `REGISTER EVENT` / `SUBSCRIBE` が出ること。
 
+Adaptive AUTOSAR の Loaned Message API:
+
+- `Publisher<T>::borrow_loaned_message()` と `publish(LoanedMessage<T>&&)` が利用できます。
+- `Subscription<T>::take_loaned_message(LoanedSubscriptionMessage<T>&)` が利用できます。
+- Adaptive AUTOSAR バックエンドの `can_loan_messages()` は `true` を返します（API は常に利用可能）。
+- `ARA_COM_EVENT_BINDING=iceoryx` かつ `iox-roudi` 起動時、trivially-copyable な型は `ara::com::SkeletonEvent::Allocate/Send` 経路を利用できます。非 trivial な ROS メッセージ型は安全に typed `Send(const T&)` へフォールバックします。
+- `adaptive-autosar` ビルドでも `example_zero_copy_pub` / `example_zero_copy_sub` を生成します。
+
 ### ビルドディレクトリのクリーン
 
 ```bash

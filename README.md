@@ -258,6 +258,14 @@ Switch verification checklist:
 - iceoryx profile: subscriber prints `I heard: 'Hello, world! ...'` with `iox-roudi` running and no runtime transport errors.
 - SOME/IP profile: subscriber prints `I heard: 'Hello, world! ...'`, and routing manager log shows `REGISTER EVENT` / `SUBSCRIBE`.
 
+Adaptive AUTOSAR Loaned Message API:
+
+- `Publisher<T>::borrow_loaned_message()` and `publish(LoanedMessage<T>&&)` are available.
+- `Subscription<T>::take_loaned_message(LoanedSubscriptionMessage<T>&)` is available.
+- `can_loan_messages()` now returns `true` on Adaptive AUTOSAR backend (API always available).
+- With `ARA_COM_EVENT_BINDING=iceoryx` and `iox-roudi` running, trivially-copyable message types can use `ara::com::SkeletonEvent::Allocate/Send`. Non-trivial ROS message types safely fall back to typed `Send(const T&)`.
+- `example_zero_copy_pub` / `example_zero_copy_sub` are built for `adaptive-autosar` as well.
+
 ### Cleaning Build Directories
 
 ```bash

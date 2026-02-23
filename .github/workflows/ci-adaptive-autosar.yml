@@ -214,3 +214,53 @@ jobs:
           fi
 
           cleanup_runtime_processes
+
+      - name: Smoke check Adaptive AUTOSAR loaned-message API
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="/opt/iceoryx/lib:$DDS_PREFIX/lib:$VSOMEIP_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+          export VSOMEIP_CONFIGURATION="${AUTOSAR_AP_PREFIX}/configuration/vsomeip-rpi.json"
+
+          cleanup_zero_copy_processes() {
+            pkill -x autosar_vsomeip_routing_manager || true
+            pkill -x iox-roudi || true
+            pkill -x example_zero_copy_sub || true
+            pkill -x example_zero_copy_pub || true
+          }
+
+          hard_timeout() {
+            timeout --signal=TERM --kill-after=2s "$@"
+          }
+
+          trap cleanup_zero_copy_processes EXIT INT TERM
+          cleanup_zero_copy_processes
+
+          if [ -x /opt/iceoryx/bin/iox-roudi ]; then
+            unset ARA_COM_BINDING_MANIFEST
+            export ARA_COM_EVENT_BINDING=iceoryx
+
+            hard_timeout 12s /opt/iceoryx/bin/iox-roudi > /tmp/lwrcl_autosar_zc_roudi.log 2>&1 &
+            ZC_ROUDI_PID=$!
+            hard_timeout 12s "${AUTOSAR_AP_PREFIX}/bin/autosar_vsomeip_routing_manager" > /tmp/lwrcl_autosar_zc_rm.log 2>&1 &
+            ZC_RM_PID=$!
+            sleep 1
+
+            hard_timeout 8s apps/install-adaptive-autosar/bin/example_zero_copy_sub > /tmp/lwrcl_autosar_zc_sub.log 2>&1 &
+            ZC_SUB_PID=$!
+            sleep 1
+
+            hard_timeout 6s apps/install-adaptive-autosar/bin/example_zero_copy_pub > /tmp/lwrcl_autosar_zc_pub.log 2>&1 || true
+            wait "${ZC_SUB_PID}" || true
+            wait "${ZC_RM_PID}" || true
+            wait "${ZC_ROUDI_PID}" || true
+
+            grep -q "Can loan messages: yes" /tmp/lwrcl_autosar_zc_pub.log
+            grep -q "Can loan messages: yes" /tmp/lwrcl_autosar_zc_sub.log
+            grep -q "\[Zero-copy\] Publishing image" /tmp/lwrcl_autosar_zc_pub.log
+            grep -q "\[Zero-copy\] Received image" /tmp/lwrcl_autosar_zc_sub.log
+            ! grep -q "Received image: 0x0" /tmp/lwrcl_autosar_zc_sub.log
+            ! grep -q "APP_WITH_SAME_NAME_STILL_RUNNING" /tmp/lwrcl_autosar_zc_sub.log
+            ! grep -q "APP_WITH_SAME_NAME_STILL_RUNNING" /tmp/lwrcl_autosar_zc_pub.log
+          else
+            echo "Skip zero-copy smoke (iox-roudi is unavailable)."
+          fi
