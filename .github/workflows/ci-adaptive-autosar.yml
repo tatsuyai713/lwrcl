@@ -128,54 +128,85 @@ jobs:
           VSOMEIP_MANIFEST="${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml"
           export VSOMEIP_CONFIGURATION="${AUTOSAR_AP_PREFIX}/configuration/vsomeip-rpi.json"
 
-          # DDS profile mode
-          unset ARA_COM_EVENT_BINDING
-          export ARA_COM_BINDING_MANIFEST="${DDS_MANIFEST}"
-          timeout 10s "${AUTOSAR_AP_PREFIX}/bin/autosar_vsomeip_routing_manager" > /tmp/lwrcl_autosar_dds_rm.log 2>&1 &
-          DDS_RM_PID=$!
-          sleep 1
-          timeout 6s apps/install-adaptive-autosar/bin/example_class_sub > /tmp/lwrcl_autosar_dds_sub.log 2>&1 &
-          DDS_SUB_PID=$!
-          sleep 1
-          timeout 4s apps/install-adaptive-autosar/bin/example_class_pub > /tmp/lwrcl_autosar_dds_pub.log 2>&1 || true
-          wait "${DDS_SUB_PID}" || true
-          wait "${DDS_RM_PID}" || true
-          grep -q "Publishing: 'Hello, world!" /tmp/lwrcl_autosar_dds_pub.log
-          grep -q "I heard: 'Hello, world!" /tmp/lwrcl_autosar_dds_sub.log
-          ! grep -q "REGISTER EVENT" /tmp/lwrcl_autosar_dds_rm.log
+          cleanup_runtime_processes() {
+            pkill -x autosar_vsomeip_routing_manager || true
+            pkill -x iox-roudi || true
+            pkill -f "apps/install-adaptive-autosar/bin/example_class_sub" || true
+            pkill -f "apps/install-adaptive-autosar/bin/example_class_pub" || true
+          }
 
-          # vsomeip profile mode
-          unset ARA_COM_EVENT_BINDING
-          export ARA_COM_BINDING_MANIFEST="${VSOMEIP_MANIFEST}"
-          timeout 10s "${AUTOSAR_AP_PREFIX}/bin/autosar_vsomeip_routing_manager" > /tmp/lwrcl_autosar_vsomeip_rm.log 2>&1 &
-          RM_PID=$!
-          sleep 1
-          timeout 6s apps/install-adaptive-autosar/bin/example_class_sub > /tmp/lwrcl_autosar_vsomeip_sub.log 2>&1 &
-          VSOMEIP_SUB_PID=$!
-          sleep 1
-          timeout 4s apps/install-adaptive-autosar/bin/example_class_pub > /tmp/lwrcl_autosar_vsomeip_pub.log 2>&1 || true
-          wait "${VSOMEIP_SUB_PID}" || true
-          wait "$RM_PID" || true
-          grep -q "Publishing: 'Hello, world!" /tmp/lwrcl_autosar_vsomeip_pub.log
-          grep -q "I heard: 'Hello, world!" /tmp/lwrcl_autosar_vsomeip_sub.log
-          grep -q "REGISTER EVENT" /tmp/lwrcl_autosar_vsomeip_rm.log
+          hard_timeout() {
+            timeout --signal=TERM --kill-after=2s "$@"
+          }
 
-          # iceoryx profile mode
+          run_dds_or_vsomeip_profile() {
+            local manifest="$1"
+            local pub_log="$2"
+            local sub_log="$3"
+            local rm_log="$4"
+            local expect_register_event="$5"
+
+            cleanup_runtime_processes
+            unset ARA_COM_EVENT_BINDING
+            export ARA_COM_BINDING_MANIFEST="${manifest}"
+
+            hard_timeout 12s "${AUTOSAR_AP_PREFIX}/bin/autosar_vsomeip_routing_manager" > "${rm_log}" 2>&1 &
+            local rm_pid=$!
+            sleep 1
+
+            hard_timeout 8s apps/install-adaptive-autosar/bin/example_class_sub > "${sub_log}" 2>&1 &
+            local sub_pid=$!
+            sleep 1
+
+            hard_timeout 6s apps/install-adaptive-autosar/bin/example_class_pub > "${pub_log}" 2>&1 || true
+            wait "${sub_pid}" || true
+            wait "${rm_pid}" || true
+
+            grep -q "Publishing: 'Hello, world!" "${pub_log}"
+            grep -q "I heard: 'Hello, world!" "${sub_log}"
+            if [ "${expect_register_event}" = "yes" ]; then
+              grep -q "REGISTER EVENT" "${rm_log}"
+            else
+              ! grep -q "REGISTER EVENT" "${rm_log}"
+            fi
+          }
+
+          trap cleanup_runtime_processes EXIT INT TERM
+
+          run_dds_or_vsomeip_profile \
+            "${DDS_MANIFEST}" \
+            /tmp/lwrcl_autosar_dds_pub.log \
+            /tmp/lwrcl_autosar_dds_sub.log \
+            /tmp/lwrcl_autosar_dds_rm.log \
+            no
+
+          run_dds_or_vsomeip_profile \
+            "${VSOMEIP_MANIFEST}" \
+            /tmp/lwrcl_autosar_vsomeip_pub.log \
+            /tmp/lwrcl_autosar_vsomeip_sub.log \
+            /tmp/lwrcl_autosar_vsomeip_rm.log \
+            yes
+
           if [ -x /opt/iceoryx/bin/iox-roudi ] && [ -f "${ICEORYX_MANIFEST}" ]; then
+            cleanup_runtime_processes
             unset ARA_COM_EVENT_BINDING
             export ARA_COM_BINDING_MANIFEST="${ICEORYX_MANIFEST}"
-            timeout 10s /opt/iceoryx/bin/iox-roudi > /tmp/lwrcl_autosar_iceoryx_roudi.log 2>&1 &
+
+            hard_timeout 12s /opt/iceoryx/bin/iox-roudi > /tmp/lwrcl_autosar_iceoryx_roudi.log 2>&1 &
             ROUDI_PID=$!
-            timeout 10s "${AUTOSAR_AP_PREFIX}/bin/autosar_vsomeip_routing_manager" > /tmp/lwrcl_autosar_iceoryx_rm.log 2>&1 &
+            hard_timeout 12s "${AUTOSAR_AP_PREFIX}/bin/autosar_vsomeip_routing_manager" > /tmp/lwrcl_autosar_iceoryx_rm.log 2>&1 &
             ICEORYX_RM_PID=$!
             sleep 1
-            timeout 6s apps/install-adaptive-autosar/bin/example_class_sub > /tmp/lwrcl_autosar_iceoryx_sub.log 2>&1 &
+
+            hard_timeout 8s apps/install-adaptive-autosar/bin/example_class_sub > /tmp/lwrcl_autosar_iceoryx_sub.log 2>&1 &
             ICEORYX_SUB_PID=$!
             sleep 1
-            timeout 4s apps/install-adaptive-autosar/bin/example_class_pub > /tmp/lwrcl_autosar_iceoryx_pub.log 2>&1 || true
+
+            hard_timeout 6s apps/install-adaptive-autosar/bin/example_class_pub > /tmp/lwrcl_autosar_iceoryx_pub.log 2>&1 || true
             wait "${ICEORYX_SUB_PID}" || true
             wait "${ICEORYX_RM_PID}" || true
             wait "${ROUDI_PID}" || true
+
             grep -q "Publishing: 'Hello, world!" /tmp/lwrcl_autosar_iceoryx_pub.log
             grep -q "I heard: 'Hello, world!" /tmp/lwrcl_autosar_iceoryx_sub.log
             ! grep -q "APP_WITH_SAME_NAME_STILL_RUNNING" /tmp/lwrcl_autosar_iceoryx_sub.log
@@ -184,3 +215,5 @@ jobs:
           else
             echo "Skip iceoryx runtime smoke (iox-roudi or iceoryx manifest is unavailable)."
           fi
+
+          cleanup_runtime_processes
