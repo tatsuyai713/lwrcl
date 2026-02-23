@@ -12,7 +12,7 @@ concurrency:
 
 env:
   CYCLONEDDS_VERSION: "0.10.5"
-  ADAPTIVE_AUTOSAR_REF: "main"
+  ADAPTIVE_AUTOSAR_REF: "master"
   DDS_PREFIX: /opt/cyclonedds
   VSOMEIP_PREFIX: /opt/vsomeip
   AUTOSAR_AP_PREFIX: /opt/autosar_ap
