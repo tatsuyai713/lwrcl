@@ -43,7 +43,10 @@ target_include_directories(${PROJECT_NAME} PUBLIC include ${ROS_DATA_TYPES_INCLU
 
 target_link_libraries(${PROJECT_NAME} fastrtps)
 
-# Install targets
-install(TARGETS ${PROJECT_NAME}
-        LIBRARY DESTINATION lib
-        RUNTIME DESTINATION bin)
+# Cross-compiled tool binaries are not used by target runtime packages and can
+# trigger CMake relink install errors on QNX toolchains.
+if(NOT CMAKE_CROSSCOMPILING)
+    install(TARGETS ${PROJECT_NAME}
+            LIBRARY DESTINATION lib
+            RUNTIME DESTINATION bin)
+endif()

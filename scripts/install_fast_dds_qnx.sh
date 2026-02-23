@@ -15,9 +15,17 @@ JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
 [[ "${JOBS}" -lt 1 ]] && JOBS=1
 SKIP_SYSTEM_DEPS="OFF"
 FORCE_REINSTALL="OFF"
+TARGET_VARIANT="${TARGET_VARIANT:-aarch64le}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PATCHES_DIR="$(cd "${SCRIPT_DIR}/../patches" && pwd)"
+if [[ -d "${SCRIPT_DIR}/patches" ]]; then
+  PATCHES_DIR="$(cd "${SCRIPT_DIR}/patches" && pwd)"
+elif [[ -d "${SCRIPT_DIR}/../patches" ]]; then
+  PATCHES_DIR="$(cd "${SCRIPT_DIR}/../patches" && pwd)"
+else
+  echo "[ERROR] QNX patch directory not found (expected scripts/patches)." >&2
+  exit 1
+fi
 
 usage() {
   cat <<EOF
@@ -29,6 +37,7 @@ Options:
   --qnx-path <name>    QNX SDP directory name in HOME (default: ${QNX_PATH})
   --build-dir <path>    Build directory (default: \${HOME}/build-fast-dds-qnx)
   --jobs <N>            Parallel build jobs (default: auto)
+  --target-variant <v>  QNX target variant: aarch64le|x86_64o (default: ${TARGET_VARIANT})
   --skip-system-deps    Skip installing system dependencies
   --force               Force reinstall even if already present
   --help                Show this help message
@@ -58,6 +67,10 @@ while [[ $# -gt 0 ]]; do
       JOBS="$2"
       shift 2
       ;;
+    --target-variant)
+      TARGET_VARIANT="$2"
+      shift 2
+      ;;
     --skip-system-deps)
       SKIP_SYSTEM_DEPS="ON"
       shift
@@ -75,6 +88,20 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+case "${TARGET_VARIANT}" in
+  aarch64le)
+    QNX_BUILD_DIR_SUFFIX="nto/aarch64/le"
+    ;;
+  x86_64o)
+    QNX_BUILD_DIR_SUFFIX="nto/x86_64/o"
+    ;;
+  *)
+    echo "[ERROR] Unsupported --target-variant: ${TARGET_VARIANT}" >&2
+    echo "        Supported values: aarch64le, x86_64o" >&2
+    exit 1
+    ;;
+esac
 
 if [[ "${FORCE_REINSTALL}" != "ON" ]] && [[ -f "${INSTALL_PREFIX}/include/fastrtps/fastrtps_all.h" ]]; then
   echo "[INFO] Fast-DDS already installed at ${INSTALL_PREFIX}. Skipping (use --force to reinstall)."
@@ -129,10 +156,16 @@ git apply "${WORKSPACE}/build_qnx/qnx_patches/fastcdr_qnx.patch"
 echo "Patch FastCDR done"
 
 cd "${WORKSPACE}/thirdparty/tinyxml2"
-unix2dos "${WORKSPACE}/build_qnx/qnx_patches/tinyxml2_qnx.patch"
+# Keep compatibility with environments where unix2dos is unavailable.
+if command -v unix2dos >/dev/null 2>&1; then
+  unix2dos "${WORKSPACE}/build_qnx/qnx_patches/tinyxml2_qnx.patch"
+fi
 echo "Patch TinyXML2"
-git apply "${WORKSPACE}/build_qnx/qnx_patches/tinyxml2_qnx.patch"
-echo "Patch TinyXML2 done"
+if git apply "${WORKSPACE}/build_qnx/qnx_patches/tinyxml2_qnx.patch"; then
+  echo "Patch TinyXML2 done"
+else
+  echo "[WARN] tinyxml2_qnx.patch did not apply cleanly; continuing with upstream tinyxml2."
+fi
 
 cd "${WORKSPACE}"
 git clone https://github.com/eProsima/foonathan_memory_vendor.git -b "v${FOONATHAN_MEMORY_TAG}"
@@ -141,7 +174,7 @@ cd googletest
 git checkout "v${GOOGLETEST_TAG}"
 git apply "${WORKSPACE}/build_qnx/qnx_patches/googletest_qnx.patch"
 
-cd "${WORKSPACE}/build_qnx"
+cd "${WORKSPACE}/build_qnx/${QNX_BUILD_DIR_SUFFIX}"
 make INSTALL_ROOT_nto="${INSTALL_PREFIX}"
 make install INSTALL_ROOT_nto="${INSTALL_PREFIX}"
 

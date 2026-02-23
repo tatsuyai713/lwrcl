@@ -161,6 +161,23 @@ CMAKE_ARGS=(
 )
 
 if [ "$BACKEND" = "fastdds" ]; then
+    FASTDDSGEN_BIN_DIR=""
+    if command -v fastddsgen >/dev/null 2>&1; then
+        FASTDDSGEN_BIN_DIR="$(dirname "$(command -v fastddsgen)")"
+    elif [ -x "${DDS_PREFIX}/bin/fastddsgen" ]; then
+        FASTDDSGEN_BIN_DIR="${DDS_PREFIX}/bin"
+    elif [ -x "/opt/fast-dds-gen/bin/fastddsgen" ]; then
+        FASTDDSGEN_BIN_DIR="/opt/fast-dds-gen/bin"
+    elif [ -x "/opt/qnx/fast-dds-gen/bin/fastddsgen" ]; then
+        FASTDDSGEN_BIN_DIR="/opt/qnx/fast-dds-gen/bin"
+    fi
+    if [ -n "${FASTDDSGEN_BIN_DIR}" ]; then
+        export PATH="${FASTDDSGEN_BIN_DIR}:${PATH}"
+    else
+        echo "Error: fastddsgen not found."
+        echo "Install Fast-DDS-Gen (e.g. ./scripts/install_fast_dds_gen.sh) and ensure it is on PATH."
+        exit 1
+    fi
     CMAKE_ARGS+=(
         -DOPENSSL_ROOT_DIR="${QNX_TARGET}/aarch64le/usr"
         -DOPENSSL_INCLUDE_DIR="${QNX_TARGET}/usr/include"
