@@ -131,8 +131,8 @@ jobs:
           cleanup_runtime_processes() {
             pkill -x autosar_vsomeip_routing_manager || true
             pkill -x iox-roudi || true
-            pkill -f "apps/install-adaptive-autosar/bin/example_class_sub" || true
-            pkill -f "apps/install-adaptive-autosar/bin/example_class_pub" || true
+            pkill -x example_class_sub || true
+            pkill -x example_class_pub || true
           }
 
           hard_timeout() {
