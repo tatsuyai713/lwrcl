@@ -105,10 +105,18 @@ if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]]; then
   if command -v apt-get &>/dev/null; then
     echo "--- Installing system dependencies (apt) ---"
     ${SUDO} apt-get update -qq
+    # Boost/build tools – always needed
     ${SUDO} apt-get install -y --no-install-recommends \
-        build-essential cmake git \
+        build-essential git \
         libboost-system-dev libboost-thread-dev libboost-log-dev \
         libboost-filesystem-dev
+    # cmake: skip if already present (e.g. Kitware PPA version) to avoid
+    # dependency conflicts with distro-provided cmake-data.
+    if ! command -v cmake &>/dev/null; then
+      ${SUDO} apt-get install -y --no-install-recommends cmake
+    else
+      echo "  cmake $(cmake --version | head -1 | awk '{print $3}') already installed – skipping."
+    fi
   elif command -v pacman &>/dev/null; then
     echo "--- Installing system dependencies (pacman) ---"
     ${SUDO} pacman -Sy --noconfirm base-devel cmake git boost
