@@ -41,18 +41,17 @@ namespace lwrcl
     LoanedSubscriptionMessage() = default;
 
     /**
-     * @brief Construct from a shared LoanedSamples container + index.
+     * @brief Construct from a shared LoanedSamples container + pointer to the sample data.
      *
      * The shared_ptr keeps the DDS loan alive until all messages sharing
      * the same loan are destroyed.
      */
     LoanedSubscriptionMessage(
         std::shared_ptr<dds::sub::LoanedSamples<T>> samples,
-        uint32_t index)
+        const T* data_ptr)
         : samples_(std::move(samples)),
-          index_(index),
-          is_valid_(index_ < static_cast<uint32_t>(samples_->length()) &&
-                    (*samples_)[index_].info().valid())
+          data_ptr_(data_ptr),
+          is_valid_(data_ptr_ != nullptr)
     {
     }
 
@@ -64,9 +63,10 @@ namespace lwrcl
 
     LoanedSubscriptionMessage(LoanedSubscriptionMessage &&other) noexcept
         : samples_(std::move(other.samples_)),
-          index_(other.index_),
+          data_ptr_(other.data_ptr_),
           is_valid_(other.is_valid_)
     {
+      other.data_ptr_ = nullptr;
       other.is_valid_ = false;
     }
 
@@ -75,8 +75,9 @@ namespace lwrcl
       if (this != &other)
       {
         samples_ = std::move(other.samples_);
-        index_ = other.index_;
+        data_ptr_ = other.data_ptr_;
         is_valid_ = other.is_valid_;
+        other.data_ptr_ = nullptr;
         other.is_valid_ = false;
       }
       return *this;
@@ -91,14 +92,14 @@ namespace lwrcl
     {
       if (!is_valid_)
         throw std::runtime_error("Attempting to access invalid loaned message");
-      return const_cast<T &>((*samples_)[index_].data());
+      return const_cast<T &>(*data_ptr_);
     }
 
     const T &get() const
     {
       if (!is_valid_)
         throw std::runtime_error("Attempting to access invalid loaned message");
-      return (*samples_)[index_].data();
+      return *data_ptr_;
     }
 
     T *operator->() { return &get(); }
@@ -116,19 +117,20 @@ namespace lwrcl
     {
       if (!is_valid_)
         throw std::runtime_error("Attempting to access sample info of invalid loaned message");
-      return SampleInfo{(*samples_)[index_].info().valid()};
+      return SampleInfo{true};  // validity already checked during construction
     }
 
     /// Release the underlying loan explicitly (automatic on destruction)
     void release()
     {
       samples_.reset();
+      data_ptr_ = nullptr;
       is_valid_ = false;
     }
 
   private:
     std::shared_ptr<dds::sub::LoanedSamples<T>> samples_;
-    uint32_t index_ = 0;
+    const T* data_ptr_ = nullptr;
     bool is_valid_ = false;
   };
 
@@ -308,14 +310,16 @@ namespace lwrcl
         dds::sub::LoanedSamples<T> samples = reader_->take();
         if (samples.length() > 0)
         {
-          // Find the first valid sample
-          for (uint32_t i = 0; i < static_cast<uint32_t>(samples.length()); ++i)
+          // Find the first valid sample using iterator-based access
+          // (dds::sub::LoanedSamples does not support operator[] with uint32_t)
+          for (auto &s : samples)
           {
-            if (samples[i].info().valid())
+            if (s.info().valid())
             {
+              const T* data_ptr = &s.data();
               auto loan_guard =
                   std::make_shared<dds::sub::LoanedSamples<T>>(std::move(samples));
-              out_loaned = LoanedSubscriptionMessage<T>(loan_guard, i);
+              out_loaned = LoanedSubscriptionMessage<T>(loan_guard, data_ptr);
               return true;
             }
           }
