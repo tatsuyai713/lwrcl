@@ -12,7 +12,9 @@ concurrency:
 
 env:
   CYCLONEDDS_VERSION: "0.10.5"
+  ICEORYX_VERSION: "v2.0.6"
   DDS_PREFIX: /opt/cyclonedds
+  ICEORYX_PREFIX: /opt/iceoryx
   LWRCL_PREFIX: /opt/cyclonedds-libs
 
 jobs:
@@ -33,15 +35,32 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake automake autoconf git \
             libasio-dev libssl-dev libyaml-cpp-dev \
-            libboost-dev libopencv-dev
+            libboost-dev libopencv-dev \
+            libacl1-dev
 
-      # ── Cache Cyclone DDS install ────────────────────────────────────
+      # ── Cache iceoryx ─────────────────────────────────────────────────
+      - name: Cache iceoryx
+        id: cache-iceoryx
+        uses: actions/cache@v4
+        with:
+          path: /opt/iceoryx
+          key: iceoryx-${{ env.ICEORYX_VERSION }}-ubuntu2404-v1
+
+      - name: Build & install iceoryx
+        if: steps.cache-iceoryx.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          sudo mkdir -p $ICEORYX_PREFIX
+          sudo chmod 777 -R $ICEORYX_PREFIX
+          INSTALL_PREFIX=$ICEORYX_PREFIX ./scripts/install_iceoryx.sh --skip-system-deps
+
+      # ── Cache Cyclone DDS install (SHM enabled) ──────────────────────
       - name: Cache Cyclone DDS
         id: cache-cyclonedds
         uses: actions/cache@v4
         with:
           path: /opt/cyclonedds
-          key: cyclonedds-${{ env.CYCLONEDDS_VERSION }}-ubuntu2404-v2
+          key: cyclonedds-${{ env.CYCLONEDDS_VERSION }}-iceoryx-${{ env.ICEORYX_VERSION }}-ubuntu2404-v1
 
       - name: Build & install Cyclone DDS
         if: steps.cache-cyclonedds.outputs.cache-hit != 'true'
@@ -52,13 +71,14 @@ jobs:
 
           sudo mkdir -p $DDS_PREFIX
 
-          # Cyclone DDS core
+          # Cyclone DDS core (SHM enabled via iceoryx)
           git clone https://github.com/eclipse-cyclonedds/cyclonedds.git --depth 1
           cd cyclonedds && git fetch --tags && git checkout ${CYCLONEDDS_VERSION}
           cmake -S . -B build \
             -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX \
+            -DCMAKE_PREFIX_PATH=$ICEORYX_PREFIX \
             -DBUILD_SHARED_LIBS=ON \
-            -DENABLE_SHM=OFF
+            -DENABLE_SHM=ON
           cmake --build build -j$(nproc)
           sudo cmake --install build
           cd "$WORK"
@@ -67,7 +87,7 @@ jobs:
           git clone https://github.com/eclipse-cyclonedds/cyclonedds-cxx.git --depth 1
           cd cyclonedds-cxx && git fetch --tags && git checkout ${CYCLONEDDS_VERSION}
           cmake -B build \
-            -DCMAKE_PREFIX_PATH=$DDS_PREFIX \
+            -DCMAKE_PREFIX_PATH="$DDS_PREFIX;$ICEORYX_PREFIX" \
             -DCMAKE_INSTALL_PREFIX=$DDS_PREFIX \
             -DBUILD_IDLCPP_GENERATOR=ON \
             -DCYCLONEDDS_CXX_BLD_IDLCPP=ON \
@@ -81,7 +101,8 @@ jobs:
       - name: Configure environment
         run: |
           echo "$DDS_PREFIX/bin" >> $GITHUB_PATH
-          echo "LD_LIBRARY_PATH=$DDS_PREFIX/lib:$LWRCL_PREFIX/lib" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$DDS_PREFIX/lib:$ICEORYX_PREFIX/lib:$LWRCL_PREFIX/lib" >> $GITHUB_ENV
+          echo "ICEORYX_PREFIX=$ICEORYX_PREFIX" >> $GITHUB_ENV
 
       # ── Build lwrcl (libraries → data_types → lwrcl) ─────────────────
       - name: Build & install lwrcl (CycloneDDS)
