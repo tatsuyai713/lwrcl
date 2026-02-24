@@ -25,9 +25,17 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Build order: libraries → data_types → lwrcl
-STEPS=("build_libraries.sh" "build_data_types.sh" "build_lwrcl.sh")
-LABELS=("libraries" "data_types" "lwrcl")
+# Build order: libraries → data_types → lwrcl → apps
+# Each step must be installed before the next step can find its outputs,
+# so always use "install" unless the user requested "clean".
+if [ "$ACTION" = "clean" ]; then
+    STEP_ACTION="clean"
+else
+    STEP_ACTION="install"
+fi
+
+STEPS=("build_libraries.sh" "build_data_types.sh" "build_lwrcl.sh" "build_apps.sh")
+LABELS=("libraries" "data_types" "lwrcl" "apps")
 
 FAILED=0
 for i in "${!STEPS[@]}"; do
@@ -38,7 +46,7 @@ for i in "${!STEPS[@]}"; do
     echo "  [$(( i + 1 ))/${#STEPS[@]}] ${LABEL}  (${BACKEND}${ACTION:+ $ACTION})"
     echo "========================================"
 
-    if ! bash "$SCRIPT" "$BACKEND" "$ACTION"; then
+    if ! bash "$SCRIPT" "$BACKEND" "$STEP_ACTION"; then
         echo "ERROR: ${LABEL} failed."
         FAILED=1
         break
