@@ -48,10 +48,10 @@ namespace lwrcl
      */
     LoanedSubscriptionMessage(
         std::shared_ptr<dds::sub::LoanedSamples<T>> samples,
-        size_t index)
+        uint32_t index)
         : samples_(std::move(samples)),
           index_(index),
-          is_valid_(index_ < static_cast<size_t>(samples_->length()) &&
+          is_valid_(index_ < static_cast<uint32_t>(samples_->length()) &&
                     (*samples_)[index_].info().valid())
     {
     }
@@ -128,7 +128,7 @@ namespace lwrcl
 
   private:
     std::shared_ptr<dds::sub::LoanedSamples<T>> samples_;
-    size_t index_ = 0;
+    uint32_t index_ = 0;
     bool is_valid_ = false;
   };
 
@@ -309,7 +309,7 @@ namespace lwrcl
         if (samples.length() > 0)
         {
           // Find the first valid sample
-          for (size_t i = 0; i < static_cast<size_t>(samples.length()); ++i)
+          for (uint32_t i = 0; i < static_cast<uint32_t>(samples.length()); ++i)
           {
             if (samples[i].info().valid())
             {

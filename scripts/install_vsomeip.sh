@@ -356,6 +356,15 @@ cat > "${INSTALL_PREFIX}/include/org/eclipse/cyclonedds/topic/datatopic.hpp" << 
  */
 #ifndef CYCLONEDDS_TOPIC_DATATOPIC_HPP_
 #define CYCLONEDDS_TOPIC_DATATOPIC_HPP_
+
+/**
+ * No-op stub for CDR-only (SOME/IP) builds.
+ * idlc -l cxx emits DDSCXX_IMPL_TYPE(T) at the end of generated .cpp
+ * files; with SOME/IP transport the DDS topic registration is unused,
+ * so we define the macro as a no-op.
+ */
+#define DDSCXX_IMPL_TYPE(T)
+
 #endif /* CYCLONEDDS_TOPIC_DATATOPIC_HPP_ */
 DATATOPIC_HPP
 

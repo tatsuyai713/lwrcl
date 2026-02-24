@@ -289,21 +289,35 @@ Adaptive AUTOSAR の Loaned Message API:
 
 CycloneDDS バックエンドでは、lwrcl は利用可能な場合に native の writer-loan/read-loan API を使用し、利用できない場合は安全にフォールバックします。
 
-iceoryx SHM 転送によるゼロコピーを有効化するには:
+iceoryx SHM 転送によるゼロコピーを有効化するには、以下を実行するだけです:
 
 ```bash
-./scripts/install_iceoryx.sh
-./scripts/install_cyclonedds.sh --enable-shm
+./scripts/install_cyclonedds.sh
+```
+
+`install_cyclonedds.sh` は iceoryx の有無を自動検出し、見つからない場合は `/opt/iceoryx` へのインストール（コンテナセーフ ACL フォールバック付き）を行ってから、`ENABLE_SHM=ON` で CycloneDDS をビルドします。
+
+iceoryx の自動インストールをスキップして SHM なしでビルドするには:
+
+```bash
+./scripts/install_cyclonedds.sh --skip-iceoryx
+# または
+./scripts/install_cyclonedds.sh --disable-shm
+```
+
+インストール後、実行前に以下の環境変数を設定し `iox-roudi` を起動してください:
+
+```bash
 export LD_LIBRARY_PATH=/opt/iceoryx/lib:/opt/cyclonedds/lib:/opt/cyclonedds-libs/lib:${LD_LIBRARY_PATH}
 export CYCLONEDDS_URI=file:///opt/cyclonedds/etc/cyclonedds-lwrcl.xml
 iox-roudi
 ```
 
-`install_iceoryx.sh` は、`/dev/shm` が ACL 非対応のコンテナ環境でも起動できるように、デフォルトで ACL フォールバックを適用します。  
-厳密な ACL 強制が必要な場合は、以下で再インストールしてください。
+厳密な ACL 強制が必要な場合（デフォルトのコンテナセーフ動作を使わない場合）は、iceoryx を個別に再インストールしてください:
 
 ```bash
 ./scripts/install_iceoryx.sh --force --strict-acl
+./scripts/install_cyclonedds.sh --skip-iceoryx --enable-shm
 ```
 
 コンテナ設定で対応する場合（ホストが tmpfs ACL 対応なら推奨）:

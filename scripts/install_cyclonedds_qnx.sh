@@ -9,6 +9,7 @@ ARCH="aarch64le"
 BUILD_DIR="${HOME}/build-cyclonedds-qnx"
 TOOLCHAIN_FILE=""
 ENABLE_SHM="AUTO" # AUTO | ON | OFF
+SKIP_ICEORYX="OFF" # OFF: auto-install iceoryx when SHM is needed; ON: skip
 BUILD_HOST_IDLC="ON"
 PATCH_THREADS_FOR_QNX="ON"
 SKIP_SYSTEM_DEPS="OFF"
@@ -55,6 +56,7 @@ Options:
   --jobs <N>                   Parallel jobs (default: auto)
   --enable-shm                 Force CycloneDDS SHM ON (requires QNX iceoryx)
   --disable-shm                Force CycloneDDS SHM OFF
+  --skip-iceoryx               Skip auto-installation of iceoryx (SHM will be OFF if iceoryx is absent)
   --without-host-idlc          Do not build/install host idlc tool
   --without-qnx-threads-patch  Disable QNX Threads patch in ddsrt CMake
   --skip-system-deps           Skip apt dependency installation
@@ -112,6 +114,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --disable-shm)
       ENABLE_SHM="OFF"
+      shift
+      ;;
+    --skip-iceoryx)
+      SKIP_ICEORYX="ON"
       shift
       ;;
     --without-host-idlc)
@@ -197,16 +203,33 @@ fi
 
 if [[ "${ENABLE_SHM}" == "AUTO" ]]; then
   if [[ -f "${ICEORYX_PREFIX}/lib/cmake/iceoryx_posh/iceoryx_poshConfig.cmake" ]]; then
+    log_info "iceoryx found at ${ICEORYX_PREFIX} – enabling SHM."
     ENABLE_SHM="ON"
-  else
+  elif [[ "${SKIP_ICEORYX}" == "ON" ]]; then
+    log_info "iceoryx not found and --skip-iceoryx set – building without SHM."
     ENABLE_SHM="OFF"
+  else
+    log_info "iceoryx not found – installing iceoryx for QNX SHM support."
+    ICEORYX_INSTALL_ARGS=("--arch" "${ARCH}" "--prefix" "${ICEORYX_PREFIX}")
+    if [[ -n "${TOOLCHAIN_FILE}" ]]; then
+      ICEORYX_INSTALL_ARGS+=("--toolchain-file" "${TOOLCHAIN_FILE}")
+    fi
+    bash "${SCRIPT_DIR}/install_iceoryx_qnx.sh" install "${ICEORYX_INSTALL_ARGS[@]}"
+    ENABLE_SHM="ON"
   fi
 fi
 
 if [[ "${ENABLE_SHM}" == "ON" ]] && [[ ! -f "${ICEORYX_PREFIX}/lib/cmake/iceoryx_posh/iceoryx_poshConfig.cmake" ]]; then
-  log_error "ENABLE_SHM=ON but iceoryx is not found at ${ICEORYX_PREFIX}."
-  log_error "Install QNX iceoryx first (e.g. scripts/install_iceoryx_qnx.sh) or pass --disable-shm."
-  exit 1
+  if [[ "${SKIP_ICEORYX}" == "ON" ]]; then
+    log_error "--enable-shm requested but iceoryx not found at ${ICEORYX_PREFIX} and --skip-iceoryx set."
+    exit 1
+  fi
+  log_info "--enable-shm set but iceoryx not found – installing iceoryx for QNX."
+  ICEORYX_INSTALL_ARGS=("--arch" "${ARCH}" "--prefix" "${ICEORYX_PREFIX}")
+  if [[ -n "${TOOLCHAIN_FILE}" ]]; then
+    ICEORYX_INSTALL_ARGS+=("--toolchain-file" "${TOOLCHAIN_FILE}")
+  fi
+  bash "${SCRIPT_DIR}/install_iceoryx_qnx.sh" install "${ICEORYX_INSTALL_ARGS[@]}"
 fi
 
 SOURCE_DIR="${BUILD_DIR}/cyclonedds"

@@ -289,21 +289,35 @@ Adaptive AUTOSAR Loaned Message API:
 
 For CycloneDDS backend, lwrcl uses native writer-loan/read-loan APIs when available and falls back safely when loaning is unavailable.
 
-To enable SHM zero-copy transport with iceoryx:
+To enable SHM zero-copy transport with iceoryx, simply run:
 
 ```bash
-./scripts/install_iceoryx.sh
-./scripts/install_cyclonedds.sh --enable-shm
+./scripts/install_cyclonedds.sh
+```
+
+`install_cyclonedds.sh` automatically detects whether iceoryx is present. If not found, it installs iceoryx to `/opt/iceoryx` (including the container-safe ACL fallback) before building CycloneDDS with `ENABLE_SHM=ON`.
+
+To opt out of automatic iceoryx installation and build without SHM:
+
+```bash
+./scripts/install_cyclonedds.sh --skip-iceoryx
+# or
+./scripts/install_cyclonedds.sh --disable-shm
+```
+
+Once installed, start `iox-roudi` and set the following environment variables before running:
+
+```bash
 export LD_LIBRARY_PATH=/opt/iceoryx/lib:/opt/cyclonedds/lib:/opt/cyclonedds-libs/lib:${LD_LIBRARY_PATH}
 export CYCLONEDDS_URI=file:///opt/cyclonedds/etc/cyclonedds-lwrcl.xml
 iox-roudi
 ```
 
-`install_iceoryx.sh` applies a container-safe ACL fallback by default (if `/dev/shm` ACL is unsupported).  
-If you need strict ACL enforcement, reinstall with:
+If you need strict ACL enforcement (instead of the default container-safe fallback), reinstall iceoryx separately:
 
 ```bash
 ./scripts/install_iceoryx.sh --force --strict-acl
+./scripts/install_cyclonedds.sh --skip-iceoryx --enable-shm
 ```
 
 Container-side setting (preferred if host supports tmpfs ACL):
