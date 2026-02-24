@@ -343,28 +343,33 @@ namespace lwrcl
   private:
     void push_message(std::shared_ptr<T> message, ara::com::SamplePtr<T> loaned_sample)
     {
-      channel_->produce(std::make_shared<SubscriberCallback<T>>(
-          callback_function_, message, lwrcl_subscriber_mutex_));
-
       lwrcl::MessageInfo new_info;
       new_info.source_timestamp = std::chrono::system_clock::now();
       new_info.from_intra_process = false;
 
-      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
-      pollable_buffer_.emplace_back(message, new_info);
-      if (loaned_sample)
+      // Update buffers under lock BEFORE producing the callback so that
+      // polling users always see a consistent state when the callback fires.
       {
-        loaned_buffer_.emplace_back(std::move(loaned_sample));
+        std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+        pollable_buffer_.emplace_back(message, new_info);
+        if (loaned_sample)
+        {
+          loaned_buffer_.emplace_back(std::move(loaned_sample));
+        }
+
+        if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
+        {
+          pollable_buffer_.pop_front();
+          // Keep loaned_buffer_ in sync with pollable_buffer_ on overflow.
+          if (!loaned_buffer_.empty())
+          {
+            loaned_buffer_.pop_front();
+          }
+        }
       }
 
-      if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
-      {
-        pollable_buffer_.pop_front();
-      }
-      if (loaned_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
-      {
-        loaned_buffer_.pop_front();
-      }
+      channel_->produce(std::make_shared<SubscriberCallback<T>>(
+          callback_function_, message, lwrcl_subscriber_mutex_));
     }
 
     void run_once()

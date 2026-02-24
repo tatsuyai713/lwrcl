@@ -237,11 +237,15 @@ namespace lwrcl
 
     T &get()
     {
+      if (!is_valid_ || message_ == nullptr)
+        throw std::runtime_error("Attempting to access invalid loaned message");
       return *message_;
     }
 
     const T &get() const
     {
+      if (!is_valid_ || message_ == nullptr)
+        throw std::runtime_error("Attempting to access invalid loaned message");
       return *message_;
     }
 

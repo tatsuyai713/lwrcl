@@ -370,16 +370,21 @@ namespace lwrcl
                 auto message_view =
                     std::shared_ptr<T>(loan_guard, const_cast<T *>(&sample.data()));
 
-                channel_->produce(std::make_shared<SubscriberCallback<T>>(
-                    callback_function_, message_view, lwrcl_subscriber_mutex_));
-
+                // Update pollable_buffer_ under lock BEFORE producing the
+                // callback so that polling users always see a consistent state
+                // when the callback fires.
                 new_info.source_timestamp = std::chrono::system_clock::now();
                 new_info.from_intra_process = false;
-                pollable_buffer_.emplace_back(message_view, new_info);
-                
-                if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE) {
-                  pollable_buffer_.pop_front();
+                {
+                  std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+                  pollable_buffer_.emplace_back(message_view, new_info);
+                  if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE) {
+                    pollable_buffer_.pop_front();
+                  }
                 }
+
+                channel_->produce(std::make_shared<SubscriberCallback<T>>(
+                    callback_function_, message_view, lwrcl_subscriber_mutex_));
               }
             }
           }

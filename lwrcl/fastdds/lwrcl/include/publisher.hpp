@@ -315,8 +315,18 @@ namespace lwrcl
     bool is_valid() const { return is_valid_ && message_ != nullptr; }
 
     // Access the message
-    T &get() { return *message_; }
-    const T &get() const { return *message_; }
+    T &get()
+    {
+      if (!is_valid_ || message_ == nullptr)
+        throw std::runtime_error("Attempting to access invalid loaned message");
+      return *message_;
+    }
+    const T &get() const
+    {
+      if (!is_valid_ || message_ == nullptr)
+        throw std::runtime_error("Attempting to access invalid loaned message");
+      return *message_;
+    }
 
     T *operator->() { return message_; }
     const T *operator->() const { return message_; }

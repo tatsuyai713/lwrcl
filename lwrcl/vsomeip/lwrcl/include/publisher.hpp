@@ -82,9 +82,13 @@ namespace lwrcl
               }
               else
               {
-                auto prev = subscriber_count_.load();
-                if (prev > 0)
-                  subscriber_count_.fetch_sub(1);
+                // Use CAS loop to decrement only when > 0, avoiding a TOCTOU
+                // race between a separate load() + fetch_sub() pair.
+                int32_t prev = subscriber_count_.load();
+                while (prev > 0 &&
+                       !subscriber_count_.compare_exchange_weak(prev, prev - 1))
+                {
+                }
               }
               return true; // accept subscription
             });

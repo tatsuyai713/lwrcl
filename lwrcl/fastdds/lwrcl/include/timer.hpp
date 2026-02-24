@@ -96,7 +96,15 @@ namespace lwrcl
 
     void start() override
     {
+      // Join any previously running thread before starting a new one to avoid
+      // std::terminate() when the joinable thread object is overwritten.
+      if (worker_.joinable())
+      {
+        stop_flag_.store(true);
+        worker_.join();
+      }
       is_canceled_.store(false);
+      stop_flag_.store(false);
       worker_ = std::thread([this]()
                             { run(); });
     }

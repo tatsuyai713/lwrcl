@@ -464,8 +464,8 @@ namespace lwrcl
                 }
                 else
                 {
-                  std::cerr << "Error: Invalid data" << std::endl;
-                  break;
+                  // Skip invalid-data samples (e.g. heartbeat gaps) and keep draining.
+                  continue;
                 }
               }
             }
@@ -517,14 +517,14 @@ namespace lwrcl
       lwrcl::dds::TopicQos topic_qos = lwrcl::dds::TOPIC_QOS_DEFAULT();
       if (message_type_.get_type_support().register_type(participant_) != ReturnCode_t::RETCODE_OK)
       {
-        std::cerr << "Failed to register message type" << std::endl;
+        throw std::runtime_error("Failed to register message type");
       }
 
       std::string type_name = message_type_.get_type_support().get_type_name();
       subscriber_ = participant_->create_subscriber(eprosima::fastdds::dds::SUBSCRIBER_QOS_DEFAULT);
       if (!subscriber_)
       {
-        std::cerr << "Failed to create subscriber" << std::endl;
+        throw std::runtime_error("Failed to create subscriber");
       }
 
       eprosima::fastdds::dds::Topic *retrieved_topic =
@@ -536,7 +536,8 @@ namespace lwrcl
         if (!topic_)
         {
           participant_->delete_subscriber(subscriber_);
-          std::cerr << "Failed to create topic" << std::endl;
+          subscriber_ = nullptr;
+          throw std::runtime_error("Failed to create topic");
         }
         topic_owned_ = true;
       }
@@ -605,11 +606,22 @@ namespace lwrcl
       reader_qos.data_sharing().automatic();
       reader_qos.properties().properties().emplace_back("fastdds.intraprocess_delivery", "true");
 
+      if (!subscriber_)
+      {
+        throw std::runtime_error("Failed to create subscriber");
+      }
+      if (!topic_)
+      {
+        participant_->delete_subscriber(subscriber_);
+        subscriber_ = nullptr;
+        throw std::runtime_error("Failed to create topic");
+      }
+
       reader_ = subscriber_->create_datareader(topic_, reader_qos, nullptr, eprosima::fastdds::dds::StatusMask::all());
       if (!reader_)
       {
-        participant_->delete_subscriber(subscriber_);
-        participant_->delete_topic(topic_);
+        if (subscriber_ != nullptr) participant_->delete_subscriber(subscriber_);
+        if (topic_ != nullptr && topic_owned_) participant_->delete_topic(topic_);
         throw std::runtime_error("Failed to create datareader");
       }
 
