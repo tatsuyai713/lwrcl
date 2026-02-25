@@ -85,22 +85,132 @@ namespace rclcpp {
 // Include QoS helper functions from qos.hpp
 #include "rclcpp/qos.hpp"
 
-// Logger macros
+// Basic logger macros
 #define RCLCPP_DEBUG(logger, ...) (logger).log(lwrcl::DEBUG, __VA_ARGS__)
 #define RCLCPP_INFO(logger, ...) (logger).log(lwrcl::INFO, __VA_ARGS__)
 #define RCLCPP_WARN(logger, ...) (logger).log(lwrcl::WARN, __VA_ARGS__)
 #define RCLCPP_ERROR(logger, ...) (logger).log(lwrcl::ERROR, __VA_ARGS__)
 
-// Throttled logger macros (simplified - no actual throttling in this implementation)
-#define RCLCPP_DEBUG_THROTTLE(logger, clock, duration, ...) (logger).log(lwrcl::DEBUG, __VA_ARGS__)
-#define RCLCPP_INFO_THROTTLE(logger, clock, duration, ...) (logger).log(lwrcl::INFO, __VA_ARGS__)
-#define RCLCPP_WARN_THROTTLE(logger, clock, duration, ...) (logger).log(lwrcl::WARN, __VA_ARGS__)
-#define RCLCPP_ERROR_THROTTLE(logger, clock, duration, ...) (logger).log(lwrcl::ERROR, __VA_ARGS__)
+// Stream logger macros (accepts std::ostream-style expressions)
+#define RCLCPP_DEBUG_STREAM(logger, stream_arg) do { \
+    std::ostringstream _lwrcl_ss_; _lwrcl_ss_ << stream_arg; \
+    (logger).log(lwrcl::DEBUG, "%s", _lwrcl_ss_.str().c_str()); } while(0)
+#define RCLCPP_INFO_STREAM(logger, stream_arg) do { \
+    std::ostringstream _lwrcl_ss_; _lwrcl_ss_ << stream_arg; \
+    (logger).log(lwrcl::INFO, "%s", _lwrcl_ss_.str().c_str()); } while(0)
+#define RCLCPP_WARN_STREAM(logger, stream_arg) do { \
+    std::ostringstream _lwrcl_ss_; _lwrcl_ss_ << stream_arg; \
+    (logger).log(lwrcl::WARN, "%s", _lwrcl_ss_.str().c_str()); } while(0)
+#define RCLCPP_ERROR_STREAM(logger, stream_arg) do { \
+    std::ostringstream _lwrcl_ss_; _lwrcl_ss_ << stream_arg; \
+    (logger).log(lwrcl::ERROR, "%s", _lwrcl_ss_.str().c_str()); } while(0)
 
-// Once logger macros (simplified - logs every time in this implementation)
-#define RCLCPP_DEBUG_ONCE(logger, ...) (logger).log(lwrcl::DEBUG, __VA_ARGS__)
-#define RCLCPP_INFO_ONCE(logger, ...) (logger).log(lwrcl::INFO, __VA_ARGS__)
-#define RCLCPP_WARN_ONCE(logger, ...) (logger).log(lwrcl::WARN, __VA_ARGS__)
-#define RCLCPP_ERROR_ONCE(logger, ...) (logger).log(lwrcl::ERROR, __VA_ARGS__)
+// Throttled logger macros (fires at most once per duration_ms milliseconds per call site)
+#define RCLCPP_DEBUG_THROTTLE(logger, clock, duration_ms, ...) do { \
+    static std::chrono::steady_clock::time_point _lwrcl_last_ = \
+        std::chrono::steady_clock::time_point::min(); \
+    auto _lwrcl_now_ = std::chrono::steady_clock::now(); \
+    if (std::chrono::duration_cast<std::chrono::milliseconds>( \
+            _lwrcl_now_ - _lwrcl_last_).count() >= static_cast<long long>(duration_ms)) { \
+        _lwrcl_last_ = _lwrcl_now_; (logger).log(lwrcl::DEBUG, __VA_ARGS__); } } while(0)
+#define RCLCPP_INFO_THROTTLE(logger, clock, duration_ms, ...) do { \
+    static std::chrono::steady_clock::time_point _lwrcl_last_ = \
+        std::chrono::steady_clock::time_point::min(); \
+    auto _lwrcl_now_ = std::chrono::steady_clock::now(); \
+    if (std::chrono::duration_cast<std::chrono::milliseconds>( \
+            _lwrcl_now_ - _lwrcl_last_).count() >= static_cast<long long>(duration_ms)) { \
+        _lwrcl_last_ = _lwrcl_now_; (logger).log(lwrcl::INFO, __VA_ARGS__); } } while(0)
+#define RCLCPP_WARN_THROTTLE(logger, clock, duration_ms, ...) do { \
+    static std::chrono::steady_clock::time_point _lwrcl_last_ = \
+        std::chrono::steady_clock::time_point::min(); \
+    auto _lwrcl_now_ = std::chrono::steady_clock::now(); \
+    if (std::chrono::duration_cast<std::chrono::milliseconds>( \
+            _lwrcl_now_ - _lwrcl_last_).count() >= static_cast<long long>(duration_ms)) { \
+        _lwrcl_last_ = _lwrcl_now_; (logger).log(lwrcl::WARN, __VA_ARGS__); } } while(0)
+#define RCLCPP_ERROR_THROTTLE(logger, clock, duration_ms, ...) do { \
+    static std::chrono::steady_clock::time_point _lwrcl_last_ = \
+        std::chrono::steady_clock::time_point::min(); \
+    auto _lwrcl_now_ = std::chrono::steady_clock::now(); \
+    if (std::chrono::duration_cast<std::chrono::milliseconds>( \
+            _lwrcl_now_ - _lwrcl_last_).count() >= static_cast<long long>(duration_ms)) { \
+        _lwrcl_last_ = _lwrcl_now_; (logger).log(lwrcl::ERROR, __VA_ARGS__); } } while(0)
+
+// Stream + throttle macros
+#define RCLCPP_DEBUG_STREAM_THROTTLE(logger, clock, duration_ms, stream_arg) do { \
+    static std::chrono::steady_clock::time_point _lwrcl_last_ = \
+        std::chrono::steady_clock::time_point::min(); \
+    auto _lwrcl_now_ = std::chrono::steady_clock::now(); \
+    if (std::chrono::duration_cast<std::chrono::milliseconds>( \
+            _lwrcl_now_ - _lwrcl_last_).count() >= static_cast<long long>(duration_ms)) { \
+        _lwrcl_last_ = _lwrcl_now_; \
+        std::ostringstream _lwrcl_ss_; _lwrcl_ss_ << stream_arg; \
+        (logger).log(lwrcl::DEBUG, "%s", _lwrcl_ss_.str().c_str()); } } while(0)
+#define RCLCPP_INFO_STREAM_THROTTLE(logger, clock, duration_ms, stream_arg) do { \
+    static std::chrono::steady_clock::time_point _lwrcl_last_ = \
+        std::chrono::steady_clock::time_point::min(); \
+    auto _lwrcl_now_ = std::chrono::steady_clock::now(); \
+    if (std::chrono::duration_cast<std::chrono::milliseconds>( \
+            _lwrcl_now_ - _lwrcl_last_).count() >= static_cast<long long>(duration_ms)) { \
+        _lwrcl_last_ = _lwrcl_now_; \
+        std::ostringstream _lwrcl_ss_; _lwrcl_ss_ << stream_arg; \
+        (logger).log(lwrcl::INFO, "%s", _lwrcl_ss_.str().c_str()); } } while(0)
+#define RCLCPP_WARN_STREAM_THROTTLE(logger, clock, duration_ms, stream_arg) do { \
+    static std::chrono::steady_clock::time_point _lwrcl_last_ = \
+        std::chrono::steady_clock::time_point::min(); \
+    auto _lwrcl_now_ = std::chrono::steady_clock::now(); \
+    if (std::chrono::duration_cast<std::chrono::milliseconds>( \
+            _lwrcl_now_ - _lwrcl_last_).count() >= static_cast<long long>(duration_ms)) { \
+        _lwrcl_last_ = _lwrcl_now_; \
+        std::ostringstream _lwrcl_ss_; _lwrcl_ss_ << stream_arg; \
+        (logger).log(lwrcl::WARN, "%s", _lwrcl_ss_.str().c_str()); } } while(0)
+#define RCLCPP_ERROR_STREAM_THROTTLE(logger, clock, duration_ms, stream_arg) do { \
+    static std::chrono::steady_clock::time_point _lwrcl_last_ = \
+        std::chrono::steady_clock::time_point::min(); \
+    auto _lwrcl_now_ = std::chrono::steady_clock::now(); \
+    if (std::chrono::duration_cast<std::chrono::milliseconds>( \
+            _lwrcl_now_ - _lwrcl_last_).count() >= static_cast<long long>(duration_ms)) { \
+        _lwrcl_last_ = _lwrcl_now_; \
+        std::ostringstream _lwrcl_ss_; _lwrcl_ss_ << stream_arg; \
+        (logger).log(lwrcl::ERROR, "%s", _lwrcl_ss_.str().c_str()); } } while(0)
+
+// Once logger macros (logs exactly once per call site)
+#define RCLCPP_DEBUG_ONCE(logger, ...) do { \
+    static bool _lwrcl_once_ = false; \
+    if (!_lwrcl_once_) { _lwrcl_once_ = true; (logger).log(lwrcl::DEBUG, __VA_ARGS__); } \
+} while(0)
+#define RCLCPP_INFO_ONCE(logger, ...) do { \
+    static bool _lwrcl_once_ = false; \
+    if (!_lwrcl_once_) { _lwrcl_once_ = true; (logger).log(lwrcl::INFO, __VA_ARGS__); } \
+} while(0)
+#define RCLCPP_WARN_ONCE(logger, ...) do { \
+    static bool _lwrcl_once_ = false; \
+    if (!_lwrcl_once_) { _lwrcl_once_ = true; (logger).log(lwrcl::WARN, __VA_ARGS__); } \
+} while(0)
+#define RCLCPP_ERROR_ONCE(logger, ...) do { \
+    static bool _lwrcl_once_ = false; \
+    if (!_lwrcl_once_) { _lwrcl_once_ = true; (logger).log(lwrcl::ERROR, __VA_ARGS__); } \
+} while(0)
+
+// Stream + once macros
+#define RCLCPP_DEBUG_STREAM_ONCE(logger, stream_arg) do { \
+    static bool _lwrcl_once_ = false; \
+    if (!_lwrcl_once_) { _lwrcl_once_ = true; \
+        std::ostringstream _lwrcl_ss_; _lwrcl_ss_ << stream_arg; \
+        (logger).log(lwrcl::DEBUG, "%s", _lwrcl_ss_.str().c_str()); } } while(0)
+#define RCLCPP_INFO_STREAM_ONCE(logger, stream_arg) do { \
+    static bool _lwrcl_once_ = false; \
+    if (!_lwrcl_once_) { _lwrcl_once_ = true; \
+        std::ostringstream _lwrcl_ss_; _lwrcl_ss_ << stream_arg; \
+        (logger).log(lwrcl::INFO, "%s", _lwrcl_ss_.str().c_str()); } } while(0)
+#define RCLCPP_WARN_STREAM_ONCE(logger, stream_arg) do { \
+    static bool _lwrcl_once_ = false; \
+    if (!_lwrcl_once_) { _lwrcl_once_ = true; \
+        std::ostringstream _lwrcl_ss_; _lwrcl_ss_ << stream_arg; \
+        (logger).log(lwrcl::WARN, "%s", _lwrcl_ss_.str().c_str()); } } while(0)
+#define RCLCPP_ERROR_STREAM_ONCE(logger, stream_arg) do { \
+    static bool _lwrcl_once_ = false; \
+    if (!_lwrcl_once_) { _lwrcl_once_ = true; \
+        std::ostringstream _lwrcl_ss_; _lwrcl_ss_ << stream_arg; \
+        (logger).log(lwrcl::ERROR, "%s", _lwrcl_ss_.str().c_str()); } } while(0)
 
 #endif // RCLCPP_HPP_

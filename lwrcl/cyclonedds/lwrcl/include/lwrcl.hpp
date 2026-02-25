@@ -375,6 +375,42 @@ namespace lwrcl
     void get_parameter(const std::string &name, double &double_data) const;
     void get_parameter(const std::string &name, std::string &string_data) const;
 
+    bool has_parameter(const std::string &name) const {
+      return parameters_.find(name) != parameters_.end();
+    }
+    void undeclare_parameter(const std::string &name) {
+      parameters_.erase(name);
+    }
+    void set_parameter(const Parameter &param) {
+      parameters_[param.get_name()] = param;
+    }
+    std::vector<Parameter> get_parameters(const std::vector<std::string> &names) const {
+      std::vector<Parameter> result;
+      result.reserve(names.size());
+      for (const auto &n : names) {
+        result.push_back(get_parameter(n));
+      }
+      return result;
+    }
+    std::vector<std::string> list_parameters(
+        const std::vector<std::string> &prefixes, uint64_t /*depth*/) const {
+      std::vector<std::string> result;
+      for (const auto &kv : parameters_) {
+        if (prefixes.empty()) {
+          result.push_back(kv.first);
+        } else {
+          for (const auto &prefix : prefixes) {
+            if (kv.first.size() >= prefix.size() &&
+                kv.first.substr(0, prefix.size()) == prefix) {
+              result.push_back(kv.first);
+              break;
+            }
+          }
+        }
+      }
+      return result;
+    }
+
     std::atomic<bool> closed_{false};
     void stop_spin();
 
@@ -818,6 +854,10 @@ namespace lwrcl
       }
 
       return false;
+    }
+
+    bool service_is_ready() const {
+      return publisher_->get_subscriber_count() > 0;
     }
 
   private:
