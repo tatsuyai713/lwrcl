@@ -635,6 +635,10 @@ namespace lwrcl
       , participant_(std::make_shared<AutosarDomainParticipant>(
             static_cast<uint32_t>(domain_id)))
       , channel_(std::make_shared<CallbackChannel>())
+      , callback_mutex_(std::make_shared<std::mutex>())
+      , node_cv_(std::make_shared<std::condition_variable>())
+      , node_cv_mutex_(std::make_shared<std::mutex>())
+      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
       , clock_(std::make_unique<Clock>())
       , name_("lwrcl_default_node")
       , namespace_("")
@@ -650,6 +654,10 @@ namespace lwrcl
       , participant_(std::make_shared<AutosarDomainParticipant>(
             static_cast<uint32_t>(domain_id)))
       , channel_(std::make_shared<CallbackChannel>())
+      , callback_mutex_(std::make_shared<std::mutex>())
+      , node_cv_(std::make_shared<std::condition_variable>())
+      , node_cv_mutex_(std::make_shared<std::mutex>())
+      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
       , clock_(std::make_unique<Clock>())
       , name_(name)
       , namespace_("")
@@ -665,6 +673,10 @@ namespace lwrcl
       , participant_(std::make_shared<AutosarDomainParticipant>(
             static_cast<uint32_t>(domain_id)))
       , channel_(std::make_shared<CallbackChannel>())
+      , callback_mutex_(std::make_shared<std::mutex>())
+      , node_cv_(std::make_shared<std::condition_variable>())
+      , node_cv_mutex_(std::make_shared<std::mutex>())
+      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
       , clock_(std::make_unique<Clock>())
       , name_(name)
       , namespace_(ns)
@@ -680,6 +692,10 @@ namespace lwrcl
       , participant_(std::make_shared<AutosarDomainParticipant>(
             static_cast<uint32_t>(domain_id)))
       , channel_(std::make_shared<CallbackChannel>())
+      , callback_mutex_(std::make_shared<std::mutex>())
+      , node_cv_(std::make_shared<std::condition_variable>())
+      , node_cv_mutex_(std::make_shared<std::mutex>())
+      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
       , clock_(std::make_unique<Clock>())
       , name_(name)
       , namespace_(ns)
@@ -694,6 +710,10 @@ namespace lwrcl
       : closed_(false)
       , participant_(std::make_shared<AutosarDomainParticipant>(0))
       , channel_(std::make_shared<CallbackChannel>())
+      , callback_mutex_(std::make_shared<std::mutex>())
+      , node_cv_(std::make_shared<std::condition_variable>())
+      , node_cv_mutex_(std::make_shared<std::mutex>())
+      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
       , clock_(std::make_unique<Clock>())
       , name_(name)
       , namespace_("")
@@ -708,6 +728,10 @@ namespace lwrcl
       : closed_(false)
       , participant_(std::make_shared<AutosarDomainParticipant>(0))
       , channel_(std::make_shared<CallbackChannel>())
+      , callback_mutex_(std::make_shared<std::mutex>())
+      , node_cv_(std::make_shared<std::condition_variable>())
+      , node_cv_mutex_(std::make_shared<std::mutex>())
+      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
       , clock_(std::make_unique<Clock>())
       , name_(name)
       , namespace_(ns)
@@ -722,6 +746,10 @@ namespace lwrcl
       : closed_(false)
       , participant_(std::make_shared<AutosarDomainParticipant>(0))
       , channel_(std::make_shared<CallbackChannel>())
+      , callback_mutex_(std::make_shared<std::mutex>())
+      , node_cv_(std::make_shared<std::condition_variable>())
+      , node_cv_mutex_(std::make_shared<std::mutex>())
+      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
       , clock_(std::make_unique<Clock>())
       , name_(name)
       , namespace_(ns)
@@ -736,6 +764,10 @@ namespace lwrcl
       : closed_(false)
       , participant_(participant)
       , channel_(std::make_shared<CallbackChannel>())
+      , callback_mutex_(std::make_shared<std::mutex>())
+      , node_cv_(std::make_shared<std::condition_variable>())
+      , node_cv_mutex_(std::make_shared<std::mutex>())
+      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
       , clock_(std::make_unique<Clock>())
       , name_("lwrcl_default_node")
       , namespace_("")
@@ -755,6 +787,10 @@ namespace lwrcl
       : closed_(false)
       , participant_(participant)
       , channel_(std::make_shared<CallbackChannel>())
+      , callback_mutex_(std::make_shared<std::mutex>())
+      , node_cv_(std::make_shared<std::condition_variable>())
+      , node_cv_mutex_(std::make_shared<std::mutex>())
+      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
       , clock_(std::make_unique<Clock>())
       , name_(name)
       , namespace_("")
@@ -774,6 +810,10 @@ namespace lwrcl
       : closed_(false)
       , participant_(participant)
       , channel_(std::make_shared<CallbackChannel>())
+      , callback_mutex_(std::make_shared<std::mutex>())
+      , node_cv_(std::make_shared<std::condition_variable>())
+      , node_cv_mutex_(std::make_shared<std::mutex>())
+      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
       , clock_(std::make_unique<Clock>())
       , name_(name)
       , namespace_(ns)
@@ -893,19 +933,30 @@ namespace lwrcl
   void Node::spin()
   {
     stop_flag_ = false;
+
+    std::vector<std::shared_ptr<ISubscription>> subs;
+    for (auto &sub : subscription_list_) subs.push_back(sub);
+
+    // Register shared wakeup condition variable with all subscriptions.
+    // Stops per-subscription threads; callbacks are invoked directly.
+    for (auto &sub : subs) sub->add_to_waitset(node_cv_, node_cv_mutex_, node_data_pending_);
+
     while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
     {
+      // Drain service/client channel callbacks (non-blocking).
       CallbackPtr callback;
-      while (channel_->consume(callback) && global_stop_flag.load() == false && stop_flag_ == false)
+      while (channel_->consume_nowait(callback))
       {
-        if (callback)
-        {
-          callback->invoke();
-        }
-        else
-        {
-          break;
-        }
+        if (callback) callback->invoke();
+      }
+
+      // Wait for subscription wakeup or 10 ms timeout.
+      {
+        std::unique_lock<std::mutex> lk(*node_cv_mutex_);
+        node_cv_->wait_for(lk, std::chrono::milliseconds(10),
+            [this]() { return node_data_pending_->load() || closed_.load()
+                        || global_stop_flag.load() || stop_flag_; });
+        node_data_pending_->store(false);
       }
     }
 

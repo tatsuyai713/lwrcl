@@ -227,7 +227,7 @@ namespace lwrcl
     {
       QoS qos(depth);
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), resolve_topic_name(topic), qos, std::move(callback_function), channel_);
+          participant_.get(), resolve_topic_name(topic), qos, std::move(callback_function), callback_mutex_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -238,7 +238,7 @@ namespace lwrcl
         std::function<void(std::shared_ptr<T>)> callback_function)
     {
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), resolve_topic_name(topic), qos, std::move(callback_function), channel_);
+          participant_.get(), resolve_topic_name(topic), qos, std::move(callback_function), callback_mutex_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -273,7 +273,7 @@ namespace lwrcl
             callback_function)
     {
       std::shared_ptr<Service<T>> service =
-          std::make_shared<Service<T>>(participant_.get(), service_name, std::move(callback_function), channel_);
+          std::make_shared<Service<T>>(participant_.get(), service_name, std::move(callback_function), callback_mutex_);
       service_list_.push_front(service);
 
       return service;
@@ -283,7 +283,7 @@ namespace lwrcl
     std::shared_ptr<Client<T>> create_client(const std::string &service_name)
     {
       std::shared_ptr<Client<T>> client =
-          std::make_shared<Client<T>>(participant_.get(), service_name, channel_);
+          std::make_shared<Client<T>>(participant_.get(), service_name, callback_mutex_);
       client_list_.push_front(client);
 
       return client;
@@ -295,7 +295,7 @@ namespace lwrcl
     {
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::SYSTEM_TIME;
       auto duration = Duration(period);
-      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), channel_, clock_type);
+      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), callback_mutex_, clock_type);
       timer_list_.push_front(timer);
       return timer;
     }
@@ -306,7 +306,7 @@ namespace lwrcl
     {
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::STEADY_TIME;
       auto duration = Duration(period);
-      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), channel_, clock_type);
+      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), callback_mutex_, clock_type);
       timer_list_.push_front(timer);
       return timer;
     }
@@ -427,6 +427,10 @@ namespace lwrcl
     // Member variables (order matters for -Werror=reorder)
     std::shared_ptr<AutosarDomainParticipant> participant_;
     CallbackChannel::SharedPtr channel_;
+    std::shared_ptr<std::mutex> callback_mutex_;
+    std::shared_ptr<std::condition_variable> node_cv_;
+    std::shared_ptr<std::mutex> node_cv_mutex_;
+    std::shared_ptr<std::atomic<bool>> node_data_pending_;
     Clock::SharedPtr clock_;
     std::string name_;
     std::string namespace_;
@@ -602,7 +606,7 @@ namespace lwrcl
         AutosarDomainParticipant *participant, const std::string &service_name,
         std::function<void(std::shared_ptr<typename T::Request>, std::shared_ptr<typename T::Response>)>
             callback_function,
-        CallbackChannel::SharedPtr channel)
+        std::shared_ptr<std::mutex> /*node_mutex*/)
         : IService(),
           std::enable_shared_from_this<Service<T>>(),
           participant_(participant),
@@ -612,8 +616,7 @@ namespace lwrcl
           publisher_(nullptr),
           subscription_(nullptr),
           request_topic_name_(service_name_ + "_Request"),
-          response_topic_name_(service_name_ + "_Response"),
-          channel_(channel)
+          response_topic_name_(service_name_ + "_Response")
     {
       RMWQoSProfile rmw_qos_profile_services = rmw_qos_profile_services_default;
       QoS service_qos(KeepLast(10), rmw_qos_profile_services);
@@ -630,7 +633,7 @@ namespace lwrcl
 
       subscription_ = std::make_shared<Subscription<typename T::Request>>(
           participant_, std::string("rp/") + request_topic_name_, service_qos,
-          request_callback_function_, channel_);
+          request_callback_function_, std::make_shared<std::mutex>());
     }
 
     ~Service() = default;
@@ -658,7 +661,6 @@ namespace lwrcl
     std::shared_ptr<Subscription<typename T::Request>> subscription_;
     std::string request_topic_name_;
     std::string response_topic_name_;
-    CallbackChannel::SharedPtr channel_;
   };
 
   class IClient
@@ -737,12 +739,11 @@ namespace lwrcl
 
     Client(
         AutosarDomainParticipant *participant, const std::string &service_name,
-        CallbackChannel::SharedPtr channel)
+        std::shared_ptr<std::mutex> /*node_mutex*/)
         : IClient(),
           std::enable_shared_from_this<Client<T>>(),
           participant_(participant),
           service_name_(service_name),
-          channel_(channel),
           response_(nullptr),
           publisher_(nullptr),
           subscription_(nullptr),
@@ -762,7 +763,7 @@ namespace lwrcl
           participant_, std::string("rp/") + response_topic_name_, client_qos,
           std::function<void(std::shared_ptr<typename T::Response>)>(
               [this](std::shared_ptr<typename T::Response> resp) { handle_response(std::move(resp)); }),
-          channel_);
+          std::make_shared<std::mutex>());
     }
 
     ~Client() = default;
@@ -843,7 +844,6 @@ namespace lwrcl
   private:
     AutosarDomainParticipant *participant_;
     std::string service_name_;
-    CallbackChannel::SharedPtr channel_;
     std::shared_ptr<typename T::Response> response_;
     std::queue<std::shared_ptr<std::promise<std::shared_ptr<typename T::Response>>>> response_promises_;
     std::shared_ptr<Publisher<typename T::Request>> publisher_;

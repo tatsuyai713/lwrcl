@@ -221,9 +221,12 @@ namespace lwrcl
   public:
     SubscriberWaitSet(
         std::function<void(std::shared_ptr<T>)> callback_function,
-        CallbackChannel::SharedPtr channel)
+        std::shared_ptr<std::mutex> node_mutex)
         : callback_function_(callback_function),
-          channel_(channel),
+          node_mutex_(node_mutex),
+          node_cv_(),
+          node_cv_mutex_(),
+          node_data_pending_(nullptr),
           proxy_(nullptr),
           stop_flag_(false),
           waitset_thread_(),
@@ -278,6 +281,36 @@ namespace lwrcl
       {
         proxy_->Event.UnsetReceiveHandler();
         proxy_->Event.Unsubscribe();
+      }
+    }
+
+    // Register with the Node-level wakeup condition variable.
+    // Stops the per-subscription thread so Node::spin() drives dispatch.
+    void add_to_waitset(
+        std::shared_ptr<std::condition_variable> cv,
+        std::shared_ptr<std::mutex> cv_mutex,
+        std::shared_ptr<std::atomic<bool>> pending)
+    {
+      node_cv_ = cv;
+      node_cv_mutex_ = cv_mutex;
+      node_data_pending_ = pending;
+      stop(); // stop per-subscription thread
+      // Re-register receive handler to signal the shared node cv.
+      if (proxy_)
+      {
+        proxy_->Event.SetReceiveHandler([this]() {
+          if (node_data_pending_) node_data_pending_->store(true);
+          if (node_cv_) node_cv_->notify_all();
+        });
+      }
+    }
+
+    // Invoke callback for any available data (called from Node::spin() after wakeup).
+    void invoke_if_data()
+    {
+      try { run_once(); }
+      catch (const std::exception &e) {
+        std::cerr << "Exception in invoke_if_data: " << e.what() << std::endl;
       }
     }
 
@@ -362,29 +395,28 @@ namespace lwrcl
       new_info.source_timestamp = std::chrono::system_clock::now();
       new_info.from_intra_process = false;
 
-      // Update buffers under lock BEFORE producing the callback so that
-      // polling users always see a consistent state when the callback fires.
       {
         std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
         pollable_buffer_.emplace_back(message, new_info);
         if (loaned_sample)
-        {
           loaned_buffer_.emplace_back(std::move(loaned_sample));
-        }
-
         if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
         {
           pollable_buffer_.pop_front();
-          // Keep loaned_buffer_ in sync with pollable_buffer_ on overflow.
-          if (!loaned_buffer_.empty())
-          {
-            loaned_buffer_.pop_front();
-          }
+          if (!loaned_buffer_.empty()) loaned_buffer_.pop_front();
         }
       }
 
-      channel_->produce(std::make_shared<SubscriberCallback<T>>(
-          callback_function_, message, lwrcl_subscriber_mutex_));
+      // Direct invocation — no channel/executor hop.
+      {
+        std::lock_guard<std::mutex> lock(*node_mutex_);
+        try { callback_function_(message); }
+        catch (const std::exception &e) {
+          std::cerr << "Exception in subscription callback: " << e.what() << std::endl;
+        } catch (...) {
+          std::cerr << "Unknown exception in subscription callback." << std::endl;
+        }
+      }
     }
 
     void run_once()
@@ -443,7 +475,10 @@ namespace lwrcl
     }
 
     std::function<void(std::shared_ptr<T>)> callback_function_;
-    CallbackChannel::SharedPtr channel_;
+    std::shared_ptr<std::mutex> node_mutex_;
+    std::shared_ptr<std::condition_variable> node_cv_;
+    std::shared_ptr<std::mutex> node_cv_mutex_;
+    std::shared_ptr<std::atomic<bool>> node_data_pending_;
     std::unique_ptr<autosar_generated::TopicEventProxy<T>> proxy_;
     std::atomic<bool> stop_flag_;
     std::thread waitset_thread_;
@@ -463,6 +498,11 @@ namespace lwrcl
   public:
     virtual ~ISubscription() = default;
     virtual void stop() = 0;
+    virtual void add_to_waitset(
+        std::shared_ptr<std::condition_variable> cv,
+        std::shared_ptr<std::mutex> cv_mutex,
+        std::shared_ptr<std::atomic<bool>> pending) = 0;
+    virtual void invoke_if_data() = 0;
 
   protected:
     ISubscription() = default;
@@ -477,8 +517,8 @@ namespace lwrcl
     Subscription(
         AutosarDomainParticipant *participant, const std::string &topic_name,
         const QoS &qos, std::function<void(std::shared_ptr<T>)> callback_function,
-        CallbackChannel::SharedPtr channel)
-        : waitset_(callback_function, channel),
+        std::shared_ptr<std::mutex> node_mutex)
+        : waitset_(callback_function, node_mutex),
           topic_name_(topic_name)
     {
       (void)participant;
@@ -514,6 +554,19 @@ namespace lwrcl
     void stop() override
     {
       waitset_.stop();
+    }
+
+    void add_to_waitset(
+        std::shared_ptr<std::condition_variable> cv,
+        std::shared_ptr<std::mutex> cv_mutex,
+        std::shared_ptr<std::atomic<bool>> pending) override
+    {
+      waitset_.add_to_waitset(cv, cv_mutex, pending);
+    }
+
+    void invoke_if_data() override
+    {
+      waitset_.invoke_if_data();
     }
 
     bool take(T &out_msg, lwrcl::MessageInfo &info)

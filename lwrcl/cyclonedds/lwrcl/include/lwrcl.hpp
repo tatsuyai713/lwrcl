@@ -650,7 +650,7 @@ namespace lwrcl
 
       subscription_ = std::make_shared<Subscription<typename T::Request>>(
           participant_, std::string("rp/") + request_topic_name_, service_qos,
-          request_callback_function_, channel_);
+          request_callback_function_, std::make_shared<std::mutex>());
     }
 
     ~Service() = default;
@@ -782,7 +782,7 @@ namespace lwrcl
           participant_, std::string("rp/") + response_topic_name_, client_qos,
           std::function<void(std::shared_ptr<typename T::Response>)>(
               [this](std::shared_ptr<typename T::Response> resp) { handle_response(std::move(resp)); }),
-          channel_);
+          std::make_shared<std::mutex>());
     }
 
     ~Client() = default;

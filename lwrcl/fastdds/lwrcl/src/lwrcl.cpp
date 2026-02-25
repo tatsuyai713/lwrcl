@@ -639,6 +639,7 @@ namespace lwrcl
       : factory_(nullptr),
         participant_(nullptr),
         channel_(std::make_shared<CallbackChannel>()),
+        callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_("lwrcl_default_node"),
         namespace_(""),
@@ -670,6 +671,7 @@ namespace lwrcl
       : factory_(nullptr),
         participant_(nullptr),
         channel_(std::make_shared<CallbackChannel>()),
+        callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(""),
@@ -700,6 +702,7 @@ namespace lwrcl
       : factory_(nullptr),
         participant_(nullptr),
         channel_(std::make_shared<CallbackChannel>()),
+        callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -730,6 +733,7 @@ namespace lwrcl
       : factory_(nullptr),
         participant_(nullptr),
         channel_(std::make_shared<CallbackChannel>()),
+        callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -760,6 +764,7 @@ namespace lwrcl
       : factory_(nullptr),
         participant_(nullptr),
         channel_(std::make_shared<CallbackChannel>()),
+        callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(""),
@@ -791,6 +796,7 @@ namespace lwrcl
       : factory_(nullptr),
         participant_(nullptr),
         channel_(std::make_shared<CallbackChannel>()),
+        callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -822,6 +828,7 @@ namespace lwrcl
       : factory_(nullptr),
         participant_(nullptr),
         channel_(std::make_shared<CallbackChannel>()),
+        callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -853,6 +860,7 @@ namespace lwrcl
       : factory_(nullptr),
         participant_(participant),
         channel_(std::make_shared<CallbackChannel>()),
+        callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_("lwrcl_default_node"),
         namespace_(""),
@@ -874,6 +882,7 @@ namespace lwrcl
       : factory_(nullptr),
         participant_(participant),
         channel_(std::make_shared<CallbackChannel>()),
+        callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(""),
@@ -896,6 +905,7 @@ namespace lwrcl
       : factory_(nullptr),
         participant_(participant),
         channel_(std::make_shared<CallbackChannel>()),
+        callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -1021,27 +1031,44 @@ namespace lwrcl
   void Node::spin()
   {
     stop_flag_ = false;
+
+    std::vector<std::shared_ptr<ISubscription>> subs;
+    for (auto &sub : subscription_list_) subs.push_back(sub);
+
+    // Unified FastDDS WaitSet — one blocking point for all subscriptions.
+    eprosima::fastdds::dds::WaitSet unified_ws;
+    eprosima::fastdds::dds::GuardCondition stop_cond;
+    unified_ws.attach_condition(stop_cond);
+    for (auto &sub : subs) sub->add_to_waitset(unified_ws);
+    const bool has_subs = !subs.empty();
+
     while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
     {
       CallbackPtr callback;
-      while (channel_->consume(callback) && global_stop_flag.load() == false && stop_flag_ == false)
+      while (channel_->consume_nowait(callback))
       {
-        if (callback)
+        if (callback) callback->invoke();
+      }
+
+      if (has_subs)
+      {
+        eprosima::fastdds::dds::ConditionSeq active;
+        eprosima::fastrtps::Duration_t timeout{0, 10000000}; // 10 ms
+        ReturnCode_t ret = unified_ws.wait(active, timeout);
+        if (global_stop_flag.load() || stop_flag_) break;
+        if (ret == ReturnCode_t::RETCODE_OK)
         {
-          callback->invoke();
-        }
-        else
-        {
-          break;
+          for (auto &sub : subs) sub->invoke_if_data();
         }
       }
-      std::this_thread::sleep_for(std::chrono::microseconds(10));
+      else
+      {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
     }
 
-    if (global_stop_flag.load() == true)
-    {
-      shutdown();
-    }
+    stop_cond.set_trigger_value(true);
+    if (global_stop_flag.load() == true) shutdown();
   }
 
   void Node::stop_spin() { stop_flag_ = true; }

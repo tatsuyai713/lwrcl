@@ -104,15 +104,16 @@ Numbers are **round-trip time ÷ 2** (one-way latency).
 
 | Metric | Value |
 |--------|------:|
-| p50 | ~95 µs |
-| p90 | ~170 µs |
-| p99 | ~220 µs |
-| Min | ~30 µs |
+| p50 | ~68 µs |
+| p90 | ~107 µs |
+| p99 | ~161 µs |
+| Min | ~14 µs |
 
-> Subscriptions use an event-driven `WaitSet` + `ReadCondition` and invoke callbacks
-> directly in the WaitSet thread (no executor channel hop). A per-node mutex serializes
-> concurrent callbacks. The remaining gap over raw CycloneDDS is one thread wake-up
-> (DDS → WaitSet thread) per delivery.
+> All subscriptions in a node share a single **unified Node-level WaitSet** — their
+> `ReadCondition`s are aggregated so the spin thread wakes exactly once per delivery.
+> Callbacks are invoked directly in the spin thread (no executor channel hop).
+> A per-node mutex serializes concurrent callbacks.
+> Minimum latency now matches ROS2 + CycloneDDS (~14 µs).
 
 **Raw CycloneDDS transport layer** (measured with `ddsperf -L ping pong`, bypasses lwrcl callback layer):
 
@@ -206,17 +207,18 @@ Latency was measured with a C++ ping-pong pair (publisher + subscriber in one pr
 
 | Metric | lwrcl + CycloneDDS | ROS2 + CycloneDDS | ROS2 + FastDDS |
 |--------|-------------------:|------------------:|---------------:|
-| p50 | ~95 µs | **~22 µs** | ~32 µs |
-| p90 | ~170 µs | **~78 µs** | ~118 µs |
-| p99 | ~220 µs | ~280 µs | ~375 µs |
-| Min | ~30 µs | **~14 µs** | ~20 µs |
+| p50 | ~68 µs | **~22 µs** | ~32 µs |
+| p90 | ~107 µs | **~78 µs** | ~118 µs |
+| p99 | **~161 µs** | ~280 µs | ~375 µs |
+| Min | **~14 µs** | **~14 µs** | ~20 µs |
 
-> lwrcl callbacks fire directly in the DDS WaitSet thread (no executor channel hop).
+> lwrcl uses a unified Node-level WaitSet: all subscription `ReadCondition`s are aggregated
+> so `Node::spin()` blocks on a single WaitSet and wakes exactly once per delivery.
+> Callbacks fire directly in the spin thread (no executor channel hop).
 > A per-node mutex serializes concurrent callbacks, providing single-threaded semantics.
-> The remaining gap vs ROS2+CycloneDDS (at p50) is one kernel thread wake-up per delivery.
-> ROS2's executor blocks directly on the DDS WaitSet, eliminating that extra context switch.
-> At **p99**, lwrcl (~220 µs) is actually **faster** than both ROS2+CycloneDDS (~280 µs) and
-> ROS2+FastDDS (~375 µs).
+> **Minimum latency now matches ROS2+CycloneDDS (~14 µs).**
+> At **p99**, lwrcl (~161 µs) is significantly **faster** than both ROS2+CycloneDDS (~280 µs)
+> and ROS2+FastDDS (~375 µs).
 
 ### Summary
 
@@ -224,8 +226,8 @@ Latency was measured with a C++ ping-pong pair (publisher + subscriber in one pr
 |--------|:------------------:|:-----------------:|:--------------:|
 | Middleware size | **~3.8 MB** ✅ | ~6.0 MB | ~15 MB |
 | Memory (RSS) | **~15 MB** ✅ | ~21 MB | ~38 MB |
-| Latency p50 | ~95 µs | **~22 µs** ✅ | ~32 µs |
-| Latency p99 | **~220 µs** ✅ | ~280 µs | ~375 µs |
+| Latency p50 | ~68 µs | **~22 µs** ✅ | ~32 µs |
+| Latency p99 | **~161 µs** ✅ | ~280 µs | ~375 µs |
 | Portability | **QNX / AUTOSAR** ✅ | Linux only | Linux only |
 | No ROS2 install | **Yes** ✅ | No | No |
 

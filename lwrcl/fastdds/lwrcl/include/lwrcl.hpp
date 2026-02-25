@@ -235,7 +235,7 @@ namespace lwrcl
       QoS qos(depth);
       std::string full_topic = resolve_topic_name(topic);
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), full_topic, qos, std::move(callback_function), channel_);
+          participant_.get(), full_topic, qos, std::move(callback_function), callback_mutex_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -247,7 +247,7 @@ namespace lwrcl
     {
       std::string full_topic = resolve_topic_name(topic);
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), full_topic, qos, std::move(callback_function), channel_);
+          participant_.get(), full_topic, qos, std::move(callback_function), callback_mutex_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -264,7 +264,7 @@ namespace lwrcl
         cb(*msg);
       };
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), full_topic, qos, std::move(wrapped_callback), channel_);
+          participant_.get(), full_topic, qos, std::move(wrapped_callback), callback_mutex_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -279,7 +279,7 @@ namespace lwrcl
         cb(*msg);
       };
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), full_topic, qos, std::move(wrapped_callback), channel_);
+          participant_.get(), full_topic, qos, std::move(wrapped_callback), callback_mutex_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -294,7 +294,7 @@ namespace lwrcl
             callback_function)
     {
       std::shared_ptr<Service<T>> service =
-          std::make_shared<Service<T>>(participant_.get(), service_name, std::move(callback_function), channel_);
+          std::make_shared<Service<T>>(participant_.get(), service_name, std::move(callback_function), callback_mutex_);
       service_list_.push_front(service);
 
       return service;
@@ -316,7 +316,7 @@ namespace lwrcl
     {
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::SYSTEM_TIME;
       auto duration = Duration(period);
-      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), channel_, clock_type);
+      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), callback_mutex_, clock_type);
       timer_list_.push_front(timer);
       return timer;
     }
@@ -327,7 +327,7 @@ namespace lwrcl
     {
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::STEADY_TIME;
       auto duration = Duration(period);
-      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), channel_, clock_type);
+      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), callback_mutex_, clock_type);
       timer_list_.push_front(timer);
       return timer;
     }
@@ -462,6 +462,7 @@ namespace lwrcl
     eprosima::fastdds::dds::DomainParticipantFactory *factory_;
     std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant_;
     CallbackChannel::SharedPtr channel_;
+    std::shared_ptr<std::mutex> callback_mutex_;
     Clock::SharedPtr clock_;
     std::string name_;
     std::string namespace_;
@@ -651,7 +652,7 @@ namespace lwrcl
         eprosima::fastdds::dds::DomainParticipant *participant, const std::string &service_name,
         std::function<void(std::shared_ptr<typename T::Request>, std::shared_ptr<typename T::Response>)>
             callback_function,
-        CallbackChannel::SharedPtr channel)
+        CallbackChannel::SharedPtr /*channel*/)
         : IService(),
           std::enable_shared_from_this<Service<T>>(),
           participant_(participant),
@@ -661,8 +662,7 @@ namespace lwrcl
           publisher_(nullptr),
           subscription_(nullptr),
           request_topic_name_(service_name_ + "_Request"),
-          response_topic_name_(service_name_ + "_Response"),
-          channel_(channel)
+          response_topic_name_(service_name_ + "_Response")
     {
       RMWQoSProfile rmw_qos_profile_services = rmw_qos_profile_services_default;
       QoS service_qos(KeepLast(10), rmw_qos_profile_services);
@@ -679,7 +679,7 @@ namespace lwrcl
 
       subscription_ = std::make_shared<Subscription<typename T::Request>>(
           participant_, std::string("rp/") + request_topic_name_, service_qos,
-          request_callback_function_, channel_);
+          request_callback_function_, std::make_shared<std::mutex>());
     }
 
     ~Service() = default;
@@ -707,7 +707,6 @@ namespace lwrcl
     std::shared_ptr<Subscription<typename T::Request>> subscription_;
     std::string request_topic_name_;
     std::string response_topic_name_;
-    CallbackChannel::SharedPtr channel_;
   };
 
   class IClient
@@ -786,12 +785,11 @@ namespace lwrcl
 
     Client(
         eprosima::fastdds::dds::DomainParticipant *participant, const std::string &service_name,
-        CallbackChannel::SharedPtr channel)
+        CallbackChannel::SharedPtr /*channel*/)
         : IClient(),
           std::enable_shared_from_this<Client<T>>(),
           participant_(participant),
           service_name_(service_name),
-          channel_(channel),
           response_(nullptr),
           publisher_(nullptr),
           subscription_(nullptr),
@@ -811,7 +809,7 @@ namespace lwrcl
           participant_, std::string("rp/") + response_topic_name_, client_qos,
           std::function<void(std::shared_ptr<typename T::Response>)>(
               [this](std::shared_ptr<typename T::Response> resp) { handle_response(std::move(resp)); }),
-          channel_);
+          std::make_shared<std::mutex>());
     }
 
     ~Client() = default;
@@ -892,7 +890,6 @@ namespace lwrcl
   private:
     eprosima::fastdds::dds::DomainParticipant *participant_;
     std::string service_name_;
-    CallbackChannel::SharedPtr channel_;
     std::shared_ptr<typename T::Response> response_;
     std::queue<std::shared_ptr<std::promise<std::shared_ptr<typename T::Response>>>> response_promises_;
     std::shared_ptr<Publisher<typename T::Request>> publisher_;

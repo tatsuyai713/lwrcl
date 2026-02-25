@@ -105,9 +105,12 @@ namespace lwrcl
   public:
     SubscriberWaitSet(
         std::function<void(std::shared_ptr<T>)> callback_function,
-        CallbackChannel::SharedPtr channel)
+        std::shared_ptr<std::mutex> node_mutex)
         : callback_function_(callback_function),
-          channel_(channel),
+          node_mutex_(node_mutex),
+          node_cv_(),
+          node_cv_mutex_(),
+          node_data_pending_(nullptr),
           stop_flag_(false),
           lwrcl_subscriber_mutex_(std::make_shared<std::mutex>()),
           pollable_buffer_(),
@@ -141,8 +144,21 @@ namespace lwrcl
         }
       }
 
-      channel_->produce(std::make_shared<SubscriberCallback<T>>(
-          callback_function_, message, lwrcl_subscriber_mutex_));
+      // Direct invocation — no channel/executor hop.
+      {
+        std::lock_guard<std::mutex> lock(*node_mutex_);
+        try { callback_function_(message); }
+        catch (const std::exception &e) {
+          std::cerr << "Exception in subscription callback: " << e.what() << std::endl;
+        } catch (...) {
+          std::cerr << "Unknown exception in subscription callback." << std::endl;
+        }
+      }
+      // Signal Node::spin() wakeup cv if registered.
+      if (node_cv_) {
+        if (node_data_pending_) node_data_pending_->store(true);
+        node_cv_->notify_all();
+      }
     }
 
     void ready(std::shared_ptr<vsomeip::application> /*app*/)
@@ -159,6 +175,20 @@ namespace lwrcl
     {
       stop_flag_.store(true);
     }
+
+    // Register with the Node-level wakeup condition variable.
+    void add_to_waitset(
+        std::shared_ptr<std::condition_variable> cv,
+        std::shared_ptr<std::mutex> cv_mutex,
+        std::shared_ptr<std::atomic<bool>> pending)
+    {
+      node_cv_ = cv;
+      node_cv_mutex_ = cv_mutex;
+      node_data_pending_ = pending;
+    }
+
+    // No-op for vsomeip: callbacks are invoked directly in on_message_received().
+    void invoke_if_data() {}
 
     int32_t get_publisher_count()
     {
@@ -203,7 +233,10 @@ namespace lwrcl
 
   private:
     std::function<void(std::shared_ptr<T>)> callback_function_;
-    CallbackChannel::SharedPtr channel_;
+    std::shared_ptr<std::mutex> node_mutex_;
+    std::shared_ptr<std::condition_variable> node_cv_;
+    std::shared_ptr<std::mutex> node_cv_mutex_;
+    std::shared_ptr<std::atomic<bool>> node_data_pending_;
     std::atomic<bool> stop_flag_;
 
     std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
@@ -216,6 +249,11 @@ namespace lwrcl
   public:
     virtual ~ISubscription() = default;
     virtual void stop() = 0;
+    virtual void add_to_waitset(
+        std::shared_ptr<std::condition_variable> cv,
+        std::shared_ptr<std::mutex> cv_mutex,
+        std::shared_ptr<std::atomic<bool>> pending) = 0;
+    virtual void invoke_if_data() = 0;
 
   protected:
     ISubscription() = default;
@@ -230,9 +268,9 @@ namespace lwrcl
     Subscription(
         std::shared_ptr<vsomeip::application> app, const std::string &topic_name,
         const QoS &qos, std::function<void(std::shared_ptr<T>)> callback_function,
-        CallbackChannel::SharedPtr channel)
+        std::shared_ptr<std::mutex> node_mutex)
         : app_(app),
-          waitset_(callback_function, channel),
+          waitset_(callback_function, node_mutex),
           topic_name_(topic_name),
           service_id_(someip_id::topic_to_service_id(topic_name)),
           instance_id_(someip_id::default_instance_id()),
@@ -300,6 +338,16 @@ namespace lwrcl
     {
       waitset_.stop();
     }
+
+    void add_to_waitset(
+        std::shared_ptr<std::condition_variable> cv,
+        std::shared_ptr<std::mutex> cv_mutex,
+        std::shared_ptr<std::atomic<bool>> pending) override
+    {
+      waitset_.add_to_waitset(cv, cv_mutex, pending);
+    }
+
+    void invoke_if_data() override { waitset_.invoke_if_data(); }
 
     bool take(T &out_msg, lwrcl::MessageInfo &info)
     {

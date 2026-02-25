@@ -974,19 +974,55 @@ namespace lwrcl
   void Node::spin()
   {
     stop_flag_ = false;
+
+    // Snapshot the subscription list into a vector to keep shared_ptrs alive
+    // and to allow safe iteration while the unified WaitSet is active.
+    std::vector<std::shared_ptr<ISubscription>> subs;
+    for (auto &sub : subscription_list_)
+    {
+      subs.push_back(sub);
+    }
+
+    // Build the unified DDS WaitSet — one blocking point for ALL subscriptions.
+    // add_to_waitset() stops each subscription's own WaitSet thread so that
+    // data delivery is serialised through this spin() call instead.
+    dds::core::cond::WaitSet unified_ws;
+    for (auto &sub : subs)
+    {
+      sub->add_to_waitset(unified_ws);
+    }
+    const bool has_subs = !subs.empty();
+
     while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
     {
+      // Drain any service/client channel callbacks (non-blocking).
       CallbackPtr callback;
-      while (channel_->consume(callback) && global_stop_flag.load() == false && stop_flag_ == false)
+      while (channel_->consume_nowait(callback))
       {
-        if (callback)
+        if (callback) callback->invoke();
+      }
+
+      if (has_subs)
+      {
+        // Block until data arrives on any subscription (10 ms timeout to recheck flags).
+        try
         {
-          callback->invoke();
+          unified_ws.wait(dds::core::Duration::from_millisecs(10));
+          for (auto &sub : subs)
+          {
+            sub->invoke_if_data();
+          }
         }
-        else
+        catch (const dds::core::TimeoutError &) {}
+        catch (const dds::core::Exception &e)
         {
-          break;
+          std::cerr << "DDS Exception in Node::spin: " << e.what() << std::endl;
         }
+      }
+      else
+      {
+        // No subscriptions — just yield briefly (timers run on their own threads).
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }
     }
 

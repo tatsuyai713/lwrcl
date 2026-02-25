@@ -73,14 +73,14 @@ namespace lwrcl
 
     TimerBase(
       Duration period, std::function<void()> callback_function,
-      CallbackChannel::SharedPtr channel, Clock::ClockType clock_type)
+      std::shared_ptr<std::mutex> node_mutex, Clock::ClockType clock_type)
         : ITimerBase(),
           std::enable_shared_from_this<TimerBase>(),
           clock_type_(clock_type),
           period_(period),
-          timer_callback_(std::make_shared<TimerCallback>(callback_function)),
+          callback_function_(std::move(callback_function)),
           worker_(),
-          channel_(channel),
+          node_mutex_(node_mutex),
           stop_flag_(false),
           is_canceled_(false)
     {
@@ -155,16 +155,20 @@ namespace lwrcl
   private:
     void run_system_time()
     {
-      // Use steady_clock for scheduling even in SYSTEM_TIME mode to avoid
-      // instability with system_clock in containerised / virtualised environments.
       auto next_execution_time = std::chrono::steady_clock::now() + std::chrono::nanoseconds(period_.nanoseconds());
       while (!stop_flag_.load())
       {
         std::this_thread::sleep_until(next_execution_time);
         if (!stop_flag_.load())
         {
-          channel_->produce(timer_callback_);
-          next_execution_time += std::chrono::nanoseconds(period_.nanoseconds()); // Schedule next execution
+          std::lock_guard<std::mutex> lock(*node_mutex_);
+          try { callback_function_(); }
+          catch (const std::exception &e) {
+            std::cerr << "Exception in timer callback: " << e.what() << std::endl;
+          } catch (...) {
+            std::cerr << "Unknown exception in timer callback." << std::endl;
+          }
+          next_execution_time += std::chrono::nanoseconds(period_.nanoseconds());
         }
       }
     }
@@ -177,8 +181,14 @@ namespace lwrcl
         std::this_thread::sleep_until(next_execution_time);
         if (!stop_flag_.load())
         {
-          channel_->produce(timer_callback_);
-          next_execution_time += std::chrono::nanoseconds(period_.nanoseconds()); // Schedule next execution
+          std::lock_guard<std::mutex> lock(*node_mutex_);
+          try { callback_function_(); }
+          catch (const std::exception &e) {
+            std::cerr << "Exception in timer callback: " << e.what() << std::endl;
+          } catch (...) {
+            std::cerr << "Unknown exception in timer callback." << std::endl;
+          }
+          next_execution_time += std::chrono::nanoseconds(period_.nanoseconds());
         }
       }
     }
@@ -197,9 +207,9 @@ namespace lwrcl
 
     Clock::ClockType clock_type_;
     Duration period_;
-    std::shared_ptr<TimerCallback> timer_callback_;
+    std::function<void()> callback_function_;
     std::thread worker_;
-    CallbackChannel::SharedPtr channel_;
+    std::shared_ptr<std::mutex> node_mutex_;
     std::atomic<bool> stop_flag_;
     std::atomic<bool> is_canceled_;
   };

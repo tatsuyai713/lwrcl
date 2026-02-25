@@ -237,11 +237,14 @@ namespace lwrcl
     {
       reader_ = reader;
       stop_flag_.store(false);
+      // Pre-create ReadCondition so it can be shared with a unified WaitSet.
+      read_cond_ = std::make_shared<dds::sub::cond::ReadCondition>(
+          *reader_, dds::sub::status::DataState::any_data());
     }
 
-    void start() 
-    { 
-      waitset_thread_ = std::thread(&SubscriberWaitSet::run, this); 
+    void start()
+    {
+      waitset_thread_ = std::thread(&SubscriberWaitSet::run, this);
     }
 
     void stop()
@@ -250,6 +253,24 @@ namespace lwrcl
       if (waitset_thread_.joinable())
       {
         waitset_thread_.join();
+      }
+    }
+
+    // Register this subscription's ReadCondition with an external (unified) WaitSet.
+    // Stops the per-subscription thread so that the caller's WaitSet drives delivery.
+    void add_to_waitset(dds::core::cond::WaitSet& ws)
+    {
+      stop(); // stop per-subscription thread; unified WaitSet takes over
+      if (read_cond_) ws += *read_cond_;
+    }
+
+    // Invoke the callback if the ReadCondition has triggered (data is available).
+    // Called from the unified-WaitSet spin loop after a successful wait().
+    void invoke_if_data()
+    {
+      if (read_cond_ && read_cond_->trigger_value())
+      {
+        take_available();
       }
     }
 
@@ -432,6 +453,8 @@ namespace lwrcl
     std::shared_ptr<dds::sub::DataReader<T>> reader_;
     std::atomic<bool> stop_flag_;
     std::thread waitset_thread_;
+    // ReadCondition shared with the unified Node-level WaitSet (created in ready()).
+    std::shared_ptr<dds::sub::cond::ReadCondition> read_cond_;
 
     std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
     std::deque<std::pair<std::shared_ptr<T>, lwrcl::MessageInfo>> pollable_buffer_;
@@ -443,6 +466,8 @@ namespace lwrcl
   public:
     virtual ~ISubscription() = default;
     virtual void stop() = 0;
+    virtual void add_to_waitset(dds::core::cond::WaitSet& ws) = 0;
+    virtual void invoke_if_data() = 0;
 
   protected:
     ISubscription() = default;
@@ -528,9 +553,19 @@ namespace lwrcl
       return waitset_.get_publisher_count();
     }
 
-    void stop() override 
-    { 
-      waitset_.stop(); 
+    void stop() override
+    {
+      waitset_.stop();
+    }
+
+    void add_to_waitset(dds::core::cond::WaitSet& ws) override
+    {
+      waitset_.add_to_waitset(ws);
+    }
+
+    void invoke_if_data() override
+    {
+      waitset_.invoke_if_data();
     }
 
     bool take(T &out_msg, lwrcl::MessageInfo &info) 
