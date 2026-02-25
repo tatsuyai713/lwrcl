@@ -8,46 +8,10 @@
 #include <string>
 #include <thread>
 
-#include "channel.hpp"
 #include "clock_time_duration.hpp"
 
 namespace lwrcl
 {
-
-  class TimerCallback : public ChannelCallback
-  {
-  public:
-    explicit TimerCallback(std::function<void()> callback_function)
-        : callback_function_(callback_function)
-    {
-    }
-
-    ~TimerCallback() = default;
-
-    TimerCallback(const TimerCallback &) = delete;
-    TimerCallback &operator=(const TimerCallback &) = delete;
-    TimerCallback(TimerCallback &&) = default;
-    TimerCallback &operator=(TimerCallback &&) = default;
-
-    void invoke() override
-    {
-      try
-      {
-        callback_function_();
-      }
-      catch (const std::exception &e)
-      {
-        std::cerr << "Exception during callback invocation: " << e.what() << std::endl;
-      }
-      catch (...)
-      {
-        std::cerr << "Unknown exception during callback invocation." << std::endl;
-      }
-    }
-
-  private:
-    std::function<void()> callback_function_;
-  };
 
   class ITimerBase
   {

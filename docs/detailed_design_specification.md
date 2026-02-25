@@ -11,8 +11,6 @@ This document describes implementation-level design for the `lwrcl` core library
 - `lwrcl/include/lwrcl.hpp`
   - Public API aggregation
   - `Node`, `Service`, `Client`, executor classes, parameter API
-- `lwrcl/include/channel.hpp`
-  - Generic thread-safe callback queue (`Channel<T>`)
 - `lwrcl/include/timer.hpp`
   - Timer scheduling and callback dispatch integration
 - `lwrcl/include/clock_time_duration.hpp`
@@ -35,15 +33,15 @@ Each backend provides equivalent API shape with transport-specific internals.
 
 ## 3. Runtime Execution Model
 
-### 3.1 Callback Channel
+### 3.1 Callback Dispatch
 
-- `CallbackChannel` is `Channel<std::shared_ptr<ChannelCallback>>`.
+- Callbacks are invoked directly under a shared `callback_mutex_` per node.
 - Producers:
   - Subscription waitset workers
   - Timer worker threads
   - Other asynchronous adapters
 - Consumers:
-  - `Node::spin()` (blocking consume loop)
+  - `Node::spin()` (blocking loop)
   - `Node::spin_some()` (non-blocking drain)
 
 ### 3.2 Node Event Loop
@@ -76,7 +74,7 @@ Responsibilities:
 
 Important members:
 
-- `participant_`, `channel_`, `clock_`
+- `participant_`, `callback_mutex_`, `clock_`
 - entity lists: publishers, subscriptions, timers, services, clients
 - parameter map: `parameters_`
 
@@ -140,7 +138,7 @@ Client design:
 
 - Each `TimerBase` owns a worker thread.
 - Worker schedules periodic wakeups using `sleep_until`.
-- On timeout, enqueues `TimerCallback` into node callback channel.
+- On timeout, invokes the timer callback under `callback_mutex_`.
 - Supports `cancel()`, `reset()`, `is_canceled()`, `is_ready()`.
 
 ## 4.6 Parameter Subsystem
@@ -193,8 +191,7 @@ Note:
 
 ## 6. Concurrency and Thread Safety
 
-- `Channel<T>` uses mutex + condition variable.
-- Subscription waitset and callback delivery are protected by mutexes.
+- Subscription waitset and callback delivery are protected by `callback_mutex_`.
 - Executor node lists are guarded by executor-local mutexes.
 - Timer state uses atomics.
 - Potentially blocking APIs are isolated (`spin`, wait loops, timer workers).

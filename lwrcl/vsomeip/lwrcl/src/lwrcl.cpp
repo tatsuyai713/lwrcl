@@ -592,7 +592,6 @@ namespace lwrcl
   Node::Node(int domain_id)
       : closed_(false),
         app_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_("lwrcl_default_node"),
         namespace_(""),
@@ -613,7 +612,6 @@ namespace lwrcl
   Node::Node(int domain_id, const std::string &name)
       : closed_(false),
         app_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(""),
@@ -634,7 +632,6 @@ namespace lwrcl
   Node::Node(int domain_id, const std::string &name, const std::string &ns)
       : closed_(false),
         app_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -655,7 +652,6 @@ namespace lwrcl
   Node::Node(int domain_id, const std::string &name, const std::string &ns, const NodeOptions &options)
       : closed_(false),
         app_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -676,7 +672,6 @@ namespace lwrcl
   Node::Node(const std::string &name)
       : closed_(false),
         app_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(""),
@@ -696,7 +691,6 @@ namespace lwrcl
   Node::Node(const std::string &name, const std::string &ns)
       : closed_(false),
         app_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -716,7 +710,6 @@ namespace lwrcl
   Node::Node(const std::string &name, const std::string &ns, const NodeOptions &options)
       : closed_(false),
         app_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -736,7 +729,6 @@ namespace lwrcl
   Node::Node(std::shared_ptr<vsomeip::application> app)
       : closed_(false),
         app_(app),
-        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_("lwrcl_default_node"),
         namespace_(""),
@@ -757,7 +749,6 @@ namespace lwrcl
   Node::Node(std::shared_ptr<vsomeip::application> app, const std::string &name)
       : closed_(false),
         app_(app),
-        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(""),
@@ -778,7 +769,6 @@ namespace lwrcl
   Node::Node(std::shared_ptr<vsomeip::application> app, const std::string &name, const std::string &ns)
       : closed_(false),
         app_(app),
-        channel_(std::make_shared<CallbackChannel>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -902,13 +892,6 @@ namespace lwrcl
 
     while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
     {
-      // Drain service/client channel callbacks (non-blocking).
-      CallbackPtr callback;
-      while (channel_->consume_nowait(callback))
-      {
-        if (callback) callback->invoke();
-      }
-
       // Wait for subscription wakeup or 10 ms timeout.
       {
         std::unique_lock<std::mutex> lk(*node_cv_mutex_);
@@ -929,17 +912,14 @@ namespace lwrcl
 
   void Node::spin_some()
   {
-    bool event_processed = false;
-    do
+    // Non-blocking: poll each subscription for available data and invoke
+    // callbacks directly under callback_mutex_ (via invoke_if_data).
+    // Note: vsomeip invoke_if_data() is currently a no-op because
+    // callbacks are invoked directly in on_message_received().
+    for (auto &sub : subscription_list_)
     {
-      event_processed = false;
-      CallbackPtr callback;
-      while (channel_->consume_nowait(callback))
-      {
-        callback->invoke();
-        event_processed = true;
-      }
-    } while (event_processed);
+      std::static_pointer_cast<ISubscription>(sub)->invoke_if_data();
+    }
   }
 
   // ======================================================================

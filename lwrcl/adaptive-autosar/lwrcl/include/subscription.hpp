@@ -15,7 +15,6 @@
 #include <vector>
 
 #include "adaptive_autosar_header.hpp"
-#include "channel.hpp"
 #include "lwrcl_autosar_proxy_skeleton.hpp"
 #include "qos.hpp"
 
@@ -170,49 +169,6 @@ namespace lwrcl
   {
     std::function<bool()> has_message;
     std::function<bool(void *, MessageInfo &)> take;
-  };
-
-  template <typename T>
-  class SubscriberCallback : public ChannelCallback
-  {
-  public:
-    SubscriberCallback(
-        std::function<void(std::shared_ptr<T>)> callback_function, std::shared_ptr<T> message_ptr,
-        std::shared_ptr<std::mutex> lwrcl_subscriber_mutex)
-        : callback_function_(callback_function),
-          message_ptr_(message_ptr),
-          lwrcl_subscriber_mutex_(std::move(lwrcl_subscriber_mutex))
-    {
-    }
-
-    ~SubscriberCallback() noexcept = default;
-
-    SubscriberCallback(const SubscriberCallback &) = delete;
-    SubscriberCallback &operator=(const SubscriberCallback &) = delete;
-    SubscriberCallback(SubscriberCallback &&) = default;
-    SubscriberCallback &operator=(SubscriberCallback &&) = default;
-
-    void invoke() override
-    {
-      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
-      try
-      {
-        callback_function_(message_ptr_);
-      }
-      catch (const std::exception &e)
-      {
-        std::cerr << "Exception during callback invocation: " << e.what() << std::endl;
-      }
-      catch (...)
-      {
-        std::cerr << "Unknown exception during callback invocation." << std::endl;
-      }
-    }
-
-  private:
-    std::function<void(std::shared_ptr<T>)> callback_function_;
-    std::shared_ptr<T> message_ptr_;
-    std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
   };
 
   template <typename T>

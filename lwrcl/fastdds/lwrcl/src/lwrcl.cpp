@@ -638,7 +638,6 @@ namespace lwrcl
   Node::Node(int domain_id)
       : factory_(nullptr),
         participant_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_("lwrcl_default_node"),
@@ -670,7 +669,6 @@ namespace lwrcl
   Node::Node(int domain_id, const std::string &name)
       : factory_(nullptr),
         participant_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
@@ -701,7 +699,6 @@ namespace lwrcl
   Node::Node(int domain_id, const std::string &name, const std::string &ns)
       : factory_(nullptr),
         participant_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
@@ -732,7 +729,6 @@ namespace lwrcl
   Node::Node(int domain_id, const std::string &name, const std::string &ns, const NodeOptions &options)
       : factory_(nullptr),
         participant_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
@@ -763,7 +759,6 @@ namespace lwrcl
   Node::Node(const std::string &name)
       : factory_(nullptr),
         participant_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
@@ -795,7 +790,6 @@ namespace lwrcl
   Node::Node(const std::string &name, const std::string &ns)
       : factory_(nullptr),
         participant_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
@@ -827,7 +821,6 @@ namespace lwrcl
   Node::Node(const std::string &name, const std::string &ns, const NodeOptions &options)
       : factory_(nullptr),
         participant_(nullptr),
-        channel_(std::make_shared<CallbackChannel>()),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
@@ -859,7 +852,6 @@ namespace lwrcl
   Node::Node(std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant)
       : factory_(nullptr),
         participant_(participant),
-        channel_(std::make_shared<CallbackChannel>()),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_("lwrcl_default_node"),
@@ -881,7 +873,6 @@ namespace lwrcl
       std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant, const std::string &name)
       : factory_(nullptr),
         participant_(participant),
-        channel_(std::make_shared<CallbackChannel>()),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
@@ -904,7 +895,6 @@ namespace lwrcl
       const std::string &name, const std::string &ns)
       : factory_(nullptr),
         participant_(participant),
-        channel_(std::make_shared<CallbackChannel>()),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
         name_(name),
@@ -1044,12 +1034,6 @@ namespace lwrcl
 
     while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
     {
-      CallbackPtr callback;
-      while (channel_->consume_nowait(callback))
-      {
-        if (callback) callback->invoke();
-      }
-
       if (has_subs)
       {
         eprosima::fastdds::dds::ConditionSeq active;
@@ -1075,19 +1059,12 @@ namespace lwrcl
 
   void Node::spin_some()
   {
-    bool event_processed = false;
-
-    do
+    // Non-blocking: poll each subscription for available data and invoke
+    // callbacks directly under callback_mutex_ (via invoke_if_data).
+    for (auto &sub : subscription_list_)
     {
-      event_processed = false;
-
-      CallbackPtr callback;
-      while (channel_->consume_nowait(callback))
-      {
-        callback->invoke();
-        event_processed = true;
-      }
-    } while (event_processed);
+      std::static_pointer_cast<ISubscription>(sub)->invoke_if_data();
+    }
   }
 
   void Node::shutdown()

@@ -426,7 +426,6 @@ namespace lwrcl
   private:
     // Member variables (order matters for -Werror=reorder)
     std::shared_ptr<AutosarDomainParticipant> participant_;
-    CallbackChannel::SharedPtr channel_;
     std::shared_ptr<std::mutex> callback_mutex_;
     std::shared_ptr<std::condition_variable> node_cv_;
     std::shared_ptr<std::mutex> node_cv_mutex_;

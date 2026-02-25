@@ -20,7 +20,7 @@ Logical layers:
 2. API Layer
    - `lwrcl` public API and `rclcpp` compatibility headers
 3. Core Runtime Layer
-   - Node lifecycle, executors, callback channel, timers, parameters, QoS
+   - Node lifecycle, executors, callback dispatch, timers, parameters, QoS
 4. Backend Adapter Layer
    - Fast DDS / CycloneDDS / vsomeip / Adaptive AUTOSAR implementations
 5. Transport Runtime Layer
@@ -66,7 +66,7 @@ Install prefixes vary per backend (for example `/opt/fast-dds-libs`, `/opt/cyclo
 
 ## 5.1 Callback and Execution Topology
 
-- Subscriptions and timers produce callback work items into a shared callback channel per node.
+- Subscriptions and timers invoke callbacks under a shared mutex per node.
 - Node spin loops consume and execute callbacks.
 - Executors orchestrate one or more nodes:
   - single-thread polling dispatch
@@ -148,7 +148,7 @@ In Adaptive AUTOSAR profiles, deployment also includes generated manifests and p
 
 ## 10. Concurrency and Fault Isolation
 
-- Node-local callback channels isolate callback queues per node.
+- Node-local callback mutexes isolate callback execution per node.
 - Timers and subscription polling use dedicated worker threads.
 - Executor-level mutexes protect node collections.
 - Callback invocation catches exceptions to avoid unintentional worker termination.

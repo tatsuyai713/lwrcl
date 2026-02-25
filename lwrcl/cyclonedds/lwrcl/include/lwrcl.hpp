@@ -443,7 +443,6 @@ namespace lwrcl
 
     // Member variables (order matters for -Werror=reorder)
     std::shared_ptr<dds::domain::DomainParticipant> participant_;
-    CallbackChannel::SharedPtr channel_;
     std::shared_ptr<std::mutex> callback_mutex_;
     Clock::SharedPtr clock_;
     std::string name_;

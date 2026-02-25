@@ -52,7 +52,7 @@ Backend is selected at build time through `DDS_BACKEND`.
 
 - The system shall provide typed publisher/subscription APIs.
 - Topic names shall support namespace resolution with ROS-like prefixing.
-- Subscription callbacks shall be executed asynchronously through callback channels.
+- Subscription callbacks shall be executed asynchronously under a shared callback mutex.
 
 ### FR-03 Service Communication
 

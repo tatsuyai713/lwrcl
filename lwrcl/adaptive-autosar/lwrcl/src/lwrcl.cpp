@@ -634,7 +634,6 @@ namespace lwrcl
       : closed_(false)
       , participant_(std::make_shared<AutosarDomainParticipant>(
             static_cast<uint32_t>(domain_id)))
-      , channel_(std::make_shared<CallbackChannel>())
       , callback_mutex_(std::make_shared<std::mutex>())
       , node_cv_(std::make_shared<std::condition_variable>())
       , node_cv_mutex_(std::make_shared<std::mutex>())
@@ -653,7 +652,6 @@ namespace lwrcl
       : closed_(false)
       , participant_(std::make_shared<AutosarDomainParticipant>(
             static_cast<uint32_t>(domain_id)))
-      , channel_(std::make_shared<CallbackChannel>())
       , callback_mutex_(std::make_shared<std::mutex>())
       , node_cv_(std::make_shared<std::condition_variable>())
       , node_cv_mutex_(std::make_shared<std::mutex>())
@@ -672,7 +670,6 @@ namespace lwrcl
       : closed_(false)
       , participant_(std::make_shared<AutosarDomainParticipant>(
             static_cast<uint32_t>(domain_id)))
-      , channel_(std::make_shared<CallbackChannel>())
       , callback_mutex_(std::make_shared<std::mutex>())
       , node_cv_(std::make_shared<std::condition_variable>())
       , node_cv_mutex_(std::make_shared<std::mutex>())
@@ -691,7 +688,6 @@ namespace lwrcl
       : closed_(false)
       , participant_(std::make_shared<AutosarDomainParticipant>(
             static_cast<uint32_t>(domain_id)))
-      , channel_(std::make_shared<CallbackChannel>())
       , callback_mutex_(std::make_shared<std::mutex>())
       , node_cv_(std::make_shared<std::condition_variable>())
       , node_cv_mutex_(std::make_shared<std::mutex>())
@@ -709,7 +705,6 @@ namespace lwrcl
   Node::Node(const std::string &name)
       : closed_(false)
       , participant_(std::make_shared<AutosarDomainParticipant>(0))
-      , channel_(std::make_shared<CallbackChannel>())
       , callback_mutex_(std::make_shared<std::mutex>())
       , node_cv_(std::make_shared<std::condition_variable>())
       , node_cv_mutex_(std::make_shared<std::mutex>())
@@ -727,7 +722,6 @@ namespace lwrcl
   Node::Node(const std::string &name, const std::string &ns)
       : closed_(false)
       , participant_(std::make_shared<AutosarDomainParticipant>(0))
-      , channel_(std::make_shared<CallbackChannel>())
       , callback_mutex_(std::make_shared<std::mutex>())
       , node_cv_(std::make_shared<std::condition_variable>())
       , node_cv_mutex_(std::make_shared<std::mutex>())
@@ -745,7 +739,6 @@ namespace lwrcl
   Node::Node(const std::string &name, const std::string &ns, const NodeOptions &options)
       : closed_(false)
       , participant_(std::make_shared<AutosarDomainParticipant>(0))
-      , channel_(std::make_shared<CallbackChannel>())
       , callback_mutex_(std::make_shared<std::mutex>())
       , node_cv_(std::make_shared<std::condition_variable>())
       , node_cv_mutex_(std::make_shared<std::mutex>())
@@ -763,7 +756,6 @@ namespace lwrcl
   Node::Node(std::shared_ptr<AutosarDomainParticipant> participant)
       : closed_(false)
       , participant_(participant)
-      , channel_(std::make_shared<CallbackChannel>())
       , callback_mutex_(std::make_shared<std::mutex>())
       , node_cv_(std::make_shared<std::condition_variable>())
       , node_cv_mutex_(std::make_shared<std::mutex>())
@@ -786,7 +778,6 @@ namespace lwrcl
       std::shared_ptr<AutosarDomainParticipant> participant, const std::string &name)
       : closed_(false)
       , participant_(participant)
-      , channel_(std::make_shared<CallbackChannel>())
       , callback_mutex_(std::make_shared<std::mutex>())
       , node_cv_(std::make_shared<std::condition_variable>())
       , node_cv_mutex_(std::make_shared<std::mutex>())
@@ -809,7 +800,6 @@ namespace lwrcl
       std::shared_ptr<AutosarDomainParticipant> participant, const std::string &name, const std::string &ns)
       : closed_(false)
       , participant_(participant)
-      , channel_(std::make_shared<CallbackChannel>())
       , callback_mutex_(std::make_shared<std::mutex>())
       , node_cv_(std::make_shared<std::condition_variable>())
       , node_cv_mutex_(std::make_shared<std::mutex>())
@@ -943,13 +933,6 @@ namespace lwrcl
 
     while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
     {
-      // Drain service/client channel callbacks (non-blocking).
-      CallbackPtr callback;
-      while (channel_->consume_nowait(callback))
-      {
-        if (callback) callback->invoke();
-      }
-
       // Wait for subscription wakeup or 10 ms timeout.
       {
         std::unique_lock<std::mutex> lk(*node_cv_mutex_);
@@ -970,19 +953,12 @@ namespace lwrcl
 
   void Node::spin_some()
   {
-    bool event_processed = false;
-
-    do
+    // Non-blocking: poll each subscription for available data and invoke
+    // callbacks directly under callback_mutex_ (via invoke_if_data).
+    for (auto &sub : subscription_list_)
     {
-      event_processed = false;
-
-      CallbackPtr callback;
-      while (channel_->consume_nowait(callback))
-      {
-        callback->invoke();
-        event_processed = true;
-      }
-    } while (event_processed);
+      std::static_pointer_cast<ISubscription>(sub)->invoke_if_data();
+    }
   }
 
   void Node::shutdown()

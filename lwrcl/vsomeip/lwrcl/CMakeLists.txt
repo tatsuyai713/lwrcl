@@ -27,7 +27,6 @@ include/subscription.hpp
 include/serialized_message.hpp
 include/clock_time_duration.hpp
 include/timer.hpp
-include/channel.hpp
 include/qos.hpp
 DESTINATION include/)
 

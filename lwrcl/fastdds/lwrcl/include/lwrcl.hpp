@@ -461,7 +461,6 @@ namespace lwrcl
     // Member variables
     eprosima::fastdds::dds::DomainParticipantFactory *factory_;
     std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant_;
-    CallbackChannel::SharedPtr channel_;
     std::shared_ptr<std::mutex> callback_mutex_;
     Clock::SharedPtr clock_;
     std::string name_;
