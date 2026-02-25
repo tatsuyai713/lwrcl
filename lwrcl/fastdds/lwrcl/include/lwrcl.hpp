@@ -304,7 +304,7 @@ namespace lwrcl
     std::shared_ptr<Client<T>> create_client(const std::string &service_name)
     {
       std::shared_ptr<Client<T>> client =
-          std::make_shared<Client<T>>(participant_.get(), service_name, channel_);
+          std::make_shared<Client<T>>(participant_.get(), service_name, callback_mutex_);
       client_list_.push_front(client);
 
       return client;
@@ -652,7 +652,7 @@ namespace lwrcl
         eprosima::fastdds::dds::DomainParticipant *participant, const std::string &service_name,
         std::function<void(std::shared_ptr<typename T::Request>, std::shared_ptr<typename T::Response>)>
             callback_function,
-        CallbackChannel::SharedPtr /*channel*/)
+        std::shared_ptr<std::mutex> /*node_mutex*/)
         : IService(),
           std::enable_shared_from_this<Service<T>>(),
           participant_(participant),
@@ -785,7 +785,7 @@ namespace lwrcl
 
     Client(
         eprosima::fastdds::dds::DomainParticipant *participant, const std::string &service_name,
-        CallbackChannel::SharedPtr /*channel*/)
+        std::shared_ptr<std::mutex> /*node_mutex*/)
         : IClient(),
           std::enable_shared_from_this<Client<T>>(),
           participant_(participant),

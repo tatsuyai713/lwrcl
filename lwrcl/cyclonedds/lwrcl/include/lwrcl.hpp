@@ -276,7 +276,7 @@ namespace lwrcl
             callback_function)
     {
       std::shared_ptr<Service<T>> service =
-          std::make_shared<Service<T>>(participant_.get(), service_name, std::move(callback_function), channel_);
+          std::make_shared<Service<T>>(participant_.get(), service_name, std::move(callback_function), callback_mutex_);
       service_list_.push_front(service);
 
       return service;
@@ -286,7 +286,7 @@ namespace lwrcl
     std::shared_ptr<Client<T>> create_client(const std::string &service_name)
     {
       std::shared_ptr<Client<T>> client =
-          std::make_shared<Client<T>>(participant_.get(), service_name, channel_);
+          std::make_shared<Client<T>>(participant_.get(), service_name, callback_mutex_);
       client_list_.push_front(client);
 
       return client;
@@ -622,7 +622,7 @@ namespace lwrcl
         dds::domain::DomainParticipant *participant, const std::string &service_name,
         std::function<void(std::shared_ptr<typename T::Request>, std::shared_ptr<typename T::Response>)>
             callback_function,
-        CallbackChannel::SharedPtr channel)
+        std::shared_ptr<std::mutex> /*node_mutex*/)
         : IService(),
           std::enable_shared_from_this<Service<T>>(),
           participant_(participant),
@@ -632,8 +632,7 @@ namespace lwrcl
           publisher_(nullptr),
           subscription_(nullptr),
           request_topic_name_(service_name_ + "_Request"),
-          response_topic_name_(service_name_ + "_Response"),
-          channel_(channel)
+          response_topic_name_(service_name_ + "_Response")
     {
       RMWQoSProfile rmw_qos_profile_services = rmw_qos_profile_services_default;
       QoS service_qos(KeepLast(10), rmw_qos_profile_services);
@@ -678,7 +677,6 @@ namespace lwrcl
     std::shared_ptr<Subscription<typename T::Request>> subscription_;
     std::string request_topic_name_;
     std::string response_topic_name_;
-    CallbackChannel::SharedPtr channel_;
   };
 
   class IClient
@@ -757,12 +755,11 @@ namespace lwrcl
 
     Client(
         dds::domain::DomainParticipant *participant, const std::string &service_name,
-        CallbackChannel::SharedPtr channel)
+        std::shared_ptr<std::mutex> /*node_mutex*/)
         : IClient(),
           std::enable_shared_from_this<Client<T>>(),
           participant_(participant),
           service_name_(service_name),
-          channel_(channel),
           response_(nullptr),
           publisher_(nullptr),
           subscription_(nullptr),
@@ -864,7 +861,6 @@ namespace lwrcl
   private:
     dds::domain::DomainParticipant *participant_;
     std::string service_name_;
-    CallbackChannel::SharedPtr channel_;
     std::shared_ptr<typename T::Response> response_;
     std::queue<std::shared_ptr<std::promise<std::shared_ptr<typename T::Response>>>> response_promises_;
     std::shared_ptr<Publisher<typename T::Request>> publisher_;
