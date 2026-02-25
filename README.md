@@ -67,8 +67,6 @@ lwrcl provides an API compatible with ROS 2's rclcpp. It supports **CycloneDDS**
 ## Performance Benchmarks
 
 All numbers were measured on an **x86\_64 Linux host** (Docker container, Ubuntu 22.04) with CycloneDDS 0.10.5.
-Latency and throughput numbers use **CycloneDDS `ddsperf`** in intra-process (`-L`) mode, which isolates the
-DDS transport layer from network effects and represents the lower bound achievable by lwrcl on any backend.
 
 ### 1. Library and Binary Size
 
@@ -98,30 +96,40 @@ Measured for a single subscriber node (`example_class_sub`, CycloneDDS backend) 
 \* Virtual memory is large due to DDS shared-memory region reservations; only the RSS figure reflects actual
 physical memory usage.
 
-### 3. End-to-End Latency
+### 3. End-to-End Latency (lwrcl Callback API)
 
-Measured with `ddsperf -L ping pong` (intra-process ping-pong, CycloneDDS 0.10.5, Release build).
+Measured with a C++ ping-pong node using the lwrcl publisher/subscription callback API
+(intra-process, CycloneDDS backend, `std_msgs::msg::String`, Release build).
 Numbers are **round-trip time ÷ 2** (one-way latency).
 
-| Message size | Mean | p50 | p90 | p99 | Min |
-|-------------|-----:|----:|----:|----:|----:|
-| 12 bytes (KS) | 13.9 µs | 13.0 µs | 17.1 µs | 21 µs | 5 µs |
-| 32 bytes (K32) | 13.4 µs | 12.8 µs | 16.7 µs | 19 µs | 4 µs |
-| 256 bytes (K256) | 14.2 µs | 13.2 µs | 17.3 µs | 19 µs | 1 µs |
+| Metric | Value |
+|--------|------:|
+| p50 | ~148 µs |
+| p90 | ~275 µs |
+| p99 | ~322 µs |
+| Min | ~61 µs |
 
-Sub-20 µs p90 latency across all typical message sizes.
+> The subscription uses an event-driven `WaitSet` + `ReadCondition` (since v0.x) so latency
+> is no longer bounded by a polling interval. The remaining overhead over raw CycloneDDS is
+> the lwrcl channel-based callback dispatch layer.
 
-### 4. Throughput
+**Raw CycloneDDS transport layer** (measured with `ddsperf -L ping pong`, bypasses lwrcl callback layer):
 
-Measured with `ddsperf -L pub sub` (intra-process publisher + subscriber, CycloneDDS 0.10.5, Release build).
+| Message size | p50 | p90 | p99 | Min |
+|-------------|----:|----:|----:|----:|
+| 12 bytes | 13.0 µs | 17.1 µs | 21 µs | 5 µs |
+| 32 bytes | 12.8 µs | 16.7 µs | 19 µs | 4 µs |
+| 256 bytes | 13.2 µs | 17.3 µs | 19 µs | 1 µs |
+
+### 4. Throughput (Raw CycloneDDS Transport Layer)
+
+Measured with `ddsperf -L pub sub` (CycloneDDS 0.10.5, Release build).
 
 | Message size | Messages/sec | Bandwidth |
 |-------------|-------------:|----------:|
 | 12 bytes (KS) | ~2.1 million/s | ~201 Mb/s |
 | 32 bytes (K32) | ~2.4 million/s | ~613 Mb/s |
 | 256 bytes (K256) | ~2.1 million/s | **~4.3 Gb/s** |
-
-Zero packet loss observed in all runs.
 
 ### 5. Build Time
 
@@ -151,13 +159,13 @@ The entire codebase is small enough to audit manually in an afternoon.
 
 ### Reproducing the Benchmarks
 
-**Latency (ping-pong):**
+**Raw DDS latency (ddsperf):**
 ```bash
 LD_LIBRARY_PATH=/opt/iceoryx/lib:/opt/cyclonedds/lib \
   ddsperf -L -D 10 ping pong
 ```
 
-**Throughput:**
+**Raw DDS throughput (ddsperf):**
 ```bash
 LD_LIBRARY_PATH=/opt/iceoryx/lib:/opt/cyclonedds/lib \
   ddsperf -L -D 10 -T K256 pub sub
@@ -174,43 +182,48 @@ grep VmRSS /proc/$!/status
 
 ## Comparison with ROS2 Humble
 
-The table below compares lwrcl (CycloneDDS backend) against **ROS2 Humble** (default rmw_fastrtps).
 All measurements were taken on the same machine (x86\_64, Ubuntu 22.04, Docker container).
-The ROS2 latency numbers used a C++ rclcpp publisher/subscriber pair in the same process
-(comparable to ddsperf `-L` intra-process mode); message type was `std_msgs::msg::String`.
+Latency was measured with a C++ rclcpp (or lwrcl) publisher/subscriber ping-pong pair in the
+same process; message type was `std_msgs::msg::String`.
+**Each pair uses the same DDS backend** so that only the middleware wrapper overhead differs.
 
 ### Middleware Layer Size
 
-| Component | lwrcl + CycloneDDS | ROS2 Humble + FastDDS |
-|-----------|-------------------:|----------------------:|
-| Wrapper / rclcpp layer | **811 KB** (liblwrcl.so stripped) | 3.0 MB (rclcpp + rcl + rmw stack) |
-| DDS runtime | 3.0 MB (libddsc + libddscxx) | 12 MB (libfastrtps.so) |
-| **Total** | **~3.8 MB** | **~15 MB** |
+| Component | lwrcl + CycloneDDS | ROS2 + CycloneDDS | ROS2 + FastDDS |
+|-----------|-------------------:|------------------:|---------------:|
+| Wrapper / rclcpp layer | **811 KB** | 3.0 MB | 3.0 MB |
+| DDS runtime | 3.0 MB | 3.0 MB | 12 MB |
+| **Total** | **~3.8 MB** | **~6.0 MB** | **~15 MB** |
 
-### Memory Footprint (RSS)
+### Memory Footprint (RSS, subscriber node at startup)
 
-| Scenario | lwrcl (CycloneDDS) | ROS2 Humble (FastDDS) |
-|----------|-------------------:|----------------------:|
-| Subscriber node at startup | **~15 MB** | ~38 MB |
-
-lwrcl uses **~2.5× less memory** at runtime.
+| | lwrcl + CycloneDDS | ROS2 + CycloneDDS | ROS2 + FastDDS |
+|-|-------------------:|------------------:|---------------:|
+| VmRSS | **~15 MB** | ~21 MB | ~38 MB |
 
 ### End-to-End Latency (same-host intra-process, C++ nodes)
 
-| Metric | lwrcl / CycloneDDS (`ddsperf -L`) | ROS2 Humble / FastDDS (rclcpp) |
-|--------|----------------------------------:|-------------------------------:|
-| Mean | **~14 µs** | ~57 µs |
-| p50 | **~13 µs** | ~32 µs |
-| p90 | **~17 µs** | ~118 µs |
-| p99 | **~20 µs** | ~375 µs |
-| Min | **~5 µs** | ~20 µs |
+| Metric | lwrcl + CycloneDDS (callback) | ROS2 + CycloneDDS (rclcpp) | ROS2 + FastDDS (rclcpp) |
+|--------|------------------------------:|---------------------------:|------------------------:|
+| p50 | ~148 µs | **~22 µs** | ~32 µs |
+| p90 | ~275 µs | **~78 µs** | ~118 µs |
+| p99 | ~322 µs | **~280 µs** | ~375 µs |
+| Min | ~61 µs | **~14 µs** | ~20 µs |
 
-lwrcl achieves **2–7× lower latency** across percentiles.
+> lwrcl uses an event-driven `WaitSet` + `ReadCondition` (no polling). The remaining gap vs
+> ROS2+CycloneDDS reflects the lwrcl channel-based callback dispatch overhead. At p99, lwrcl
+> and ROS2+CycloneDDS are comparable (~322 µs vs ~280 µs).
 
-> **Note:** The ROS2 numbers include rclcpp executor overhead, `std_msgs::String` serialization,
-> and rmw abstraction layers. The lwrcl numbers are from `ddsperf` which directly exercises the
-> CycloneDDS transport layer — the same layer lwrcl wraps. This comparison illustrates how thin
-> the lwrcl wrapper is and how much overhead the full ROS2 stack adds.
+### Summary
+
+| Advantage | Winner |
+|-----------|--------|
+| Middleware size | **lwrcl** (~4 MB vs 6–15 MB) |
+| Memory footprint (RSS) | **lwrcl** (~15 MB vs 21–38 MB) |
+| Callback API latency (p50) | ROS2 (~22 µs vs lwrcl ~148 µs) |
+| Callback API latency (p99) | Comparable (~280 µs vs ~322 µs) |
+| WaitSet / raw DDS latency | **lwrcl** (direct CycloneDDS access) |
+| Portability (non-Linux targets) | **lwrcl** (QNX, embedded, AUTOSAR) |
 
 ---
 

@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <deque>
 #include <functional>
 #include <iostream>
@@ -227,6 +228,9 @@ namespace lwrcl
           stop_flag_(false),
           waitset_thread_(),
           proxy_mutex_(),
+          data_cv_mutex_(),
+          data_cv_(),
+          data_pending_(false),
           lwrcl_subscriber_mutex_(std::make_shared<std::mutex>()),
           pollable_buffer_(),
           loaned_buffer_(),
@@ -249,12 +253,23 @@ namespace lwrcl
 
     void start()
     {
+      if (proxy_) {
+        // Register an event-driven receive handler to wake the run() thread
+        proxy_->Event.SetReceiveHandler([this]() {
+          {
+            std::lock_guard<std::mutex> lk(data_cv_mutex_);
+            data_pending_ = true;
+          }
+          data_cv_.notify_one();
+        });
+      }
       waitset_thread_ = std::thread(&SubscriberWaitSet::run, this);
     }
 
     void stop()
     {
       stop_flag_.store(true);
+      data_cv_.notify_all();  // wake run() thread so it can exit
       if (waitset_thread_.joinable())
       {
         waitset_thread_.join();
@@ -406,6 +421,16 @@ namespace lwrcl
     {
       while (!stop_flag_.load())
       {
+        // Wait for SetReceiveHandler to signal new data (or 100 ms for state polling)
+        {
+          std::unique_lock<std::mutex> lk(data_cv_mutex_);
+          data_cv_.wait_for(lk, std::chrono::milliseconds(100),
+                            [this]{ return data_pending_ || stop_flag_.load(); });
+          data_pending_ = false;
+        }
+
+        if (stop_flag_.load()) break;
+
         try
         {
           run_once();
@@ -414,8 +439,6 @@ namespace lwrcl
         {
           std::cerr << "Exception in SubscriberWaitSet: " << e.what() << std::endl;
         }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
       }
     }
 
@@ -425,6 +448,9 @@ namespace lwrcl
     std::atomic<bool> stop_flag_;
     std::thread waitset_thread_;
     std::mutex proxy_mutex_;
+    std::mutex data_cv_mutex_;
+    std::condition_variable data_cv_;
+    bool data_pending_{false};
 
     std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
     std::deque<std::pair<std::shared_ptr<T>, lwrcl::MessageInfo>> pollable_buffer_;

@@ -11,6 +11,8 @@
 #include <vector>
 
 #include <dds/dds.hpp>
+#include <dds/sub/cond/ReadCondition.hpp>
+#include <dds/core/cond/WaitSet.hpp>
 #include "qos.hpp"
 #include "channel.hpp"
 
@@ -338,66 +340,80 @@ namespace lwrcl
     dds::sub::DataReader<T> *get_reader() { return reader_.get(); }
 
   private:
-    void run()
+    void take_available()
     {
       lwrcl::MessageInfo new_info;
-
-      while (!stop_flag_.load())
-      {
-        try {
-          if (!reader_) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            continue;
-          }
-
-          // Check for subscription matches
-          try {
-            auto matched_status = reader_->subscription_matched_status();
-            count_.store(matched_status.current_count());
-          } catch (const dds::core::Exception& e) {
-            // Status not available, continue
-          }
-
-          // Try to read available data
-          dds::sub::LoanedSamples<T> samples = reader_->take();
-          
-          if (samples.length() > 0) {
-            // Keep the loan alive until callbacks and pollable buffer references are done.
-            auto loan_guard = std::make_shared<dds::sub::LoanedSamples<T>>(std::move(samples));
-            for (auto &sample : *loan_guard) {
-              if (sample.info().valid()) {
-                // Alias shared_ptr to the loaned sample to avoid extra copy.
-                auto message_view =
-                    std::shared_ptr<T>(loan_guard, const_cast<T *>(&sample.data()));
-
-                // Update pollable_buffer_ under lock BEFORE producing the
-                // callback so that polling users always see a consistent state
-                // when the callback fires.
-                new_info.source_timestamp = std::chrono::system_clock::now();
-                new_info.from_intra_process = false;
-                {
-                  std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
-                  pollable_buffer_.emplace_back(message_view, new_info);
-                  if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE) {
-                    pollable_buffer_.pop_front();
-                  }
+      try {
+        dds::sub::LoanedSamples<T> samples = reader_->take();
+        if (samples.length() > 0) {
+          auto loan_guard = std::make_shared<dds::sub::LoanedSamples<T>>(std::move(samples));
+          for (auto &sample : *loan_guard) {
+            if (sample.info().valid()) {
+              auto message_view =
+                  std::shared_ptr<T>(loan_guard, const_cast<T *>(&sample.data()));
+              new_info.source_timestamp = std::chrono::system_clock::now();
+              new_info.from_intra_process = false;
+              {
+                std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+                pollable_buffer_.emplace_back(message_view, new_info);
+                if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE) {
+                  pollable_buffer_.pop_front();
                 }
-
-                channel_->produce(std::make_shared<SubscriberCallback<T>>(
-                    callback_function_, message_view, lwrcl_subscriber_mutex_));
               }
+              channel_->produce(std::make_shared<SubscriberCallback<T>>(
+                  callback_function_, message_view, lwrcl_subscriber_mutex_));
             }
           }
         }
-        catch (const dds::core::Exception& e) {
-          std::cerr << "DDS Exception in SubscriberWaitSet: " << e.what() << std::endl;
-        }
-        catch (const std::exception& e) {
-          std::cerr << "Exception in SubscriberWaitSet: " << e.what() << std::endl;
-        }
+      }
+      catch (const dds::core::Exception& e) {
+        std::cerr << "DDS Exception in take_available: " << e.what() << std::endl;
+      }
+    }
 
-        // Small sleep to prevent busy waiting
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    void run()
+    {
+      // Wait for reader_ to be set
+      while (!reader_ && !stop_flag_.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+      if (stop_flag_.load()) return;
+
+      try {
+        // Use a ReadCondition + WaitSet for event-driven data reception
+        dds::sub::cond::ReadCondition read_cond(
+            *reader_, dds::sub::status::DataState::any_data());
+        dds::core::cond::WaitSet waitset;
+        waitset += read_cond;
+
+        while (!stop_flag_.load())
+        {
+          try {
+            // Update subscription-match count
+            try {
+              auto matched_status = reader_->subscription_matched_status();
+              count_.store(matched_status.current_count());
+            } catch (const dds::core::Exception&) {}
+
+            // Block until data arrives (or 10 ms timeout to recheck stop_flag_)
+            waitset.wait(dds::core::Duration::from_millisecs(10));
+            if (!stop_flag_.load()) {
+              take_available();
+            }
+          }
+          catch (const dds::core::TimeoutError&) {
+            // Normal timeout — just loop to check stop_flag_
+          }
+          catch (const dds::core::Exception& e) {
+            std::cerr << "DDS Exception in SubscriberWaitSet: " << e.what() << std::endl;
+          }
+          catch (const std::exception& e) {
+            std::cerr << "Exception in SubscriberWaitSet: " << e.what() << std::endl;
+          }
+        }
+      }
+      catch (const dds::core::Exception& e) {
+        std::cerr << "Failed to create WaitSet in SubscriberWaitSet: " << e.what() << std::endl;
       }
     }
 
