@@ -66,7 +66,9 @@ lwrcl provides an API compatible with ROS 2's rclcpp. It supports **CycloneDDS**
 
 ## Performance Benchmarks
 
-All numbers were measured on an **x86\_64 Linux host** (Docker container, Ubuntu 22.04) with CycloneDDS 0.10.5.
+All numbers were measured on an **x86\_64 Linux host** (Docker container, Ubuntu 22.04).
+Latency tests use a C++ intra-process ping-pong node (`std_msgs::msg::String`, 1 ms timer, 1000 samples, 200 warm-up samples).
+Numbers are **round-trip time ÷ 2** (one-way). Each result is the median of 5 independent runs.
 
 ### 1. Library and Binary Size
 
@@ -96,24 +98,27 @@ Measured for a single subscriber node (`example_class_sub`, CycloneDDS backend) 
 \* Virtual memory is large due to DDS shared-memory region reservations; only the RSS figure reflects actual
 physical memory usage.
 
-### 3. End-to-End Latency (lwrcl Callback API)
+### 3. End-to-End Latency (Callback API, 4-way Comparison)
 
-Measured with a C++ ping-pong node using the lwrcl publisher/subscription callback API
-(intra-process, CycloneDDS backend, `std_msgs::msg::String`, Release build).
-Numbers are **round-trip time ÷ 2** (one-way latency).
+Measured with a C++ intra-process ping-pong node (`std_msgs::msg::String`, 1 ms timer,
+1000 samples, 200 warm-up samples). Numbers are **round-trip time ÷ 2** (one-way latency).
+Each value is the median of 5 independent runs on the same Docker host.
 
-| Metric | Value |
-|--------|------:|
-| p50 | ~68 µs |
-| p90 | ~107 µs |
-| p99 | ~161 µs |
-| Min | ~14 µs |
+| Metric | lwrcl + CycloneDDS | lwrcl + FastDDS | ROS 2 + CycloneDDS | ROS 2 + FastDDS |
+|--------|-------------------:|----------------:|------------------:|---------------:|
+| p50    | ~75 µs             | ~71 µs          | ~57 µs            | ~79 µs         |
+| p90    | ~157 µs            | ~179 µs         | ~141 µs           | ~183 µs        |
+| p99    | ~449 µs            | ~482 µs         | ~456 µs           | ~625 µs        |
+| Min    | ~12 µs             | ~15 µs          | ~10 µs            | ~15 µs         |
 
 > All subscriptions in a node share a single **unified Node-level WaitSet** — their
 > `ReadCondition`s are aggregated so the spin thread wakes exactly once per delivery.
 > Callbacks are invoked directly in the spin thread (no executor channel hop).
 > A per-node mutex serializes concurrent callbacks.
-> Minimum latency now matches ROS2 + CycloneDDS (~14 µs).
+>
+> **Note on p99**: In a Docker container environment, p99 latency is dominated by OS
+> scheduler jitter rather than DDS or middleware overhead, and varies significantly
+> between runs. p50 and p90 are the more stable and representative metrics.
 
 **Raw CycloneDDS transport layer** (measured with `ddsperf -L ping pong`, bypasses lwrcl callback layer):
 
@@ -182,54 +187,57 @@ grep VmRSS /proc/$!/status
 
 ---
 
-## Comparison with ROS2 Humble
+## Comparison with ROS 2 Humble
 
 All measurements were taken on the same machine (x86\_64, Ubuntu 22.04, Docker container).
 Latency was measured with a C++ ping-pong pair (publisher + subscriber in one process),
-`std_msgs::msg::String`, numbers are **round-trip ÷ 2** (one-way).
-**Both sides use the same DDS backend** so only the middleware wrapper overhead differs.
+`std_msgs::msg::String`, 1000 samples, 200 warm-up, numbers are **round-trip ÷ 2** (one-way).
+Each value is the **median of 5 independent runs**.
 
 ### Middleware Layer Size
 
-| Component | lwrcl + CycloneDDS | ROS2 + CycloneDDS | ROS2 + FastDDS |
-|-----------|-------------------:|------------------:|---------------:|
-| Wrapper / rclcpp layer | **811 KB** | 3.0 MB | 3.0 MB |
-| DDS runtime | 3.0 MB | 3.0 MB | 12 MB |
-| **Total** | **~3.8 MB** | **~6.0 MB** | **~15 MB** |
+| Component | lwrcl + CycloneDDS | lwrcl + FastDDS | ROS 2 + CycloneDDS | ROS 2 + FastDDS |
+|-----------|-------------------:|----------------:|------------------:|---------------:|
+| Wrapper / rclcpp layer | **811 KB** | **1.1 MB** | 3.0 MB | 3.0 MB |
+| DDS runtime | 3.0 MB | 12 MB | 3.0 MB | 12 MB |
+| **Total** | **~3.8 MB** | **~13 MB** | **~6.0 MB** | **~15 MB** |
 
 ### Memory Footprint (RSS, subscriber node at startup)
 
-| | lwrcl + CycloneDDS | ROS2 + CycloneDDS | ROS2 + FastDDS |
-|-|-------------------:|------------------:|---------------:|
-| VmRSS | **~15 MB** | ~21 MB | ~38 MB |
+| | lwrcl + CycloneDDS | lwrcl + FastDDS | ROS 2 + CycloneDDS | ROS 2 + FastDDS |
+|-|-------------------:|----------------:|------------------:|---------------:|
+| VmRSS | **~15 MB** | ~32 MB | ~21 MB | ~38 MB |
 
 ### End-to-End Latency (same-host, same-process, C++ callback API)
 
-| Metric | lwrcl + CycloneDDS | ROS2 + CycloneDDS | ROS2 + FastDDS |
-|--------|-------------------:|------------------:|---------------:|
-| p50 | ~68 µs | **~22 µs** | ~32 µs |
-| p90 | ~107 µs | **~78 µs** | ~118 µs |
-| p99 | **~161 µs** | ~280 µs | ~375 µs |
-| Min | **~14 µs** | **~14 µs** | ~20 µs |
+| Metric | lwrcl + CycloneDDS | lwrcl + FastDDS | ROS 2 + CycloneDDS | ROS 2 + FastDDS |
+|--------|-------------------:|----------------:|------------------:|---------------:|
+| p50    | ~75 µs             | ~71 µs          | **~57 µs**        | ~79 µs         |
+| p90    | ~157 µs            | ~179 µs         | **~141 µs**       | ~183 µs        |
+| p99    | ~449 µs            | ~482 µs         | ~456 µs           | ~625 µs        |
+| Min    | ~12 µs             | ~15 µs          | **~10 µs**        | ~15 µs         |
 
 > lwrcl uses a unified Node-level WaitSet: all subscription `ReadCondition`s are aggregated
 > so `Node::spin()` blocks on a single WaitSet and wakes exactly once per delivery.
 > Callbacks fire directly in the spin thread (no executor channel hop).
 > A per-node mutex serializes concurrent callbacks, providing single-threaded semantics.
-> **Minimum latency now matches ROS2+CycloneDDS (~14 µs).**
-> At **p99**, lwrcl (~161 µs) is significantly **faster** than both ROS2+CycloneDDS (~280 µs)
-> and ROS2+FastDDS (~375 µs).
+>
+> **Note on p99**: In a Docker container environment, p99 latency is dominated by OS
+> scheduler jitter and varies significantly run-to-run. All four backends show similar
+> p99 values (~450–625 µs) under these conditions. p50 and p90 are more stable and
+> representative of typical middleware behavior.
 
 ### Summary
 
-| Metric | lwrcl + CycloneDDS | ROS2 + CycloneDDS | ROS2 + FastDDS |
-|--------|:------------------:|:-----------------:|:--------------:|
-| Middleware size | **~3.8 MB** ✅ | ~6.0 MB | ~15 MB |
-| Memory (RSS) | **~15 MB** ✅ | ~21 MB | ~38 MB |
-| Latency p50 | ~68 µs | **~22 µs** ✅ | ~32 µs |
-| Latency p99 | **~161 µs** ✅ | ~280 µs | ~375 µs |
-| Portability | **QNX / AUTOSAR** ✅ | Linux only | Linux only |
-| No ROS2 install | **Yes** ✅ | No | No |
+| Metric | lwrcl + CycloneDDS | lwrcl + FastDDS | ROS 2 + CycloneDDS | ROS 2 + FastDDS |
+|--------|:------------------:|:---------------:|:-----------------:|:--------------:|
+| Middleware size | **~3.8 MB** ✅ | ~13 MB | ~6.0 MB | ~15 MB |
+| Memory (RSS) | **~15 MB** ✅ | ~32 MB | ~21 MB | ~38 MB |
+| Latency p50 | ~75 µs | ~71 µs | **~57 µs** | ~79 µs |
+| Latency p90 | ~157 µs | ~179 µs | **~141 µs** | ~183 µs |
+| Latency p99 | ~449 µs | ~482 µs | ~456 µs | ~625 µs |
+| Portability | **QNX / AUTOSAR** ✅ | **QNX** ✅ | Linux only | Linux only |
+| No ROS 2 install | **Yes** ✅ | **Yes** ✅ | No | No |
 
 ---
 
