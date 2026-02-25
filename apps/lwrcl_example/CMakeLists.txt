@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.16.3)
 project(lwrcl_example)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+if(NOT CMAKE_CXX_STANDARD OR CMAKE_CXX_STANDARD LESS 14)
+    set(CMAKE_CXX_STANDARD 14)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+endif()
 
 # Common examples (both backends)
 add_executable(example_spin src/example_spin.cpp)

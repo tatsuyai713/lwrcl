@@ -8,10 +8,8 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread")
+if(NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 endif()
 
 if(DDS_BACKEND STREQUAL "fastdds")
@@ -148,8 +146,6 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
     # vsomeip backend: uses vsomeip for transport + standalone CDR for serialization.
     # NO CycloneDDS runtime dependency. CycloneDDS idlc tool is used only for
     # code generation (via PATH) but CycloneDDS runtime headers/libs are NOT linked.
-    set(CMAKE_CXX_STANDARD 17)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
     if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
         set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/qnx/vsomeip-libs)
@@ -170,7 +166,8 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
 
     # CDR stub headers (dds/dds.hpp, org/eclipse/cyclonedds/...) live under VSOMEIP_PREFIX.
     # These replace the real CycloneDDS-CXX headers for CDR-only builds.
-    include_directories(${VSOMEIP_PREFIX}/include)
+    # Use SYSTEM so compiler warnings in vsomeip/CDR third-party headers are suppressed.
+    include_directories(SYSTEM ${VSOMEIP_PREFIX}/include)
     include_directories(${LWRCL_INSTALL_PREFIX}/include)
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
     link_directories(${VSOMEIP_PREFIX}/lib)
