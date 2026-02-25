@@ -230,7 +230,7 @@ namespace lwrcl
     {
       QoS qos(depth);
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), resolve_topic_name(topic), qos, std::move(callback_function), channel_);
+          participant_.get(), resolve_topic_name(topic), qos, std::move(callback_function), callback_mutex_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -241,7 +241,7 @@ namespace lwrcl
         std::function<void(std::shared_ptr<T>)> callback_function)
     {
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), resolve_topic_name(topic), qos, std::move(callback_function), channel_);
+          participant_.get(), resolve_topic_name(topic), qos, std::move(callback_function), callback_mutex_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -299,7 +299,7 @@ namespace lwrcl
       // Uses SYSTEM_TIME; Rate implementation now casts to system_clock::duration on QNX.
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::SYSTEM_TIME;
       auto duration = Duration(period);
-      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), channel_, clock_type);
+      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), callback_mutex_, clock_type);
       timer_list_.push_front(timer);
       return timer;
     }
@@ -311,7 +311,7 @@ namespace lwrcl
       // Uses STEADY_TIME; WallRate implementation casts to steady_clock::duration.
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::STEADY_TIME;
       auto duration = Duration(period);
-      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), channel_, clock_type);
+      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), callback_mutex_, clock_type);
       timer_list_.push_front(timer);
       return timer;
     }
@@ -444,6 +444,7 @@ namespace lwrcl
     // Member variables (order matters for -Werror=reorder)
     std::shared_ptr<dds::domain::DomainParticipant> participant_;
     CallbackChannel::SharedPtr channel_;
+    std::shared_ptr<std::mutex> callback_mutex_;
     Clock::SharedPtr clock_;
     std::string name_;
     std::string namespace_;

@@ -214,9 +214,9 @@ namespace lwrcl
   public:
     SubscriberWaitSet(
         std::function<void(std::shared_ptr<T>)> callback_function,
-        CallbackChannel::SharedPtr channel)
+        std::shared_ptr<std::mutex> node_mutex)
         : callback_function_(callback_function),
-          channel_(channel),
+          node_mutex_(node_mutex),
           reader_(nullptr),
           stop_flag_(false),
           waitset_thread_(),
@@ -342,7 +342,6 @@ namespace lwrcl
   private:
     void take_available()
     {
-      lwrcl::MessageInfo new_info;
       try {
         dds::sub::LoanedSamples<T> samples = reader_->take();
         if (samples.length() > 0) {
@@ -351,6 +350,7 @@ namespace lwrcl
             if (sample.info().valid()) {
               auto message_view =
                   std::shared_ptr<T>(loan_guard, const_cast<T *>(&sample.data()));
+              lwrcl::MessageInfo new_info;
               new_info.source_timestamp = std::chrono::system_clock::now();
               new_info.from_intra_process = false;
               {
@@ -360,8 +360,18 @@ namespace lwrcl
                   pollable_buffer_.pop_front();
                 }
               }
-              channel_->produce(std::make_shared<SubscriberCallback<T>>(
-                  callback_function_, message_view, lwrcl_subscriber_mutex_));
+              // Direct invocation in WaitSet thread — eliminates channel/executor hop.
+              // node_mutex_ serializes concurrent callbacks (subscriptions + timers).
+              {
+                std::lock_guard<std::mutex> lock(*node_mutex_);
+                try {
+                  callback_function_(message_view);
+                } catch (const std::exception &e) {
+                  std::cerr << "Exception in subscription callback: " << e.what() << std::endl;
+                } catch (...) {
+                  std::cerr << "Unknown exception in subscription callback." << std::endl;
+                }
+              }
             }
           }
         }
@@ -418,7 +428,7 @@ namespace lwrcl
     }
 
     std::function<void(std::shared_ptr<T>)> callback_function_;
-    CallbackChannel::SharedPtr channel_;
+    std::shared_ptr<std::mutex> node_mutex_;
     std::shared_ptr<dds::sub::DataReader<T>> reader_;
     std::atomic<bool> stop_flag_;
     std::thread waitset_thread_;
@@ -447,9 +457,9 @@ namespace lwrcl
     Subscription(
         dds::domain::DomainParticipant *participant, const std::string &topic_name,
         const QoS &qos, std::function<void(std::shared_ptr<T>)> callback_function,
-        CallbackChannel::SharedPtr channel)
+        std::shared_ptr<std::mutex> node_mutex)
         : participant_(participant),
-          waitset_(callback_function, channel),
+          waitset_(callback_function, node_mutex),
           topic_(nullptr),
           subscriber_(nullptr),
           reader_(nullptr),

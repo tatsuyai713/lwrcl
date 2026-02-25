@@ -104,14 +104,15 @@ Numbers are **round-trip time ÷ 2** (one-way latency).
 
 | Metric | Value |
 |--------|------:|
-| p50 | ~148 µs |
-| p90 | ~275 µs |
-| p99 | ~322 µs |
-| Min | ~61 µs |
+| p50 | ~95 µs |
+| p90 | ~170 µs |
+| p99 | ~220 µs |
+| Min | ~30 µs |
 
-> The subscription uses an event-driven `WaitSet` + `ReadCondition` (since v0.x) so latency
-> is no longer bounded by a polling interval. The remaining overhead over raw CycloneDDS is
-> the lwrcl channel-based callback dispatch layer.
+> Subscriptions use an event-driven `WaitSet` + `ReadCondition` and invoke callbacks
+> directly in the WaitSet thread (no executor channel hop). A per-node mutex serializes
+> concurrent callbacks. The remaining gap over raw CycloneDDS is one thread wake-up
+> (DDS → WaitSet thread) per delivery.
 
 **Raw CycloneDDS transport layer** (measured with `ddsperf -L ping pong`, bypasses lwrcl callback layer):
 
@@ -183,9 +184,9 @@ grep VmRSS /proc/$!/status
 ## Comparison with ROS2 Humble
 
 All measurements were taken on the same machine (x86\_64, Ubuntu 22.04, Docker container).
-Latency was measured with a C++ rclcpp (or lwrcl) publisher/subscriber ping-pong pair in the
-same process; message type was `std_msgs::msg::String`.
-**Each pair uses the same DDS backend** so that only the middleware wrapper overhead differs.
+Latency was measured with a C++ ping-pong pair (publisher + subscriber in one process),
+`std_msgs::msg::String`, numbers are **round-trip ÷ 2** (one-way).
+**Both sides use the same DDS backend** so only the middleware wrapper overhead differs.
 
 ### Middleware Layer Size
 
@@ -201,29 +202,32 @@ same process; message type was `std_msgs::msg::String`.
 |-|-------------------:|------------------:|---------------:|
 | VmRSS | **~15 MB** | ~21 MB | ~38 MB |
 
-### End-to-End Latency (same-host intra-process, C++ nodes)
+### End-to-End Latency (same-host, same-process, C++ callback API)
 
-| Metric | lwrcl + CycloneDDS (callback) | ROS2 + CycloneDDS (rclcpp) | ROS2 + FastDDS (rclcpp) |
-|--------|------------------------------:|---------------------------:|------------------------:|
-| p50 | ~148 µs | **~22 µs** | ~32 µs |
-| p90 | ~275 µs | **~78 µs** | ~118 µs |
-| p99 | ~322 µs | **~280 µs** | ~375 µs |
-| Min | ~61 µs | **~14 µs** | ~20 µs |
+| Metric | lwrcl + CycloneDDS | ROS2 + CycloneDDS | ROS2 + FastDDS |
+|--------|-------------------:|------------------:|---------------:|
+| p50 | ~95 µs | **~22 µs** | ~32 µs |
+| p90 | ~170 µs | **~78 µs** | ~118 µs |
+| p99 | ~220 µs | ~280 µs | ~375 µs |
+| Min | ~30 µs | **~14 µs** | ~20 µs |
 
-> lwrcl uses an event-driven `WaitSet` + `ReadCondition` (no polling). The remaining gap vs
-> ROS2+CycloneDDS reflects the lwrcl channel-based callback dispatch overhead. At p99, lwrcl
-> and ROS2+CycloneDDS are comparable (~322 µs vs ~280 µs).
+> lwrcl callbacks fire directly in the DDS WaitSet thread (no executor channel hop).
+> A per-node mutex serializes concurrent callbacks, providing single-threaded semantics.
+> The remaining gap vs ROS2+CycloneDDS (at p50) is one kernel thread wake-up per delivery.
+> ROS2's executor blocks directly on the DDS WaitSet, eliminating that extra context switch.
+> At **p99**, lwrcl (~220 µs) is actually **faster** than both ROS2+CycloneDDS (~280 µs) and
+> ROS2+FastDDS (~375 µs).
 
 ### Summary
 
-| Advantage | Winner |
-|-----------|--------|
-| Middleware size | **lwrcl** (~4 MB vs 6–15 MB) |
-| Memory footprint (RSS) | **lwrcl** (~15 MB vs 21–38 MB) |
-| Callback API latency (p50) | ROS2 (~22 µs vs lwrcl ~148 µs) |
-| Callback API latency (p99) | Comparable (~280 µs vs ~322 µs) |
-| WaitSet / raw DDS latency | **lwrcl** (direct CycloneDDS access) |
-| Portability (non-Linux targets) | **lwrcl** (QNX, embedded, AUTOSAR) |
+| Metric | lwrcl + CycloneDDS | ROS2 + CycloneDDS | ROS2 + FastDDS |
+|--------|:------------------:|:-----------------:|:--------------:|
+| Middleware size | **~3.8 MB** ✅ | ~6.0 MB | ~15 MB |
+| Memory (RSS) | **~15 MB** ✅ | ~21 MB | ~38 MB |
+| Latency p50 | ~95 µs | **~22 µs** ✅ | ~32 µs |
+| Latency p99 | **~220 µs** ✅ | ~280 µs | ~375 µs |
+| Portability | **QNX / AUTOSAR** ✅ | Linux only | Linux only |
+| No ROS2 install | **Yes** ✅ | No | No |
 
 ---
 
