@@ -44,6 +44,7 @@ namespace lwrcl
   void spin(std::shared_ptr<lwrcl::Node> node);
   void init(int argc, char *argv[]);
   void shutdown(void);
+  void stop_spin(void);
   void sleep_for(const lwrcl::Duration &duration);
   void spin_some(std::shared_ptr<lwrcl::Node> node);
 

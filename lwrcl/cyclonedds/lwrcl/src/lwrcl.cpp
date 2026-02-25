@@ -359,18 +359,21 @@ namespace lwrcl
       stop_flag_ = false;
       while (global_stop_flag.load() == false && stop_flag_ == false)
       {
-        std::lock_guard<std::mutex> lock(mutex_);
-        for (auto node : nodes_)
         {
-          if (node != nullptr)
+          std::lock_guard<std::mutex> lock(mutex_);
+          for (auto node : nodes_)
           {
-            if (node->closed_ == false)
+            if (node != nullptr)
             {
-              lwrcl::spin_some(node);
+              if (node->closed_ == false)
+              {
+                lwrcl::spin_some(node);
+              }
             }
           }
         }
-        std::this_thread::sleep_for(std::chrono::microseconds(10));
+        // Sleep outside the lock so cancel()/add_node()/remove_node() can proceed.
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
       }
 
       if (global_stop_flag.load() == true)
