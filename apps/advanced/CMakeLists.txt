@@ -94,6 +94,7 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
     IDL_ROOT "${IDL_ROOT}"
     IDLC     "${IDLC_EXECUTABLE}"
     UPDATE_HEADERS_SCRIPT "${UPDATE_HEADERS_SCRIPT}"
+    IDL_INCLUDE_PREFIX "${LWRCL_INSTALL_PREFIX}/include"
   )
 
   include_directories(
@@ -122,6 +123,7 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
     IDL_ROOT "${IDL_ROOT}"
     IDLC     "${IDLC_EXECUTABLE}"
     UPDATE_HEADERS_SCRIPT "${UPDATE_HEADERS_SCRIPT}"
+    IDL_INCLUDE_PREFIX "${LWRCL_INSTALL_PREFIX}/include"
   )
 
   include_directories(
