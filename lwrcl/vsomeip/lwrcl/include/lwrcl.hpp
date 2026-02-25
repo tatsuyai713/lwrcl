@@ -214,7 +214,7 @@ namespace lwrcl
     {
       QoS qos(depth);
       auto subscription = std::make_shared<Subscription<T>>(
-          app_, resolve_topic_name(topic), qos, callback_function, channel_);
+          app_, resolve_topic_name(topic), qos, std::move(callback_function), channel_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -225,7 +225,7 @@ namespace lwrcl
         std::function<void(std::shared_ptr<T>)> callback_function)
     {
       auto subscription = std::make_shared<Subscription<T>>(
-          app_, resolve_topic_name(topic), qos, callback_function, channel_);
+          app_, resolve_topic_name(topic), qos, std::move(callback_function), channel_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -236,11 +236,11 @@ namespace lwrcl
         const std::string &topic, const uint16_t &depth,
         std::function<void(const T &)> callback_function)
     {
-      auto wrapper = [callback_function](std::shared_ptr<T> msg)
+      auto wrapper = [cb = std::move(callback_function)](std::shared_ptr<T> msg)
       {
-        callback_function(*msg);
+        cb(*msg);
       };
-      return create_subscription<T>(topic, depth, std::function<void(std::shared_ptr<T>)>(wrapper));
+      return create_subscription<T>(topic, depth, std::function<void(std::shared_ptr<T>)>(std::move(wrapper)));
     }
 
     template <typename T>
@@ -248,11 +248,11 @@ namespace lwrcl
         const std::string &topic, const QoS &qos,
         std::function<void(const T &)> callback_function)
     {
-      auto wrapper = [callback_function](std::shared_ptr<T> msg)
+      auto wrapper = [cb = std::move(callback_function)](std::shared_ptr<T> msg)
       {
-        callback_function(*msg);
+        cb(*msg);
       };
-      return create_subscription<T>(topic, qos, std::function<void(std::shared_ptr<T>)>(wrapper));
+      return create_subscription<T>(topic, qos, std::function<void(std::shared_ptr<T>)>(std::move(wrapper)));
     }
 
     // Create service
@@ -263,7 +263,7 @@ namespace lwrcl
             callback_function)
     {
       std::shared_ptr<Service<T>> service =
-          std::make_shared<Service<T>>(app_, service_name, callback_function, channel_);
+          std::make_shared<Service<T>>(app_, service_name, std::move(callback_function), channel_);
       service_list_.push_front(service);
       return service;
     }
@@ -285,7 +285,7 @@ namespace lwrcl
     {
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::SYSTEM_TIME;
       auto duration = Duration(period);
-      auto timer = std::make_shared<TimerBase>(duration, callback_function, channel_, clock_type);
+      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), channel_, clock_type);
       timer_list_.push_front(timer);
       return timer;
     }
@@ -296,7 +296,7 @@ namespace lwrcl
     {
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::STEADY_TIME;
       auto duration = Duration(period);
-      auto timer = std::make_shared<TimerBase>(duration, callback_function, channel_, clock_type);
+      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), channel_, clock_type);
       timer_list_.push_front(timer);
       return timer;
     }
@@ -325,6 +325,7 @@ namespace lwrcl
     // Node functions
     virtual void shutdown();
     virtual Clock::SharedPtr get_clock();
+    Time now() { return get_clock()->now(); }
 
     // Constructors
     Node(std::shared_ptr<vsomeip::application> app);
@@ -601,7 +602,7 @@ namespace lwrcl
           std::enable_shared_from_this<Service<T>>(),
           app_(app),
           service_name_(service_name),
-          callback_function_(callback_function),
+          callback_function_(std::move(callback_function)),
           request_callback_function_(),
           publisher_(nullptr),
           subscription_(nullptr),
@@ -755,7 +756,7 @@ namespace lwrcl
       subscription_ = std::make_shared<Subscription<typename T::Response>>(
           app_, std::string("rp/") + response_topic_name_, client_qos,
           std::function<void(std::shared_ptr<typename T::Response>)>(
-              std::bind(&Client::handle_response, this, std::placeholders::_1)),
+              [this](std::shared_ptr<typename T::Response> resp) { handle_response(std::move(resp)); }),
           channel_);
     }
 
@@ -897,229 +898,6 @@ namespace lwrcl
 
   // SerializedMessage and lwrcl_serialized_message_t are defined in serialized_message.hpp
   // (included via publisher.hpp / subscription.hpp)
-
-  // Kept for backward compatibility – already included above
-  // #include "serialized_message.hpp"
-
-  /* --- SerializedMessage moved to serialized_message.hpp --- */
-#if 0  // definition moved to serialized_message.hpp
-  struct lwrcl_serialized_message_t
-  {
-    char *buffer;
-    size_t length;
-    size_t capacity;
-  };
-
-  class SerializedMessage
-  {
-  public:
-    SerializedMessage() : data_(), is_own_buffer_(true)
-    {
-      data_.buffer = nullptr;
-      data_.length = 0;
-      data_.capacity = 0;
-    }
-
-    explicit SerializedMessage(size_t initial_capacity) : data_(), is_own_buffer_(true)
-    {
-      data_.buffer = new char[initial_capacity];
-      data_.length = 0;
-      data_.capacity = initial_capacity;
-    }
-
-    SerializedMessage(const SerializedMessage &other) : data_(), is_own_buffer_(true)
-    {
-      if (other.data_.length > 0 && other.data_.buffer)
-      {
-        data_.buffer = new char[other.data_.length];
-        std::memcpy(data_.buffer, other.data_.buffer, other.data_.length);
-        data_.length = other.data_.length;
-        data_.capacity = other.data_.length;
-      }
-      else
-      {
-        data_.buffer = nullptr;
-        data_.length = 0;
-        data_.capacity = 0;
-      }
-    }
-
-    SerializedMessage(const lwrcl_serialized_message_t &other) : data_(), is_own_buffer_(true)
-    {
-      if (other.length > 0 && other.buffer)
-      {
-        data_.buffer = new char[other.length];
-        std::memcpy(data_.buffer, other.buffer, other.length);
-        data_.length = other.length;
-        data_.capacity = other.length;
-      }
-      else
-      {
-        data_.buffer = nullptr;
-        data_.length = 0;
-        data_.capacity = 0;
-      }
-    }
-
-    SerializedMessage(SerializedMessage &&other) noexcept
-        : data_(other.data_), is_own_buffer_(other.is_own_buffer_)
-    {
-      other.data_.buffer = nullptr;
-      other.data_.length = 0;
-      other.data_.capacity = 0;
-    }
-
-    SerializedMessage(lwrcl_serialized_message_t &&other) noexcept : data_(other), is_own_buffer_(true)
-    {
-      other.buffer = nullptr;
-      other.length = 0;
-      other.capacity = 0;
-    }
-
-    ~SerializedMessage()
-    {
-      if (data_.buffer != nullptr && is_own_buffer_)
-      {
-        delete[] data_.buffer;
-      }
-    }
-
-    SerializedMessage &operator=(const SerializedMessage &other)
-    {
-      if (this != &other)
-      {
-        if (is_own_buffer_ && data_.capacity >= other.data_.length && data_.buffer != nullptr)
-        {
-          std::memcpy(data_.buffer, other.data_.buffer, other.data_.length);
-          data_.length = other.data_.length;
-        }
-        else
-        {
-          if (data_.buffer != nullptr && is_own_buffer_)
-          {
-            delete[] data_.buffer;
-          }
-          data_.buffer = new char[other.data_.length];
-          std::memcpy(data_.buffer, other.data_.buffer, other.data_.length);
-          data_.length = other.data_.length;
-          data_.capacity = other.data_.length;
-          is_own_buffer_ = true;
-        }
-      }
-      return *this;
-    }
-
-    SerializedMessage &operator=(const lwrcl_serialized_message_t &other)
-    {
-      if (data_.buffer != other.buffer)
-      {
-        if (is_own_buffer_ && data_.capacity >= other.length && data_.buffer != nullptr)
-        {
-          std::memcpy(data_.buffer, other.buffer, other.length);
-          data_.length = other.length;
-        }
-        else
-        {
-          if (data_.buffer != nullptr && is_own_buffer_)
-          {
-            delete[] data_.buffer;
-          }
-          data_.buffer = new char[other.length];
-          std::memcpy(data_.buffer, other.buffer, other.length);
-          data_.length = other.length;
-          data_.capacity = other.length;
-          is_own_buffer_ = true;
-        }
-      }
-      return *this;
-    }
-
-    SerializedMessage &operator=(SerializedMessage &&other) noexcept
-    {
-      if (this != &other)
-      {
-        if (data_.buffer != nullptr && is_own_buffer_)
-        {
-          delete[] data_.buffer;
-        }
-        data_ = other.data_;
-        is_own_buffer_ = other.is_own_buffer_;
-        other.data_.buffer = nullptr;
-        other.data_.length = 0;
-        other.data_.capacity = 0;
-      }
-      return *this;
-    }
-
-    SerializedMessage &operator=(lwrcl_serialized_message_t &&other) noexcept
-    {
-      if (data_.buffer != other.buffer)
-      {
-        if (data_.buffer != nullptr && is_own_buffer_)
-        {
-          delete[] data_.buffer;
-        }
-        data_ = other;
-        other.buffer = nullptr;
-        other.length = 0;
-        other.capacity = 0;
-        is_own_buffer_ = true;
-      }
-      return *this;
-    }
-
-    lwrcl_serialized_message_t &get_rcl_serialized_message() { return data_; }
-    const lwrcl_serialized_message_t &get_rcl_serialized_message() const { return data_; }
-
-    void set_buffer(char *buffer, size_t length)
-    {
-      if (data_.buffer != nullptr && is_own_buffer_)
-      {
-        delete[] data_.buffer;
-      }
-      data_.buffer = buffer;
-      data_.length = length;
-      data_.capacity = length;
-      is_own_buffer_ = false;
-    }
-
-    size_t size() const { return data_.length; }
-    size_t capacity() const { return data_.capacity; }
-
-    void reserve(size_t new_capacity)
-    {
-      if (new_capacity > data_.capacity)
-      {
-        char *new_buffer = new char[new_capacity];
-        if (data_.buffer != nullptr && data_.length > 0)
-        {
-          std::memcpy(new_buffer, data_.buffer, data_.length);
-        }
-        if (data_.buffer != nullptr && is_own_buffer_)
-        {
-          delete[] data_.buffer;
-        }
-        data_.buffer = new_buffer;
-        data_.capacity = new_capacity;
-        is_own_buffer_ = true;
-      }
-    }
-
-    lwrcl_serialized_message_t release_lwrcl_serialized_message()
-    {
-      lwrcl_serialized_message_t out = data_;
-      data_.buffer = nullptr;
-      data_.length = 0;
-      data_.capacity = 0;
-      is_own_buffer_ = false;
-      return out;
-    }
-
-  private:
-    lwrcl_serialized_message_t data_;
-    bool is_own_buffer_;
-  };
-#endif  // definition moved to serialized_message.hpp
 
   template <typename T>
   class Serialization

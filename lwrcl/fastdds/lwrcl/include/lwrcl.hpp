@@ -152,7 +152,7 @@ namespace lwrcl
       while (std::getline(iss, item, ','))
       {
         std::istringstream converter(item);
-        T value;
+        T value{};
         converter >> value;
         vec.push_back(value);
       }
@@ -235,7 +235,7 @@ namespace lwrcl
       QoS qos(depth);
       std::string full_topic = resolve_topic_name(topic);
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), full_topic, qos, callback_function, channel_);
+          participant_.get(), full_topic, qos, std::move(callback_function), channel_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -247,7 +247,7 @@ namespace lwrcl
     {
       std::string full_topic = resolve_topic_name(topic);
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), full_topic, qos, callback_function, channel_);
+          participant_.get(), full_topic, qos, std::move(callback_function), channel_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -260,12 +260,11 @@ namespace lwrcl
     {
       QoS qos(depth);
       std::string full_topic = resolve_topic_name(topic);
-      // Wrap const ref callback to shared_ptr callback
-      auto wrapped_callback = [callback_function](std::shared_ptr<T> msg) {
-        callback_function(*msg);
+      auto wrapped_callback = [cb = std::move(callback_function)](std::shared_ptr<T> msg) {
+        cb(*msg);
       };
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), full_topic, qos, wrapped_callback, channel_);
+          participant_.get(), full_topic, qos, std::move(wrapped_callback), channel_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -276,12 +275,11 @@ namespace lwrcl
         std::function<void(const T &)> callback_function)
     {
       std::string full_topic = resolve_topic_name(topic);
-      // Wrap const ref callback to shared_ptr callback
-      auto wrapped_callback = [callback_function](std::shared_ptr<T> msg) {
-        callback_function(*msg);
+      auto wrapped_callback = [cb = std::move(callback_function)](std::shared_ptr<T> msg) {
+        cb(*msg);
       };
       auto subscription = std::make_shared<Subscription<T>>(
-          participant_.get(), full_topic, qos, wrapped_callback, channel_);
+          participant_.get(), full_topic, qos, std::move(wrapped_callback), channel_);
       subscription_list_.push_front(subscription);
       return subscription;
     }
@@ -296,7 +294,7 @@ namespace lwrcl
             callback_function)
     {
       std::shared_ptr<Service<T>> service =
-          std::make_shared<Service<T>>(participant_.get(), service_name, callback_function, channel_);
+          std::make_shared<Service<T>>(participant_.get(), service_name, std::move(callback_function), channel_);
       service_list_.push_front(service);
 
       return service;
@@ -318,7 +316,7 @@ namespace lwrcl
     {
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::SYSTEM_TIME;
       auto duration = Duration(period);
-      auto timer = std::make_shared<TimerBase>(duration, callback_function, channel_, clock_type);
+      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), channel_, clock_type);
       timer_list_.push_front(timer);
       return timer;
     }
@@ -329,7 +327,7 @@ namespace lwrcl
     {
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::STEADY_TIME;
       auto duration = Duration(period);
-      auto timer = std::make_shared<TimerBase>(duration, callback_function, channel_, clock_type);
+      auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), channel_, clock_type);
       timer_list_.push_front(timer);
       return timer;
     }
@@ -358,6 +356,7 @@ namespace lwrcl
     // Node functions
     virtual void shutdown();
     virtual Clock::SharedPtr get_clock();
+    Time now() { return get_clock()->now(); }
 
     // Constructor
     Node(std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant);
@@ -657,7 +656,7 @@ namespace lwrcl
           std::enable_shared_from_this<Service<T>>(),
           participant_(participant),
           service_name_(service_name),
-          callback_function_(callback_function),
+          callback_function_(std::move(callback_function)),
           request_callback_function_(),
           publisher_(nullptr),
           subscription_(nullptr),
@@ -811,7 +810,7 @@ namespace lwrcl
       subscription_ = std::make_shared<Subscription<typename T::Response>>(
           participant_, std::string("rp/") + response_topic_name_, client_qos,
           std::function<void(std::shared_ptr<typename T::Response>)>(
-              std::bind(&Client::handle_response, this, std::placeholders::_1)),
+              [this](std::shared_ptr<typename T::Response> resp) { handle_response(std::move(resp)); }),
           channel_);
     }
 
