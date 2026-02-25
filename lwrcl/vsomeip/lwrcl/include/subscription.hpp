@@ -144,7 +144,7 @@ namespace lwrcl
     }
 
     // No-op for vsomeip: callbacks are invoked directly in on_message_received().
-    void invoke_if_data() {}
+    bool invoke_if_data() { return false; }
 
     int32_t get_publisher_count()
     {
@@ -209,7 +209,7 @@ namespace lwrcl
         std::shared_ptr<std::condition_variable> cv,
         std::shared_ptr<std::mutex> cv_mutex,
         std::shared_ptr<std::atomic<bool>> pending) = 0;
-    virtual void invoke_if_data() = 0;
+    virtual bool invoke_if_data() = 0;
 
   protected:
     ISubscription() = default;
@@ -303,7 +303,7 @@ namespace lwrcl
       waitset_.add_to_waitset(cv, cv_mutex, pending);
     }
 
-    void invoke_if_data() override { waitset_.invoke_if_data(); }
+    bool invoke_if_data() override { return waitset_.invoke_if_data(); }
 
     bool take(T &out_msg, lwrcl::MessageInfo &info)
     {

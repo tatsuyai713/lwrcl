@@ -359,6 +359,7 @@ namespace lwrcl
       stop_flag_ = false;
       while (global_stop_flag.load() == false && stop_flag_ == false)
       {
+        bool did_work = false;
         {
           std::lock_guard<std::mutex> lock(mutex_);
           for (auto node : nodes_)
@@ -367,13 +368,16 @@ namespace lwrcl
             {
               if (node->closed_ == false)
               {
-                lwrcl::spin_some(node);
+                if (node->try_spin_some()) did_work = true;
               }
             }
           }
         }
-        // Sleep outside the lock so cancel()/add_node()/remove_node() can proceed.
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        // Adaptive sleep: re-poll immediately if work was done, otherwise yield briefly.
+        if (!did_work)
+        {
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
       }
 
       if (global_stop_flag.load() == true)
@@ -1020,14 +1024,22 @@ namespace lwrcl
 
   void Node::stop_spin() { stop_flag_ = true; }
 
-  void Node::spin_some()
+  bool Node::try_spin_some()
   {
-    // Non-blocking: poll each subscription for available data and invoke
-    // callbacks directly under callback_mutex_ (via invoke_if_data).
+    bool did_work = false;
     for (auto &sub : subscription_list_)
     {
-      std::static_pointer_cast<ISubscription>(sub)->invoke_if_data();
+      if (std::static_pointer_cast<ISubscription>(sub)->invoke_if_data())
+      {
+        did_work = true;
+      }
     }
+    return did_work;
+  }
+
+  void Node::spin_some()
+  {
+    try_spin_some();
   }
 
   void Node::shutdown()

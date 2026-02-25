@@ -262,11 +262,13 @@ namespace lwrcl
     }
 
     // Invoke callback for any available data (called from Node::spin() after wakeup).
-    void invoke_if_data()
+    // Returns true if any data was processed.
+    bool invoke_if_data()
     {
-      try { run_once(); }
+      try { return run_once(); }
       catch (const std::exception &e) {
         std::cerr << "Exception in invoke_if_data: " << e.what() << std::endl;
+        return false;
       }
     }
 
@@ -375,34 +377,37 @@ namespace lwrcl
       }
     }
 
-    void run_once()
+    // Returns true if any new samples were received.
+    bool run_once()
     {
       if (!proxy_)
       {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        return;
+        return false;
       }
 
       std::lock_guard<std::mutex> proxy_lock(proxy_mutex_);
       if (!proxy_)
       {
-        return;
+        return false;
       }
 
       const auto state = proxy_->Event.GetSubscriptionState();
       count_.store(state == ara::com::SubscriptionState::kSubscribed ? 1 : 0);
+      bool got_data = false;
       (void)proxy_->Event.GetNewSamples(
-          [this](ara::com::SamplePtr<T> payload_sample)
+          [this, &got_data](ara::com::SamplePtr<T> payload_sample)
           {
             if (!payload_sample)
             {
               return;
             }
 
+            got_data = true;
             auto message = std::make_shared<T>(*payload_sample);
             push_message(message, std::move(payload_sample));
           },
           10);
+      return got_data;
     }
 
     void run()
@@ -458,7 +463,7 @@ namespace lwrcl
         std::shared_ptr<std::condition_variable> cv,
         std::shared_ptr<std::mutex> cv_mutex,
         std::shared_ptr<std::atomic<bool>> pending) = 0;
-    virtual void invoke_if_data() = 0;
+    virtual bool invoke_if_data() = 0;
 
   protected:
     ISubscription() = default;
@@ -520,9 +525,9 @@ namespace lwrcl
       waitset_.add_to_waitset(cv, cv_mutex, pending);
     }
 
-    void invoke_if_data() override
+    bool invoke_if_data() override
     {
-      waitset_.invoke_if_data();
+      return waitset_.invoke_if_data();
     }
 
     bool take(T &out_msg, lwrcl::MessageInfo &info)

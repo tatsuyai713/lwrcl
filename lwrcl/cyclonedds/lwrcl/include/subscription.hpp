@@ -222,12 +222,15 @@ namespace lwrcl
 
     // Invoke the callback if the ReadCondition has triggered (data is available).
     // Called from the unified-WaitSet spin loop after a successful wait().
-    void invoke_if_data()
+    // Returns true if any data was processed.
+    bool invoke_if_data()
     {
       if (read_cond_ && read_cond_->trigger_value())
       {
         take_available();
+        return true;
       }
+      return false;
     }
 
     int32_t get_publisher_count()
@@ -423,7 +426,7 @@ namespace lwrcl
     virtual ~ISubscription() = default;
     virtual void stop() = 0;
     virtual void add_to_waitset(dds::core::cond::WaitSet& ws) = 0;
-    virtual void invoke_if_data() = 0;
+    virtual bool invoke_if_data() = 0;
 
   protected:
     ISubscription() = default;
@@ -519,9 +522,9 @@ namespace lwrcl
       waitset_.add_to_waitset(ws);
     }
 
-    void invoke_if_data() override
+    bool invoke_if_data() override
     {
-      waitset_.invoke_if_data();
+      return waitset_.invoke_if_data();
     }
 
     bool take(T &out_msg, lwrcl::MessageInfo &info) 

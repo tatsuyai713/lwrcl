@@ -310,16 +310,22 @@ namespace lwrcl
       stop_flag_ = false;
       while (global_stop_flag.load() == false && stop_flag_ == false)
       {
+        bool did_work = false;
         {
           std::lock_guard<std::mutex> lock(mutex_);
           for (auto node : nodes_)
           {
             if (node != nullptr && node->closed_ == false)
-              lwrcl::spin_some(node);
+            {
+              if (node->try_spin_some()) did_work = true;
+            }
           }
         }
-        // Sleep outside the lock so cancel()/add_node()/remove_node() can proceed.
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        // Adaptive sleep: re-poll immediately if work was done, otherwise yield briefly.
+        if (!did_work)
+        {
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
       }
 
       if (global_stop_flag.load() == true)
@@ -918,16 +924,24 @@ namespace lwrcl
 
   void Node::stop_spin() { stop_flag_ = true; }
 
-  void Node::spin_some()
+  bool Node::try_spin_some()
   {
-    // Non-blocking: poll each subscription for available data and invoke
-    // callbacks directly under callback_mutex_ (via invoke_if_data).
-    // Note: vsomeip invoke_if_data() is currently a no-op because
-    // callbacks are invoked directly in on_message_received().
+    bool did_work = false;
     for (auto &sub : subscription_list_)
     {
-      std::static_pointer_cast<ISubscription>(sub)->invoke_if_data();
+      if (std::static_pointer_cast<ISubscription>(sub)->invoke_if_data())
+      {
+        did_work = true;
+      }
     }
+    return did_work;
+  }
+
+  void Node::spin_some()
+  {
+    // Note: vsomeip invoke_if_data() returns false because
+    // callbacks are invoked directly in on_message_received().
+    try_spin_some();
   }
 
   // ======================================================================

@@ -430,6 +430,9 @@ namespace lwrcl
 
     std::atomic<bool> closed_{false};
     void stop_spin();
+    // Non-blocking poll: process available data on all subscriptions.
+    // Returns true if any callback was invoked.
+    bool try_spin_some();
 
   private:
     virtual void spin();

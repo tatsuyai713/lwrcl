@@ -261,9 +261,10 @@ namespace lwrcl
     }
 
     // Invoke callback if data is available (called from unified WaitSet spin loop).
-    void invoke_if_data()
+    // Returns true if any data was processed.
+    bool invoke_if_data()
     {
-      if (!reader_ || !status_cond_) return;
+      if (!reader_ || !status_cond_) return false;
       auto changed = reader_->get_status_changes();
       if (changed.is_active(eprosima::fastdds::dds::StatusMask::subscription_matched()))
       {
@@ -274,7 +275,9 @@ namespace lwrcl
       if (changed.is_active(eprosima::fastdds::dds::StatusMask::data_available()))
       {
         take_available();
+        return true;
       }
+      return false;
     }
 
     int32_t get_publisher_count()
@@ -449,7 +452,7 @@ namespace lwrcl
     virtual ~ISubscription() = default;
     virtual void stop() = 0;
     virtual void add_to_waitset(eprosima::fastdds::dds::WaitSet &ws) = 0;
-    virtual void invoke_if_data() = 0;
+    virtual bool invoke_if_data() = 0;
 
   protected:
     ISubscription() = default;
@@ -619,9 +622,9 @@ namespace lwrcl
       waitset_.add_to_waitset(ws);
     }
 
-    void invoke_if_data() override
+    bool invoke_if_data() override
     {
-      waitset_.invoke_if_data();
+      return waitset_.invoke_if_data();
     }
 
     bool take(std::shared_ptr<T> &out_msg, lwrcl::MessageInfo &info) { return waitset_.take(out_msg, info); }
