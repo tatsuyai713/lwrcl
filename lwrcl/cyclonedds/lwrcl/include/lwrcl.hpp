@@ -1121,7 +1121,7 @@ namespace lwrcl
   class Serialization
   {
   public:
-    static void serialize_message(T *message, SerializedMessage *serialized_message)
+    static void serialize_message(const T *message, SerializedMessage *serialized_message)
     {
       using namespace org::eclipse::cyclonedds::core::cdr;
 

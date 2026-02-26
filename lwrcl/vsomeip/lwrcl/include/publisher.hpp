@@ -156,7 +156,7 @@ namespace lwrcl
 
       // Serialize the message using CycloneDDS CDR
       SerializedMessage serialized;
-      Serialization<T>::serialize_message(const_cast<T*>(&message), &serialized);
+      Serialization<T>::serialize_message(&message, &serialized);
 
       // Create vsomeip payload from serialized bytes
       auto payload = vsomeip::runtime::get()->create_payload();

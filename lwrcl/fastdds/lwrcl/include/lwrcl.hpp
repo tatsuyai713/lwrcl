@@ -1151,25 +1151,41 @@ namespace lwrcl
   class Serialization
   {
   public:
-    static void serialize_message(T *message, SerializedMessage *serialized_message)
+    static void serialize_message(const T *message, SerializedMessage *serialized_message)
     {
-      // Single-pass: serialize once into auto-growing buffer, then copy result
+      auto &raw = serialized_message->get_rcl_serialized_message();
+
+      // Fast path: if buffer already has capacity, serialize directly in-place
+      // (avoids temp allocation + memcpy on repeated calls with same message type)
+      if (raw.capacity > 4)
+      {
+        raw.buffer[0] = 0x00; raw.buffer[1] = 0x01; raw.buffer[2] = 0x00; raw.buffer[3] = 0x00;
+        try
+        {
+          eprosima::fastcdr::FastBuffer direct_buf(raw.buffer + 4, raw.capacity - 4);
+          eprosima::fastcdr::Cdr cdr(direct_buf);
+          message->serialize(cdr);
+          raw.length = cdr.getSerializedDataLength() + 4;
+          return;
+        }
+        catch (const eprosima::fastcdr::exception::NotEnoughMemoryException &)
+        {
+          // Capacity insufficient; fall through to general path
+        }
+      }
+
+      // General path: serialize into auto-growing temp buffer, then copy
       eprosima::fastcdr::FastBuffer temp_buf;
       eprosima::fastcdr::Cdr cdr(temp_buf);
       message->serialize(cdr);
       size_t payload_size = cdr.getSerializedDataLength();
 
-      // Reserve capacity (reuses buffer if large enough)
       size_t total_size = payload_size + 4;
       serialized_message->reserve(total_size);
       char *buf = serialized_message->get_rcl_serialized_message().buffer;
 
-      // 4-byte CDR header
       buf[0] = 0x00; buf[1] = 0x01; buf[2] = 0x00; buf[3] = 0x00;
-
-      // Copy serialized payload (1 serialize + 1 memcpy < 2 serializes)
       std::memcpy(buf + 4, temp_buf.getBuffer(), payload_size);
-
       serialized_message->get_rcl_serialized_message().length = total_size;
     }
 
