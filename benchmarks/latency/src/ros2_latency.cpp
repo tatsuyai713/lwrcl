@@ -15,8 +15,8 @@ using namespace std::chrono;
 using namespace std::chrono_literals;
 
 static std::vector<double> latencies;
-static constexpr int WARMUP = 200;
-static constexpr int MAX_SAMPLES = 1000;
+static constexpr int WARMUP = 2000;
+static constexpr int MAX_SAMPLES = 10000;
 
 class LatencyNode : public rclcpp::Node {
 public:
