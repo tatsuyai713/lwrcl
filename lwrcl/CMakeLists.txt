@@ -226,6 +226,9 @@ elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
     endif()
     # Data type headers
     include_directories(${LWRCL_INSTALL_PREFIX}/include)
+    # Generated proxy/skeleton header for library compilation.
+    # Apps override with their own generated header via -I<app-gen-dir>.
+    include_directories(AFTER ${LWRCL_INSTALL_PREFIX}/share/lwrcl/autosar/generated)
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
     link_directories(${AUTOSAR_AP_PREFIX}/lib)
     link_directories(${DDS_PREFIX}/lib)

@@ -7,6 +7,7 @@
 #include <deque>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -15,7 +16,7 @@
 #include <vector>
 
 #include "adaptive_autosar_header.hpp"
-#include "lwrcl_autosar_proxy_skeleton.hpp"
+#include <lwrcl_autosar_proxy_skeleton.hpp>
 #include "qos.hpp"
 
 #define MAX_POLLABLE_BUFFER_SIZE 100
@@ -250,10 +251,19 @@ namespace lwrcl
       node_cv_ = cv;
       node_cv_mutex_ = cv_mutex;
       node_data_pending_ = pending;
-      stop(); // stop per-subscription thread
-      // Re-register receive handler to signal the shared node cv.
+
+      // Stop per-subscription thread but preserve proxy state.
+      stop_flag_.store(true);
+      data_cv_.notify_all();
+      if (waitset_thread_.joinable())
+      {
+        waitset_thread_.join();
+      }
       if (proxy_)
       {
+        proxy_->Event.UnsetReceiveHandler();
+        // Re-subscribe and register receive handler to signal the shared node cv.
+        proxy_->Event.Subscribe(MAX_POLLABLE_BUFFER_SIZE);
         proxy_->Event.SetReceiveHandler([this]() {
           if (node_data_pending_) node_data_pending_->store(true);
           if (node_cv_) node_cv_->notify_all();
@@ -394,6 +404,9 @@ namespace lwrcl
       const auto state = proxy_->Event.GetSubscriptionState();
       count_.store(state == ara::com::SubscriptionState::kSubscribed ? 1 : 0);
       bool got_data = false;
+      // Use a large maxSamples to avoid data loss in DDS binding.
+      // CycloneDDS reader.take() removes ALL samples from the queue;
+      // a small limit here causes the excess to be silently discarded.
       (void)proxy_->Event.GetNewSamples(
           [this, &got_data](ara::com::SamplePtr<T> payload_sample)
           {
@@ -406,7 +419,7 @@ namespace lwrcl
             auto message = std::make_shared<T>(*payload_sample);
             push_message(message, std::move(payload_sample));
           },
-          10);
+          std::numeric_limits<std::size_t>::max());
       return got_data;
     }
 

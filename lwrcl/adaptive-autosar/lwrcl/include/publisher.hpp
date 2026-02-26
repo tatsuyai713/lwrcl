@@ -9,7 +9,7 @@
 #include <type_traits>
 
 #include "adaptive_autosar_header.hpp"
-#include "lwrcl_autosar_proxy_skeleton.hpp"
+#include <lwrcl_autosar_proxy_skeleton.hpp>
 #include "qos.hpp"
 
 namespace lwrcl

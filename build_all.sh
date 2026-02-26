@@ -5,21 +5,22 @@ set -euo pipefail
 # build_all.sh — Build libraries, data_types, and lwrcl in one shot
 #
 # Usage:
-#   ./build_all.sh <fastdds|cyclonedds|vsomeip> [install|clean]
+#   ./build_all.sh <fastdds|cyclonedds|vsomeip|adaptive-autosar> [install|clean]
 #
 # Examples:
-#   ./build_all.sh fastdds install      # Build & install everything (FastDDS)
-#   ./build_all.sh cyclonedds install   # Build & install everything (CycloneDDS)
-#   ./build_all.sh vsomeip install      # Build & install everything (vsomeip)
-#   ./build_all.sh fastdds              # Build only (no install)
-#   ./build_all.sh cyclonedds clean     # Clean all build directories
+#   ./build_all.sh fastdds install              # Build & install everything (FastDDS)
+#   ./build_all.sh cyclonedds install             # Build & install everything (CycloneDDS)
+#   ./build_all.sh vsomeip install                # Build & install everything (vsomeip)
+#   ./build_all.sh adaptive-autosar install       # Build & install everything (Adaptive AUTOSAR)
+#   ./build_all.sh fastdds                        # Build only (no install)
+#   ./build_all.sh cyclonedds clean               # Clean all build directories
 ##############################################################################
 
 BACKEND="${1:-}"
 ACTION="${2:-}"
 
-if [ "$BACKEND" != "fastdds" ] && [ "$BACKEND" != "cyclonedds" ] && [ "$BACKEND" != "vsomeip" ]; then
-    echo "Usage: $0 <fastdds|cyclonedds|vsomeip> [install|clean]"
+if [ "$BACKEND" != "fastdds" ] && [ "$BACKEND" != "cyclonedds" ] && [ "$BACKEND" != "vsomeip" ] && [ "$BACKEND" != "adaptive-autosar" ]; then
+    echo "Usage: $0 <fastdds|cyclonedds|vsomeip|adaptive-autosar> [install|clean]"
     exit 1
 fi
 

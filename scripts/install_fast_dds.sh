@@ -87,7 +87,7 @@ if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]] && command -v apt-get >/dev/null 2>&1; th
   wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | ${SUDO} tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
   ${SUDO} apt-add-repository -y "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main"
   ${SUDO} apt-get update -qq
-  ${SUDO} apt-get install -y --allow-downgrades gcc g++ make automake autoconf unzip git vim openssl gcc make cmake=3.31.8* cmake-data=3.31.8* curl tar wget p11-kit libasio-dev
+  ${SUDO} apt-get install -y --allow-downgrades gcc g++ make automake autoconf unzip git vim openssl gcc make cmake=3.31.11* cmake-data=3.31.11* curl tar wget p11-kit libasio-dev
   ${SUDO} apt-mark hold cmake cmake-data
 fi
 

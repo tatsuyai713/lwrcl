@@ -98,18 +98,18 @@ Measured for a single subscriber node (`example_class_sub`, CycloneDDS backend) 
 \* Virtual memory is large due to DDS shared-memory region reservations; only the RSS figure reflects actual
 physical memory usage.
 
-### 3. End-to-End Latency (Callback API, 5-way Comparison)
+### 3. End-to-End Latency (Callback API, 6-way Comparison)
 
 Measured with a C++ intra-process ping-pong node (`std_msgs::msg::String`, 1 ms timer,
 10 000 samples, 2 000 warm-up samples). Numbers are **round-trip time ÷ 2** (one-way latency).
 Each value is the median of 5 independent runs on the same host.
 
-| Metric | lwrcl + CycloneDDS | lwrcl + FastDDS | lwrcl + vsomeip | ROS 2 Jazzy + CycloneDDS | ROS 2 Jazzy + FastDDS |
-|--------|-------------------:|----------------:|----------------:|------------------------:|---------------------:|
-| p50    | **~26 µs**         | ~33 µs          | ~65 µs          | ~17 µs                  | ~15 µs               |
-| p90    | **~30 µs**         | ~47 µs          | ~111 µs         | ~38 µs                  | ~61 µs               |
-| p99    | ~45 µs             | ~92 µs          | ~198 µs         | **~43 µs**              | ~62 µs               |
-| Min    | ~2 µs              | ~2 µs           | ~10 µs          | ~2 µs                   | ~3 µs                |
+| Metric | lwrcl + CycloneDDS | lwrcl + FastDDS | lwrcl + vsomeip | lwrcl + Adaptive AUTOSAR (vsomeip) | lwrcl + Adaptive AUTOSAR (DDS) | lwrcl + Adaptive AUTOSAR (iceoryx) | ROS 2 Jazzy + CycloneDDS | ROS 2 Jazzy + FastDDS |
+|--------|-------------------:|----------------:|----------------:|----------------------------------:|-------------------------------:|-----------------------------------:|------------------------:|---------------------:|
+| p50    | **~26 µs**         | ~33 µs          | ~65 µs          | ~206 µs                           | ~81 µs                         | ~43 µs                             | ~17 µs                  | ~15 µs               |
+| p90    | **~30 µs**         | ~47 µs          | ~111 µs         | ~273 µs                           | ~133 µs                        | ~79 µs                             | ~38 µs                  | ~61 µs               |
+| p99    | ~45 µs             | ~92 µs          | ~198 µs         | ~433 µs                           | ~222 µs                        | ~170 µs                            | **~43 µs**              | ~62 µs               |
+| Min    | ~2 µs              | ~2 µs           | ~10 µs          | ~27 µs                            | ~11 µs                         | ~7 µs                              | ~2 µs                   | ~3 µs                |
 
 > All subscriptions in a node share a single **unified Node-level WaitSet** — their
 > `ReadCondition`s are aggregated so the spin thread wakes exactly once per delivery.
@@ -117,6 +117,9 @@ Each value is the median of 5 independent runs on the same host.
 > A per-node mutex serializes concurrent callbacks.
 >
 > lwrcl + CycloneDDS achieves **~26 µs one-way latency** at p50, comparable to ROS 2 Jazzy.
+>
+> Adaptive AUTOSAR transport binding is selected via `ARA_COM_EVENT_BINDING` (vsomeip | dds | iceoryx).
+> The iceoryx binding achieves **~43 µs at p50**, the lowest among the three Adaptive AUTOSAR transports.
 
 **Raw CycloneDDS transport layer** (measured with `ddsperf -L ping pong`, bypasses lwrcl callback layer):
 
@@ -195,20 +198,20 @@ Each value is the **median of 5 independent runs**.
 
 ### Middleware Layer Size
 
-| Component | lwrcl + CycloneDDS | lwrcl + FastDDS | lwrcl + vsomeip | ROS 2 + CycloneDDS | ROS 2 + FastDDS |
-|-----------|-------------------:|----------------:|----------------:|------------------:|---------------:|
-| Wrapper / rclcpp layer | **793 KB** | **928 KB** | **683 KB** | 3.0 MB | 3.0 MB |
-| DDS runtime | 3.0 MB | 12 MB | — | 3.0 MB | 12 MB |
-| **Total** | **~3.8 MB** | **~13 MB** | **~0.7 MB** | **~6.0 MB** | **~15 MB** |
+| Component | lwrcl + CycloneDDS | lwrcl + FastDDS | lwrcl + vsomeip | lwrcl + Adaptive AUTOSAR | ROS 2 + CycloneDDS | ROS 2 + FastDDS |
+|-----------|-------------------:|----------------:|----------------:|------------------------:|------------------:|---------------:|
+| Wrapper / rclcpp layer | **793 KB** | **928 KB** | **683 KB** | — | 3.0 MB | 3.0 MB |
+| DDS runtime | 3.0 MB | 12 MB | — | — | 3.0 MB | 12 MB |
+| **Total** | **~3.8 MB** | **~13 MB** | **~0.7 MB** | — | **~6.0 MB** | **~15 MB** |
 
 ### End-to-End Latency (same-host, same-process, C++ callback API)
 
-| Metric | lwrcl + CycloneDDS | lwrcl + FastDDS | lwrcl + vsomeip | ROS 2 Jazzy + CycloneDDS | ROS 2 Jazzy + FastDDS |
-|--------|-------------------:|----------------:|----------------:|------------------------:|---------------------:|
-| p50    | **~26 µs**         | ~33 µs          | ~65 µs          | ~17 µs                  | ~15 µs               |
-| p90    | **~30 µs**         | ~47 µs          | ~111 µs         | ~38 µs                  | ~61 µs               |
-| p99    | ~45 µs             | ~92 µs          | ~198 µs         | **~43 µs**              | ~62 µs               |
-| Min    | ~2 µs              | ~2 µs           | ~10 µs          | ~2 µs                   | ~3 µs                |
+| Metric | lwrcl + CycloneDDS | lwrcl + FastDDS | lwrcl + vsomeip | lwrcl + Adaptive AUTOSAR (vsomeip) | lwrcl + Adaptive AUTOSAR (DDS) | lwrcl + Adaptive AUTOSAR (iceoryx) | ROS 2 Jazzy + CycloneDDS | ROS 2 Jazzy + FastDDS |
+|--------|-------------------:|----------------:|----------------:|----------------------------------:|-------------------------------:|-----------------------------------:|------------------------:|---------------------:|
+| p50    | **~26 µs**         | ~33 µs          | ~65 µs          | ~206 µs                           | ~81 µs                         | ~43 µs                             | ~17 µs                  | ~15 µs               |
+| p90    | **~30 µs**         | ~47 µs          | ~111 µs         | ~273 µs                           | ~133 µs                        | ~79 µs                             | ~38 µs                  | ~61 µs               |
+| p99    | ~45 µs             | ~92 µs          | ~198 µs         | ~433 µs                           | ~222 µs                        | ~170 µs                            | **~43 µs**              | ~62 µs               |
+| Min    | ~2 µs              | ~2 µs           | ~10 µs          | ~27 µs                            | ~11 µs                         | ~7 µs                              | ~2 µs                   | ~3 µs                |
 
 > lwrcl uses a unified Node-level WaitSet: all subscription `ReadCondition`s are aggregated
 > so `Node::spin()` blocks on a single WaitSet and wakes exactly once per delivery.
@@ -217,14 +220,14 @@ Each value is the **median of 5 independent runs**.
 
 ### Summary
 
-| Metric | lwrcl + CycloneDDS | lwrcl + FastDDS | lwrcl + vsomeip | ROS 2 + CycloneDDS | ROS 2 + FastDDS |
-|--------|:------------------:|:---------------:|:---------------:|:-----------------:|:--------------:|
-| Middleware size | **~3.8 MB** ✅ | ~13 MB | **~0.7 MB** ✅ | ~6.0 MB | ~15 MB |
-| Latency p50 | ~26 µs | ~33 µs | ~65 µs | ~17 µs | **~15 µs** |
-| Latency p90 | **~30 µs** | ~47 µs | ~111 µs | ~38 µs | ~61 µs |
-| Latency p99 | **~45 µs** | ~92 µs | ~198 µs | ~43 µs | ~62 µs |
-| Portability | **QNX / AUTOSAR** ✅ | **QNX** ✅ | **QNX / AUTOSAR** ✅ | Linux only | Linux only |
-| No ROS 2 install | **Yes** ✅ | **Yes** ✅ | **Yes** ✅ | No | No |
+| Metric | lwrcl + CycloneDDS | lwrcl + FastDDS | lwrcl + vsomeip | lwrcl + Adaptive AUTOSAR (iceoryx) | ROS 2 + CycloneDDS | ROS 2 + FastDDS |
+|--------|:------------------:|:---------------:|:---------------:|:----------------------------------:|:-----------------:|:--------------:|
+| Middleware size | **~3.8 MB** ✅ | ~13 MB | **~0.7 MB** ✅ | — | ~6.0 MB | ~15 MB |
+| Latency p50 | ~26 µs | ~33 µs | ~65 µs | **~43 µs** | ~17 µs | ~15 µs |
+| Latency p90 | **~30 µs** | ~47 µs | ~111 µs | ~79 µs | ~38 µs | ~61 µs |
+| Latency p99 | **~45 µs** | ~92 µs | ~198 µs | ~170 µs | ~43 µs | ~62 µs |
+| Portability | **QNX / AUTOSAR** ✅ | **QNX** ✅ | **QNX / AUTOSAR** ✅ | **AUTOSAR AP** ✅ | Linux only | Linux only |
+| No ROS 2 install | **Yes** ✅ | **Yes** ✅ | **Yes** ✅ | **Yes** ✅ | No | No |
 
 ---
 

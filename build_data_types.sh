@@ -104,10 +104,13 @@ install_adaptive_autosar_artifacts() {
     if [ -f "${output_dir}/lwrcl_autosar_manifest.yaml" ]; then
         sudo cp "${output_dir}/lwrcl_autosar_manifest.yaml" "${install_dir}/"
     fi
+    # Install the generated proxy/skeleton header to share/ (NOT include/).
+    # The lwrcl library needs it for template definitions, but apps override it
+    # with their own generated header via -I<app-gen-dir> at compile time.
+    local gen_install_dir="${install_dir}/generated"
+    sudo mkdir -p "${gen_install_dir}"
     if [ -f "${output_dir}/generated/lwrcl_autosar_proxy_skeleton.hpp" ]; then
-        sudo mkdir -p "${LWRCL_PREFIX}/include"
-        sudo cp "${output_dir}/generated/lwrcl_autosar_proxy_skeleton.hpp" \
-          "${LWRCL_PREFIX}/include/lwrcl_autosar_proxy_skeleton.hpp"
+        sudo cp "${output_dir}/generated/lwrcl_autosar_proxy_skeleton.hpp" "${gen_install_dir}/"
     fi
 }
 

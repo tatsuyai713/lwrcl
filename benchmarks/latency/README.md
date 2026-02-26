@@ -1,9 +1,12 @@
 # Latency Benchmarks
 
-Intra-process ping-pong latency measurement for 4 backend combinations:
+Intra-process ping-pong latency measurement for 7 backend combinations:
 
 - **lwrcl + CycloneDDS**
 - **lwrcl + FastDDS**
+- **lwrcl + Adaptive AUTOSAR (vsomeip)** (`ARA_COM_EVENT_BINDING=vsomeip`)
+- **lwrcl + Adaptive AUTOSAR (DDS)** (`ARA_COM_EVENT_BINDING=dds`)
+- **lwrcl + Adaptive AUTOSAR (iceoryx)** (`ARA_COM_EVENT_BINDING=iceoryx`)
 - **ROS 2 Humble + CycloneDDS** (`rmw_cyclonedds_cpp`)
 - **ROS 2 Humble + FastDDS** (`rmw_fastrtps_cpp`)
 
@@ -60,6 +63,21 @@ LD_LIBRARY_PATH=/opt/iceoryx/lib:/opt/cyclonedds/lib:/opt/cyclonedds-libs/lib \
 # lwrcl + FastDDS
 LD_LIBRARY_PATH=/opt/fast-dds/lib:/opt/fast-dds-libs/lib \
   ./benchmarks/latency/bin/lat_lwrcl_fastdds
+
+# lwrcl + Adaptive AUTOSAR (SOME/IP transport)
+ARA_COM_EVENT_BINDING=vsomeip \
+LD_LIBRARY_PATH=/opt/autosar-ap-libs/lib:/opt/autosar_ap/lib:/opt/cyclonedds/lib:/opt/iceoryx/lib:/opt/vsomeip/lib \
+  ./benchmarks/latency/bin/lat_lwrcl_autosar
+
+# lwrcl + Adaptive AUTOSAR (DDS transport)
+ARA_COM_EVENT_BINDING=dds \
+LD_LIBRARY_PATH=/opt/autosar-ap-libs/lib:/opt/autosar_ap/lib:/opt/cyclonedds/lib:/opt/iceoryx/lib:/opt/vsomeip/lib \
+  ./benchmarks/latency/bin/lat_lwrcl_autosar
+
+# lwrcl + Adaptive AUTOSAR (iceoryx transport — requires RouDi)
+ARA_COM_EVENT_BINDING=iceoryx \
+LD_LIBRARY_PATH=/opt/autosar-ap-libs/lib:/opt/autosar_ap/lib:/opt/cyclonedds/lib:/opt/iceoryx/lib:/opt/vsomeip/lib \
+  ./benchmarks/latency/bin/lat_lwrcl_autosar
 
 # ROS 2 + CycloneDDS
 source /opt/ros/humble/setup.bash
