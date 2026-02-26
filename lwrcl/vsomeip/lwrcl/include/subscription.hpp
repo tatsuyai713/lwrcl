@@ -177,10 +177,9 @@ namespace lwrcl
       {
         return false;
       }
-      out_msg = *msg_ptr;
+      out_msg = std::move(*msg_ptr);
       return true;
     }
-
     bool has_message()
     {
       std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
@@ -339,11 +338,11 @@ namespace lwrcl
 
       try
       {
-        // Deserialize the vsomeip payload using CycloneDDS CDR
-        SerializedMessage serialized(payload->get_length());
-        auto &raw = serialized.get_rcl_serialized_message();
-        std::memcpy(raw.buffer, payload->get_data(), payload->get_length());
-        raw.length = payload->get_length();
+        // Zero-copy: wrap vsomeip payload directly (no alloc, no memcpy)
+        SerializedMessage serialized;
+        serialized.set_buffer(
+            reinterpret_cast<char *>(const_cast<vsomeip::byte_t *>(payload->get_data())),
+            payload->get_length());
 
         auto message = std::make_shared<T>();
         Serialization<T>::deserialize_message(&serialized, message.get());

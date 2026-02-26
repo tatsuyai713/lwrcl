@@ -56,7 +56,7 @@ namespace lwrcl
   {
   public:
     virtual ~ParameterBase() = default;
-    virtual std::string get_name() const = 0;
+    virtual const std::string &get_name() const = 0;
     virtual std::string as_string() const = 0;
 
   protected:
@@ -91,7 +91,7 @@ namespace lwrcl
     Parameter();
     ~Parameter() = default;
 
-    std::string get_name() const override;
+    const std::string &get_name() const override;
 
     bool as_bool() const;
     int as_int() const;
@@ -200,8 +200,8 @@ namespace lwrcl
 
     // Getters
     std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> get_participant() const;
-    std::string get_name() const;
-    std::string get_namespace() const;
+    const std::string &get_name() const;
+    const std::string &get_namespace() const;
     std::string get_fully_qualified_name() const;
     Logger get_logger() const;
     const NodeOptions &get_node_options() const;
@@ -471,6 +471,7 @@ namespace lwrcl
     std::string namespace_;
     NodeOptions node_options_;
     std::atomic<bool> stop_flag_{false};
+    eprosima::fastdds::dds::GuardCondition *stop_guard_{nullptr}; // used by spin() for immediate wakeup
     bool participant_owned_;
 
     std::forward_list<std::shared_ptr<IPublisher>> publisher_list_;
@@ -869,18 +870,16 @@ namespace lwrcl
     template <typename Duration>
     bool wait_for_service(const Duration &timeout)
     {
-      std::chrono::system_clock::time_point start_time = std::chrono::system_clock::now();
-      std::chrono::system_clock::time_point current_time = std::chrono::system_clock::now();
-      std::chrono::system_clock::time_point end_time = start_time + timeout;
+      auto start_time = std::chrono::steady_clock::now();
+      auto end_time = start_time + timeout;
 
-      while (current_time < end_time)
+      while (std::chrono::steady_clock::now() < end_time)
       {
         if (publisher_->get_subscriber_count() > 0)
         {
           return true;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        current_time = std::chrono::system_clock::now();
       }
 
       return false;
@@ -1154,14 +1153,13 @@ namespace lwrcl
   public:
     static void serialize_message(T *message, SerializedMessage *serialized_message)
     {
-      // First pass: determine the serialized size without allocating
-      // Uses FastCDR's getSerializedDataLength after serialize
-      eprosima::fastcdr::FastBuffer sizing_buf;
-      eprosima::fastcdr::Cdr sizing_cdr(sizing_buf);
-      message->serialize(sizing_cdr);
-      size_t payload_size = sizing_cdr.getSerializedDataLength();
+      // Single-pass: serialize once into auto-growing buffer, then copy result
+      eprosima::fastcdr::FastBuffer temp_buf;
+      eprosima::fastcdr::Cdr cdr(temp_buf);
+      message->serialize(cdr);
+      size_t payload_size = cdr.getSerializedDataLength();
 
-      // Reserve capacity (reuses buffer if large enough) then serialize directly
+      // Reserve capacity (reuses buffer if large enough)
       size_t total_size = payload_size + 4;
       serialized_message->reserve(total_size);
       char *buf = serialized_message->get_rcl_serialized_message().buffer;
@@ -1169,10 +1167,8 @@ namespace lwrcl
       // 4-byte CDR header
       buf[0] = 0x00; buf[1] = 0x01; buf[2] = 0x00; buf[3] = 0x00;
 
-      // Serialize directly into destination buffer (zero intermediate copy)
-      eprosima::fastcdr::FastBuffer direct_buf(buf + 4, payload_size);
-      eprosima::fastcdr::Cdr direct_cdr(direct_buf);
-      message->serialize(direct_cdr);
+      // Copy serialized payload (1 serialize + 1 memcpy < 2 serializes)
+      std::memcpy(buf + 4, temp_buf.getBuffer(), payload_size);
 
       serialized_message->get_rcl_serialized_message().length = total_size;
     }

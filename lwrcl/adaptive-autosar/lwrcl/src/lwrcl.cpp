@@ -102,7 +102,7 @@ namespace lwrcl
 
   Parameter::Parameter() : name_(), string_value_(), type_(Type::UNKNOWN) {}
 
-  std::string Parameter::get_name() const { return name_; }
+  const std::string &Parameter::get_name() const { return name_; }
 
   bool Parameter::as_bool() const
   {
@@ -362,7 +362,7 @@ namespace lwrcl
         bool did_work = false;
         {
           std::lock_guard<std::mutex> lock(mutex_);
-          for (auto node : nodes_)
+          for (const auto& node : nodes_)
           {
             if (node != nullptr)
             {
@@ -389,7 +389,7 @@ namespace lwrcl
     void SingleThreadedExecutor::spin_some()
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      for (auto node : nodes_)
+      for (const auto& node : nodes_)
       {
         if (node != nullptr)
         {
@@ -430,7 +430,7 @@ namespace lwrcl
     void MultiThreadedExecutor::cancel()
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      for (auto node : nodes_)
+      for (const auto& node : nodes_)
       {
         if (node != nullptr)
         {
@@ -498,18 +498,11 @@ namespace lwrcl
     void MultiThreadedExecutor::spin_some()
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      for (auto node : nodes_)
+      for (const auto& node : nodes_)
       {
-        if (node != nullptr)
+        if (node != nullptr && node->closed_ == false)
         {
-          if (node->closed_ == false)
-          {
-            lwrcl::spin_some(node);
-          }
-        }
-        else
-        {
-          throw std::runtime_error("Error: Node pointer is null, cannot add to executor.");
+          lwrcl::spin_some(node);
         }
       }
     }
@@ -905,9 +898,9 @@ namespace lwrcl
     return participant_;
   }
 
-  std::string Node::get_name() const { return name_; }
+  const std::string &Node::get_name() const { return name_; }
 
-  std::string Node::get_namespace() const { return namespace_; }
+  const std::string &Node::get_namespace() const { return namespace_; }
 
   std::string Node::get_fully_qualified_name() const {
     if (namespace_.empty()) {
@@ -940,14 +933,16 @@ namespace lwrcl
 
     while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
     {
-      // Wait for subscription wakeup or 10 ms timeout.
+      // Wait for subscription wakeup or 100 ms safety timeout.
+      // stop_spin() notifies cv for immediate wakeup.
       {
         std::unique_lock<std::mutex> lk(*node_cv_mutex_);
-        node_cv_->wait_for(lk, std::chrono::milliseconds(10),
+        node_cv_->wait_for(lk, std::chrono::milliseconds(100),
             [this]() { return node_data_pending_->load() || closed_.load()
                         || global_stop_flag.load() || stop_flag_; });
         node_data_pending_->store(false);
       }
+      if (stop_flag_ || global_stop_flag.load()) break;
       // Process any pending data on subscriptions.
       for (auto &sub : subs)
       {
@@ -961,14 +956,19 @@ namespace lwrcl
     }
   }
 
-  void Node::stop_spin() { stop_flag_ = true; }
+  void Node::stop_spin()
+  {
+    stop_flag_ = true;
+    // Wake the spin() cv so it exits immediately.
+    if (node_cv_) node_cv_->notify_all();
+  }
 
   bool Node::try_spin_some()
   {
     bool did_work = false;
     for (auto &sub : subscription_list_)
     {
-      if (std::static_pointer_cast<ISubscription>(sub)->invoke_if_data())
+      if (sub->invoke_if_data())
       {
         did_work = true;
       }
@@ -987,7 +987,7 @@ namespace lwrcl
     publisher_list_.clear();
     for (auto &subscriber : subscription_list_)
     {
-      std::static_pointer_cast<ISubscription>(subscriber)->stop();
+      subscriber->stop();
     }
     subscription_list_.clear();
     for (auto &timer : timer_list_)
@@ -998,12 +998,12 @@ namespace lwrcl
 
     for (auto &service : service_list_)
     {
-      std::static_pointer_cast<IService>(service)->stop();
+      service->stop();
     }
     service_list_.clear();
     for (auto &client : client_list_)
     {
-      std::static_pointer_cast<IClient>(client)->stop();
+      client->stop();
     }
     client_list_.clear();
     closed_ = true;

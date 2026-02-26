@@ -56,7 +56,7 @@ namespace lwrcl
   {
   public:
     virtual ~ParameterBase() = default;
-    virtual std::string get_name() const = 0;
+    virtual const std::string &get_name() const = 0;
     virtual std::string as_string() const = 0;
 
   protected:
@@ -80,7 +80,7 @@ namespace lwrcl
     Parameter();
     ~Parameter() = default;
 
-    std::string get_name() const override;
+    const std::string &get_name() const override;
 
     bool as_bool() const;
     int as_int() const;
@@ -181,8 +181,8 @@ namespace lwrcl
 
     // Getters
     std::shared_ptr<vsomeip::application> get_participant() const;
-    std::string get_name() const;
-    std::string get_namespace() const;
+    const std::string &get_name() const;
+    const std::string &get_namespace() const;
     std::string get_fully_qualified_name() const;
     const NodeOptions &get_node_options() const;
     Logger get_logger() const;
@@ -818,18 +818,16 @@ namespace lwrcl
     template <typename Duration>
     bool wait_for_service(const Duration &timeout)
     {
-      std::chrono::system_clock::time_point start_time = std::chrono::system_clock::now();
-      std::chrono::system_clock::time_point current_time = std::chrono::system_clock::now();
-      std::chrono::system_clock::time_point end_time = start_time + timeout;
+      auto start_time = std::chrono::steady_clock::now();
+      auto end_time = start_time + timeout;
 
-      while (current_time < end_time)
+      while (std::chrono::steady_clock::now() < end_time)
       {
         if (publisher_->get_subscriber_count() > 0)
         {
           return true;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        current_time = std::chrono::system_clock::now();
       }
 
       return false;

@@ -102,7 +102,7 @@ namespace lwrcl
 
   Parameter::Parameter() : name_(), string_value_(), type_(Type::UNKNOWN) {}
 
-  std::string Parameter::get_name() const { return name_; }
+  const std::string &Parameter::get_name() const { return name_; }
 
   bool Parameter::as_bool() const
   {
@@ -362,7 +362,7 @@ namespace lwrcl
         bool did_work = false;
         {
           std::lock_guard<std::mutex> lock(mutex_);
-          for (auto node : nodes_)
+          for (const auto& node : nodes_)
           {
             if (node != nullptr)
             {
@@ -389,7 +389,7 @@ namespace lwrcl
     void SingleThreadedExecutor::spin_some()
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      for (auto node : nodes_)
+      for (const auto& node : nodes_)
       {
         if (node != nullptr)
         {
@@ -430,7 +430,7 @@ namespace lwrcl
     void MultiThreadedExecutor::cancel()
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      for (auto node : nodes_)
+      for (const auto& node : nodes_)
       {
         if (node != nullptr)
         {
@@ -498,18 +498,11 @@ namespace lwrcl
     void MultiThreadedExecutor::spin_some()
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      for (auto node : nodes_)
+      for (const auto& node : nodes_)
       {
-        if (node != nullptr)
+        if (node != nullptr && node->closed_ == false)
         {
-          if (node->closed_ == false)
-          {
-            lwrcl::spin_some(node);
-          }
-        }
-        else
-        {
-          throw std::runtime_error("Error: Node pointer is null, cannot add to executor.");
+          lwrcl::spin_some(node);
         }
       }
     }
@@ -946,9 +939,9 @@ namespace lwrcl
     return participant_;
   }
 
-  std::string Node::get_name() const { return name_; }
+  const std::string &Node::get_name() const { return name_; }
 
-  std::string Node::get_namespace() const { return namespace_; }
+  const std::string &Node::get_namespace() const { return namespace_; }
 
   std::string Node::get_fully_qualified_name() const {
     if (namespace_.empty()) {
@@ -988,16 +981,25 @@ namespace lwrcl
     {
       sub->add_to_waitset(unified_ws);
     }
+
+    // GuardCondition allows stop_spin()/shutdown() to break the wait immediately
+    // instead of waiting up to the full timeout.
+    dds::core::cond::GuardCondition stop_guard;
+    unified_ws += stop_guard;
+    stop_guard_ = &stop_guard;
+
     const bool has_subs = !subs.empty();
 
     while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
     {
       if (has_subs)
       {
-        // Block until data arrives on any subscription (10 ms timeout to recheck flags).
+        // Block until data arrives on any subscription or stop is signaled.
+        // 100 ms safety timeout — stop_guard normally triggers immediately.
         try
         {
-          unified_ws.wait(dds::core::Duration::from_millisecs(10));
+          unified_ws.wait(dds::core::Duration::from_millisecs(100));
+          if (stop_flag_ || global_stop_flag.load()) break;
           for (auto &sub : subs)
           {
             sub->invoke_if_data();
@@ -1016,20 +1018,31 @@ namespace lwrcl
       }
     }
 
+    stop_guard_ = nullptr;
+
     if (global_stop_flag.load() == true)
     {
       shutdown();
     }
   }
 
-  void Node::stop_spin() { stop_flag_ = true; }
+  void Node::stop_spin()
+  {
+    stop_flag_ = true;
+    // Trigger GuardCondition to break WaitSet::wait() immediately.
+    if (stop_guard_)
+    {
+      try { stop_guard_->trigger_value(true); }
+      catch (...) {}
+    }
+  }
 
   bool Node::try_spin_some()
   {
     bool did_work = false;
     for (auto &sub : subscription_list_)
     {
-      if (std::static_pointer_cast<ISubscription>(sub)->invoke_if_data())
+      if (sub->invoke_if_data())
       {
         did_work = true;
       }
@@ -1048,7 +1061,7 @@ namespace lwrcl
     publisher_list_.clear();
     for (auto &subscriber : subscription_list_)
     {
-      std::static_pointer_cast<ISubscription>(subscriber)->stop();
+      subscriber->stop();
     }
     subscription_list_.clear();
     for (auto &timer : timer_list_)
@@ -1059,12 +1072,12 @@ namespace lwrcl
 
     for (auto &service : service_list_)
     {
-      std::static_pointer_cast<IService>(service)->stop();
+      service->stop();
     }
     service_list_.clear();
     for (auto &client : client_list_)
     {
-      std::static_pointer_cast<IClient>(client)->stop();
+      client->stop();
     }
     client_list_.clear();
     closed_ = true;

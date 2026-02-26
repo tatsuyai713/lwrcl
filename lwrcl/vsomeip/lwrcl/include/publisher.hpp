@@ -156,16 +156,14 @@ namespace lwrcl
 
       // Serialize the message using CycloneDDS CDR
       SerializedMessage serialized;
-      T mutable_msg = message; // CDR move/write may need non-const
-      Serialization<T>::serialize_message(&mutable_msg, &serialized);
+      Serialization<T>::serialize_message(const_cast<T*>(&message), &serialized);
 
       // Create vsomeip payload from serialized bytes
       auto payload = vsomeip::runtime::get()->create_payload();
       auto &raw = serialized.get_rcl_serialized_message();
-      std::vector<vsomeip::byte_t> data(
-          reinterpret_cast<vsomeip::byte_t *>(raw.buffer),
-          reinterpret_cast<vsomeip::byte_t *>(raw.buffer) + raw.length);
-      payload->set_data(data);
+      payload->set_data(
+          reinterpret_cast<const vsomeip::byte_t *>(raw.buffer),
+          static_cast<vsomeip::length_t>(raw.length));
 
       // Notify all subscribers
       app_->notify(service_id_, instance_id_, event_id_, payload);

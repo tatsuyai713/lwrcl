@@ -259,7 +259,7 @@ namespace lwrcl
       {
         return false;
       }
-      out_msg = *msg_ptr;
+      out_msg = std::move(*msg_ptr);
       return true;
     }
 
