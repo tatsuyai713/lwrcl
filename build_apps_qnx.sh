@@ -5,7 +5,7 @@ BACKEND="${1:-}"
 ACTION="${2:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JOBS=$(nproc 2>/dev/null || echo 4)
+JOBS="${BUILD_JOBS:-$(( ($(nproc 2>/dev/null || echo 4) + 1) / 2 ))}"
 
 if [ -z "${QNX_TARGET:-}" ] || [ -z "${QNX_HOST:-}" ]; then
     echo "Please source QNX SDP environment (QNX_HOST/QNX_TARGET)."
