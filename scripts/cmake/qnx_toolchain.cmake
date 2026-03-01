@@ -80,6 +80,9 @@ add_compile_options(
   -Wno-error=format
   # GCC (used by q++) emits a false -Wmaybe-uninitialized in libc++'s unordered_map; don't fail the build.
   -Wno-error=maybe-uninitialized
+  # CycloneDDS installed headers have classes with virtual functions but non-virtual destructors.
+  # Third-party headers should be included with SYSTEM, but as a safety net suppress the error here too.
+  -Wno-error=non-virtual-dtor
 )
 if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
     add_definitions(-DNO_MCAST_SUPPORT)

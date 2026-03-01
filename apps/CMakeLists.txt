@@ -72,8 +72,9 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
     set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix")
     set(DDS_PREFIX "${DDS_PREFIX_DEFAULT}" CACHE PATH "DDS install prefix")
 
-    include_directories(${DDS_PREFIX}/include)
-    include_directories(${DDS_PREFIX}/include/ddscxx)
+    # Use SYSTEM so compiler warnings in CycloneDDS third-party headers are suppressed.
+    include_directories(SYSTEM ${DDS_PREFIX}/include)
+    include_directories(SYSTEM ${DDS_PREFIX}/include/ddscxx)
     # iceoryx headers (required when CycloneDDS is built with ENABLE_SHM=ON)
     set(ICEORYX_PREFIX "${ICEORYX_PREFIX}" CACHE PATH "iceoryx install prefix")
     if(NOT ICEORYX_PREFIX)
@@ -242,9 +243,10 @@ elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
 
     # Adaptive AUTOSAR headers
     include_directories(${AUTOSAR_AP_PREFIX}/include)
-    # CycloneDDS headers (transitive dependency)
-    include_directories(${DDS_PREFIX}/include)
-    include_directories(${DDS_PREFIX}/include/ddscxx)
+    # CycloneDDS headers (transitive dependency).
+    # Use SYSTEM so compiler warnings in CycloneDDS third-party headers are suppressed.
+    include_directories(SYSTEM ${DDS_PREFIX}/include)
+    include_directories(SYSTEM ${DDS_PREFIX}/include/ddscxx)
     # vsomeip headers (required when generated proxy/skeleton support is enabled)
     if(EXISTS "${VSOMEIP_PREFIX}/include")
         # Keep vsomeip include after CycloneDDS includes to avoid dds/* header shadowing.
