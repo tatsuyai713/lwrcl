@@ -596,6 +596,10 @@ namespace lwrcl
   Node::Node(int domain_id)
       : closed_(false),
         app_(nullptr),
+        callback_mutex_(std::make_shared<std::mutex>()),
+        node_cv_(std::make_shared<std::condition_variable>()),
+        node_cv_mutex_(std::make_shared<std::mutex>()),
+        node_data_pending_(std::make_shared<std::atomic<bool>>(false)),
         clock_(std::make_unique<Clock>()),
         name_("lwrcl_default_node"),
         namespace_(""),
@@ -604,10 +608,6 @@ namespace lwrcl
         app_owned_(true),
         registered_(false),
         parameters_()
-      , callback_mutex_(std::make_shared<std::mutex>())
-      , node_cv_(std::make_shared<std::condition_variable>())
-      , node_cv_mutex_(std::make_shared<std::mutex>())
-      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
   {
     (void)domain_id; // vsomeip doesn't use domain IDs
     init_vsomeip_app(name_);
@@ -616,6 +616,10 @@ namespace lwrcl
   Node::Node(int domain_id, const std::string &name)
       : closed_(false),
         app_(nullptr),
+        callback_mutex_(std::make_shared<std::mutex>()),
+        node_cv_(std::make_shared<std::condition_variable>()),
+        node_cv_mutex_(std::make_shared<std::mutex>()),
+        node_data_pending_(std::make_shared<std::atomic<bool>>(false)),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(""),
@@ -624,10 +628,6 @@ namespace lwrcl
         app_owned_(true),
         registered_(false),
         parameters_()
-      , callback_mutex_(std::make_shared<std::mutex>())
-      , node_cv_(std::make_shared<std::condition_variable>())
-      , node_cv_mutex_(std::make_shared<std::mutex>())
-      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
   {
     (void)domain_id;
     init_vsomeip_app(name_);
@@ -636,6 +636,10 @@ namespace lwrcl
   Node::Node(int domain_id, const std::string &name, const std::string &ns)
       : closed_(false),
         app_(nullptr),
+        callback_mutex_(std::make_shared<std::mutex>()),
+        node_cv_(std::make_shared<std::condition_variable>()),
+        node_cv_mutex_(std::make_shared<std::mutex>()),
+        node_data_pending_(std::make_shared<std::atomic<bool>>(false)),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -644,10 +648,6 @@ namespace lwrcl
         app_owned_(true),
         registered_(false),
         parameters_()
-      , callback_mutex_(std::make_shared<std::mutex>())
-      , node_cv_(std::make_shared<std::condition_variable>())
-      , node_cv_mutex_(std::make_shared<std::mutex>())
-      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
   {
     (void)domain_id;
     init_vsomeip_app(name_);
@@ -656,6 +656,10 @@ namespace lwrcl
   Node::Node(int domain_id, const std::string &name, const std::string &ns, const NodeOptions &options)
       : closed_(false),
         app_(nullptr),
+        callback_mutex_(std::make_shared<std::mutex>()),
+        node_cv_(std::make_shared<std::condition_variable>()),
+        node_cv_mutex_(std::make_shared<std::mutex>()),
+        node_data_pending_(std::make_shared<std::atomic<bool>>(false)),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -664,10 +668,6 @@ namespace lwrcl
         app_owned_(true),
         registered_(false),
         parameters_()
-      , callback_mutex_(std::make_shared<std::mutex>())
-      , node_cv_(std::make_shared<std::condition_variable>())
-      , node_cv_mutex_(std::make_shared<std::mutex>())
-      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
   {
     (void)domain_id;
     init_vsomeip_app(name_);
@@ -676,6 +676,10 @@ namespace lwrcl
   Node::Node(const std::string &name)
       : closed_(false),
         app_(nullptr),
+        callback_mutex_(std::make_shared<std::mutex>()),
+        node_cv_(std::make_shared<std::condition_variable>()),
+        node_cv_mutex_(std::make_shared<std::mutex>()),
+        node_data_pending_(std::make_shared<std::atomic<bool>>(false)),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(""),
@@ -684,10 +688,6 @@ namespace lwrcl
         app_owned_(true),
         registered_(false),
         parameters_()
-      , callback_mutex_(std::make_shared<std::mutex>())
-      , node_cv_(std::make_shared<std::condition_variable>())
-      , node_cv_mutex_(std::make_shared<std::mutex>())
-      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
   {
     init_vsomeip_app(name_);
   }
@@ -695,6 +695,10 @@ namespace lwrcl
   Node::Node(const std::string &name, const std::string &ns)
       : closed_(false),
         app_(nullptr),
+        callback_mutex_(std::make_shared<std::mutex>()),
+        node_cv_(std::make_shared<std::condition_variable>()),
+        node_cv_mutex_(std::make_shared<std::mutex>()),
+        node_data_pending_(std::make_shared<std::atomic<bool>>(false)),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -703,10 +707,6 @@ namespace lwrcl
         app_owned_(true),
         registered_(false),
         parameters_()
-      , callback_mutex_(std::make_shared<std::mutex>())
-      , node_cv_(std::make_shared<std::condition_variable>())
-      , node_cv_mutex_(std::make_shared<std::mutex>())
-      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
   {
     init_vsomeip_app(name_);
   }
@@ -714,6 +714,10 @@ namespace lwrcl
   Node::Node(const std::string &name, const std::string &ns, const NodeOptions &options)
       : closed_(false),
         app_(nullptr),
+        callback_mutex_(std::make_shared<std::mutex>()),
+        node_cv_(std::make_shared<std::condition_variable>()),
+        node_cv_mutex_(std::make_shared<std::mutex>()),
+        node_data_pending_(std::make_shared<std::atomic<bool>>(false)),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -722,10 +726,6 @@ namespace lwrcl
         app_owned_(true),
         registered_(false),
         parameters_()
-      , callback_mutex_(std::make_shared<std::mutex>())
-      , node_cv_(std::make_shared<std::condition_variable>())
-      , node_cv_mutex_(std::make_shared<std::mutex>())
-      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
   {
     init_vsomeip_app(name_);
   }
@@ -733,6 +733,10 @@ namespace lwrcl
   Node::Node(std::shared_ptr<vsomeip::application> app)
       : closed_(false),
         app_(app),
+        callback_mutex_(std::make_shared<std::mutex>()),
+        node_cv_(std::make_shared<std::condition_variable>()),
+        node_cv_mutex_(std::make_shared<std::mutex>()),
+        node_data_pending_(std::make_shared<std::atomic<bool>>(false)),
         clock_(std::make_unique<Clock>()),
         name_("lwrcl_default_node"),
         namespace_(""),
@@ -741,10 +745,6 @@ namespace lwrcl
         app_owned_(false),
         registered_(true), // Assume external app is already started
         parameters_()
-      , callback_mutex_(std::make_shared<std::mutex>())
-      , node_cv_(std::make_shared<std::condition_variable>())
-      , node_cv_mutex_(std::make_shared<std::mutex>())
-      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
   {
     if (!app_)
       throw std::runtime_error("vsomeip application pointer is null");
@@ -753,6 +753,10 @@ namespace lwrcl
   Node::Node(std::shared_ptr<vsomeip::application> app, const std::string &name)
       : closed_(false),
         app_(app),
+        callback_mutex_(std::make_shared<std::mutex>()),
+        node_cv_(std::make_shared<std::condition_variable>()),
+        node_cv_mutex_(std::make_shared<std::mutex>()),
+        node_data_pending_(std::make_shared<std::atomic<bool>>(false)),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(""),
@@ -761,10 +765,6 @@ namespace lwrcl
         app_owned_(false),
         registered_(true),
         parameters_()
-      , callback_mutex_(std::make_shared<std::mutex>())
-      , node_cv_(std::make_shared<std::condition_variable>())
-      , node_cv_mutex_(std::make_shared<std::mutex>())
-      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
   {
     if (!app_)
       throw std::runtime_error("vsomeip application pointer is null");
@@ -773,6 +773,10 @@ namespace lwrcl
   Node::Node(std::shared_ptr<vsomeip::application> app, const std::string &name, const std::string &ns)
       : closed_(false),
         app_(app),
+        callback_mutex_(std::make_shared<std::mutex>()),
+        node_cv_(std::make_shared<std::condition_variable>()),
+        node_cv_mutex_(std::make_shared<std::mutex>()),
+        node_data_pending_(std::make_shared<std::atomic<bool>>(false)),
         clock_(std::make_unique<Clock>()),
         name_(name),
         namespace_(ns),
@@ -781,10 +785,6 @@ namespace lwrcl
         app_owned_(false),
         registered_(true),
         parameters_()
-      , callback_mutex_(std::make_shared<std::mutex>())
-      , node_cv_(std::make_shared<std::condition_variable>())
-      , node_cv_mutex_(std::make_shared<std::mutex>())
-      , node_data_pending_(std::make_shared<std::atomic<bool>>(false))
   {
     if (!app_)
       throw std::runtime_error("vsomeip application pointer is null");

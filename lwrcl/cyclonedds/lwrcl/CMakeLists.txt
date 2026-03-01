@@ -6,7 +6,7 @@ project(lwrcl)
 add_library(${PROJECT_NAME} SHARED src/${PROJECT_NAME}.cpp)
 target_include_directories(${PROJECT_NAME} BEFORE PUBLIC include)
 
-target_link_libraries(${PROJECT_NAME} ddsc ddscxx yaml-cpp)
+target_link_libraries(${PROJECT_NAME} ddsc ddscxx yaml-cpp ${CYCLONEDDS_SHM_LIBRARIES})
 
 # Install targets
 install(TARGETS ${PROJECT_NAME}

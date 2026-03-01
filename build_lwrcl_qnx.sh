@@ -8,7 +8,12 @@ BACKEND="${1:-}"
 ACTION="${2:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JOBS=$(nproc 2>/dev/null || echo 4)
+_nproc="$(nproc 2>/dev/null || echo 4)"
+_mem_kb="$(grep -i MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0)"
+_mem_jobs=$(( _mem_kb / 1572864 ))   # ~1.5 GB per C++ compilation job
+[[ "${_mem_jobs}" -lt 1 ]] && _mem_jobs=1
+JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
+[[ "${JOBS}" -lt 1 ]] && JOBS=1
 
 if [ -z "${QNX_TARGET:-}" ] || [ -z "${QNX_HOST:-}" ]; then
     echo "Please source QNX SDP environment (QNX_HOST/QNX_TARGET)."
@@ -31,8 +36,12 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     AUTOSAR_AP_PREFIX="/opt/qnx/autosar_ap/${QNX_ARCH}"
     LWRCL_PREFIX="/opt/qnx/autosar-ap-libs"
     TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
+elif [ "$BACKEND" = "vsomeip" ]; then
+    VSOMEIP_PREFIX="/opt/qnx/vsomeip"
+    LWRCL_PREFIX="/opt/qnx/vsomeip-libs"
+    TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
 else
-    echo "Usage: $0 <fastdds|cyclonedds|adaptive-autosar> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|adaptive-autosar|vsomeip> [install|clean]"
     exit 1
 fi
 
@@ -46,7 +55,12 @@ fi
 
 sudo mkdir -p "$LWRCL_PREFIX"
 
-export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+if [ -n "${DDS_PREFIX:-}" ]; then
+    export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
+if [ -n "${VSOMEIP_PREFIX:-}" ]; then
+    export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
 if [ -d "${ICEORYX_PREFIX}/lib" ]; then
     export LD_LIBRARY_PATH="${ICEORYX_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 fi
@@ -87,6 +101,10 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
         -DDDS_PREFIX="${DDS_PREFIX}"
         -DICEORYX_PREFIX="${ICEORYX_PREFIX}"
         -DCMAKE_PREFIX_PATH="${AUTOSAR_AP_PREFIX}/lib/cmake/AdaptiveAutosarAP;${DDS_PREFIX}/lib/cmake;${ICEORYX_PREFIX}/lib/cmake"
+    )
+elif [ "$BACKEND" = "vsomeip" ]; then
+    CMAKE_ARGS+=(
+        -DVSOMEIP_PREFIX="${VSOMEIP_PREFIX}"
     )
 fi
 

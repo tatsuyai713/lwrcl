@@ -128,6 +128,16 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
 
     set(DDS_LIBRARIES ddsc ddscxx ${CYCLONEDDS_SHM_LIBRARIES} CACHE INTERNAL "DDS link libraries")
 
+    # The QNX cross-linker does not search -L paths for transitive (NEEDED)
+    # shared-library dependencies.  Tell it explicitly where to find iceoryx
+    # so that libddsc.so / libddscxx.so (built with ENABLE_SHM=ON) resolve.
+    if(CYCLONEDDS_SHM_LIBRARIES AND EXISTS "${ICEORYX_PREFIX}/lib")
+        set(CMAKE_EXE_LINKER_FLAGS
+            "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath-link,${ICEORYX_PREFIX}/lib")
+        set(CMAKE_SHARED_LINKER_FLAGS
+            "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath-link,${ICEORYX_PREFIX}/lib")
+    endif()
+
     add_subdirectory(cyclonedds/tf2)
     add_subdirectory(cyclonedds/tf2_ros)
     add_subdirectory(cyclonedds/lwrcl)
@@ -157,6 +167,15 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
     link_directories(${VSOMEIP_PREFIX}/lib)
 
     set(DDS_LIBRARIES vsomeip3 lwrcl_cdr CACHE INTERNAL "Transport + CDR link libraries")
+
+    # libvsomeip3.so was built without -lsocket in its NEEDED entries on QNX.
+    # Add it explicitly so executables and shared libs can resolve socket symbols.
+    if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
+        set(CMAKE_EXE_LINKER_FLAGS
+            "${CMAKE_EXE_LINKER_FLAGS} -lsocket")
+        set(CMAKE_SHARED_LINKER_FLAGS
+            "${CMAKE_SHARED_LINKER_FLAGS} -lsocket")
+    endif()
 
     add_subdirectory(vsomeip/tf2)
     add_subdirectory(vsomeip/tf2_ros)

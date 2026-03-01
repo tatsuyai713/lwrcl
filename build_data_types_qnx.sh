@@ -6,6 +6,7 @@ sudo echo "OK"
 
 BACKEND="${1:-}"
 ACTION="${2:-}"
+ORIGINAL_BACKEND="${BACKEND}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JOBS=$(nproc 2>/dev/null || echo 4)
@@ -136,12 +137,22 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     AUTOSAR_AP_PREFIX="/opt/qnx/autosar_ap/${QNX_ARCH}"
     LWRCL_PREFIX="/opt/qnx/autosar-ap-libs"
     TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
+elif [ "$BACKEND" = "vsomeip" ]; then
+    # vsomeip: data types are compiled against the standalone CDR library.
+    # CycloneDDS is needed ONLY for the host idlc code generator tool.
+    # The stub CMake configs at VSOMEIP_PREFIX provide CycloneDDS::ddsc
+    # and CycloneDDS-CXX::ddscxx targets pointing to liblwrcl_cdr.a.
+    VSOMEIP_PREFIX="/opt/qnx/vsomeip"
+    LWRCL_PREFIX="/opt/qnx/vsomeip-libs"
+    TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
+    # Override backend to cyclonedds for data type generation pipeline
+    BACKEND="cyclonedds"
 else
-    echo "Usage: $0 <fastdds|cyclonedds|adaptive-autosar> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|adaptive-autosar|vsomeip> [install|clean]"
     exit 1
 fi
 
-BUILD_DIR="${SCRIPT_DIR}/data_types/build_qnx-${BACKEND}"
+BUILD_DIR="${SCRIPT_DIR}/data_types/build_qnx-${ORIGINAL_BACKEND}"
 
 if [ "$ACTION" = "clean" ]; then
     rm -rf "$BUILD_DIR"
@@ -151,7 +162,12 @@ fi
 
 sudo mkdir -p "$LWRCL_PREFIX"
 
-export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+if [ -n "${DDS_PREFIX:-}" ]; then
+    export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
+if [ -n "${VSOMEIP_PREFIX:-}" ]; then
+    export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
 if [ -d "${ICEORYX_PREFIX}/lib" ]; then
     export LD_LIBRARY_PATH="${ICEORYX_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 fi
@@ -161,14 +177,14 @@ fi
 if [ -d "${HOST_ICEORYX_PREFIX}/lib" ]; then
     export LD_LIBRARY_PATH="${HOST_ICEORYX_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 fi
-if [ "$BACKEND" = "adaptive-autosar" ] && [ -d "${AUTOSAR_AP_PREFIX}/lib" ]; then
+if [ "$ORIGINAL_BACKEND" = "adaptive-autosar" ] && [ -d "${AUTOSAR_AP_PREFIX}/lib" ]; then
     export LD_LIBRARY_PATH="${AUTOSAR_AP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 fi
-if [ "$BACKEND" = "adaptive-autosar" ] && [ -d "${AUTOSAR_AP_PREFIX}/bin" ]; then
+if [ "$ORIGINAL_BACKEND" = "adaptive-autosar" ] && [ -d "${AUTOSAR_AP_PREFIX}/bin" ]; then
     export PATH="${AUTOSAR_AP_PREFIX}/bin:${PATH}"
 fi
 
-if [ "$BACKEND" = "adaptive-autosar" ]; then
+if [ "$ORIGINAL_BACKEND" = "adaptive-autosar" ]; then
     generate_adaptive_autosar_artifacts_qnx
 fi
 
@@ -209,6 +225,23 @@ if [ "$BACKEND" = "fastdds" ]; then
         -DCMAKE_SYSTEM_PREFIX_PATH="${QNX_TARGET}/aarch64le/usr/"
         -DCMAKE_PREFIX_PATH="${QNX_TARGET}/aarch64le/usr/"
     )
+elif [ "$BACKEND" = "cyclonedds" ] && [ "$ORIGINAL_BACKEND" = "vsomeip" ]; then
+    # vsomeip: use CDR stub configs for CycloneDDS targets,
+    # but still need host idlc from CycloneDDS for code generation
+    IDLC_BIN_DIR=""
+    if [ -x "${IDLC_PREFIX}/bin/idlc" ]; then
+        IDLC_BIN_DIR="${IDLC_PREFIX}/bin"
+    fi
+    if [ -n "${IDLC_BIN_DIR}" ]; then
+        export PATH="${IDLC_BIN_DIR}:${PATH}"
+    else
+        echo "Warning: idlc not found under ${IDLC_PREFIX}/bin"
+    fi
+    CMAKE_ARGS+=(
+        -DCMAKE_PREFIX_PATH="${VSOMEIP_PREFIX}/lib/cmake"
+        -DCycloneDDS_DIR="${VSOMEIP_PREFIX}/lib/cmake/CycloneDDS"
+        -DCycloneDDS-CXX_DIR="${VSOMEIP_PREFIX}/lib/cmake/CycloneDDS-CXX"
+    )
 elif [ "$BACKEND" = "cyclonedds" ]; then
     IDLC_BIN_DIR=""
     if [ -x "${DDS_PREFIX}/bin/idlc" ]; then
@@ -225,7 +258,7 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
         -DICEORYX_PREFIX="${ICEORYX_PREFIX}"
         -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake;${ICEORYX_PREFIX}/lib/cmake"
     )
-elif [ "$BACKEND" = "adaptive-autosar" ]; then
+elif [ "$ORIGINAL_BACKEND" = "adaptive-autosar" ]; then
     IDLC_BIN_DIR=""
     if [ -x "${DDS_PREFIX}/bin/idlc" ]; then
         IDLC_BIN_DIR="${DDS_PREFIX}/bin"
@@ -250,7 +283,7 @@ cmake --build "$BUILD_DIR" -j "$JOBS"
 
 if [ "$ACTION" = "install" ]; then
     sudo cmake --install "$BUILD_DIR" --prefix "$LWRCL_PREFIX"
-    if [ "$BACKEND" = "adaptive-autosar" ]; then
+    if [ "$ORIGINAL_BACKEND" = "adaptive-autosar" ]; then
         install_adaptive_autosar_artifacts_qnx
     fi
 fi

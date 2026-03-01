@@ -33,8 +33,12 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     LWRCL_PREFIX="/opt/qnx/autosar-ap-libs"
     TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
     CMAKE_DDS_BACKEND="cyclonedds"
+elif [ "$BACKEND" = "vsomeip" ]; then
+    VSOMEIP_PREFIX="/opt/qnx/vsomeip"
+    LWRCL_PREFIX="/opt/qnx/vsomeip-libs"
+    TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
 else
-    echo "Usage: $0 <fastdds|cyclonedds|adaptive-autosar> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|adaptive-autosar|vsomeip> [install|clean]"
     exit 1
 fi
 
@@ -48,7 +52,12 @@ fi
 
 sudo mkdir -p "$LWRCL_PREFIX"
 
-export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+if [ -n "${DDS_PREFIX:-}" ]; then
+    export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
+if [ -n "${VSOMEIP_PREFIX:-}" ]; then
+    export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
 if [ -d "${ICEORYX_PREFIX}/lib" ]; then
     export LD_LIBRARY_PATH="${ICEORYX_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 fi
@@ -81,6 +90,10 @@ elif [ "$BACKEND" = "cyclonedds" ] || [ "$BACKEND" = "adaptive-autosar" ]; then
     export PATH="${DDS_PREFIX}/bin:${PATH}"
     CMAKE_ARGS+=(
         -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake;${ICEORYX_PREFIX}/lib/cmake"
+    )
+elif [ "$BACKEND" = "vsomeip" ]; then
+    CMAKE_ARGS+=(
+        -DVSOMEIP_PREFIX="${VSOMEIP_PREFIX}"
     )
 fi
 

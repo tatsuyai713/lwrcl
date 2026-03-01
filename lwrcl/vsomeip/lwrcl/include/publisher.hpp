@@ -52,6 +52,7 @@ namespace lwrcl
           eventgroup_id_(someip_id::default_eventgroup_id()),
           subscriber_count_(0)
     {
+      (void)qos; // QoS is not used in vsomeip transport layer
       try
       {
         // Offer the service

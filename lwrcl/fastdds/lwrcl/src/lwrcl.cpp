@@ -636,7 +636,8 @@ namespace lwrcl
   }
 
   Node::Node(int domain_id)
-      : factory_(nullptr),
+      : closed_(false),
+        factory_(nullptr),
         participant_(nullptr),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
@@ -645,8 +646,6 @@ namespace lwrcl
         node_options_(),
         stop_flag_(false),
         participant_owned_(true),
-        closed_(false),
-
         parameters_()
   {
     dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
@@ -667,7 +666,8 @@ namespace lwrcl
   }
 
   Node::Node(int domain_id, const std::string &name)
-      : factory_(nullptr),
+      : closed_(false),
+        factory_(nullptr),
         participant_(nullptr),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
@@ -676,7 +676,6 @@ namespace lwrcl
         node_options_(),
         stop_flag_(false),
         participant_owned_(true),
-        closed_(false),
         parameters_()
   {
     dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
@@ -697,7 +696,8 @@ namespace lwrcl
   }
 
   Node::Node(int domain_id, const std::string &name, const std::string &ns)
-      : factory_(nullptr),
+      : closed_(false),
+        factory_(nullptr),
         participant_(nullptr),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
@@ -706,7 +706,6 @@ namespace lwrcl
         node_options_(),
         stop_flag_(false),
         participant_owned_(true),
-        closed_(false),
         parameters_()
   {
     dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
@@ -727,7 +726,8 @@ namespace lwrcl
   }
 
   Node::Node(int domain_id, const std::string &name, const std::string &ns, const NodeOptions &options)
-      : factory_(nullptr),
+      : closed_(false),
+        factory_(nullptr),
         participant_(nullptr),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
@@ -736,7 +736,6 @@ namespace lwrcl
         node_options_(options),
         stop_flag_(false),
         participant_owned_(true),
-        closed_(false),
         parameters_()
   {
     dds::DomainParticipantQos participant_qos = dds::PARTICIPANT_QOS_DEFAULT();
@@ -757,7 +756,8 @@ namespace lwrcl
   }
 
   Node::Node(const std::string &name)
-      : factory_(nullptr),
+      : closed_(false),
+        factory_(nullptr),
         participant_(nullptr),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
@@ -766,7 +766,6 @@ namespace lwrcl
         node_options_(),
         stop_flag_(false),
         participant_owned_(true),
-        closed_(false),
         parameters_()
   {
     int domain_id = 0; // Default domain ID
@@ -788,7 +787,8 @@ namespace lwrcl
   }
 
   Node::Node(const std::string &name, const std::string &ns)
-      : factory_(nullptr),
+      : closed_(false),
+        factory_(nullptr),
         participant_(nullptr),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
@@ -797,7 +797,6 @@ namespace lwrcl
         node_options_(),
         stop_flag_(false),
         participant_owned_(true),
-        closed_(false),
         parameters_()
   {
     int domain_id = 0; // Default domain ID
@@ -819,7 +818,8 @@ namespace lwrcl
   }
 
   Node::Node(const std::string &name, const std::string &ns, const NodeOptions &options)
-      : factory_(nullptr),
+      : closed_(false),
+        factory_(nullptr),
         participant_(nullptr),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
@@ -828,7 +828,6 @@ namespace lwrcl
         node_options_(options),
         stop_flag_(false),
         participant_owned_(true),
-        closed_(false),
         parameters_()
   {
     int domain_id = 0; // Default domain ID
@@ -850,7 +849,8 @@ namespace lwrcl
   }
 
   Node::Node(std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant)
-      : factory_(nullptr),
+      : closed_(false),
+        factory_(nullptr),
         participant_(participant),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
@@ -859,7 +859,6 @@ namespace lwrcl
         node_options_(),
         stop_flag_(false),
         participant_owned_(false),
-        closed_(false),
         parameters_()
   {
     if (!participant_)
@@ -871,7 +870,8 @@ namespace lwrcl
 
   Node::Node(
       std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant, const std::string &name)
-      : factory_(nullptr),
+      : closed_(false),
+        factory_(nullptr),
         participant_(participant),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
@@ -880,7 +880,6 @@ namespace lwrcl
         node_options_(),
         stop_flag_(false),
         participant_owned_(false),
-        closed_(false),
         parameters_()
   {
     if (!participant_)
@@ -893,7 +892,8 @@ namespace lwrcl
   Node::Node(
       std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant, 
       const std::string &name, const std::string &ns)
-      : factory_(nullptr),
+      : closed_(false),
+        factory_(nullptr),
         participant_(participant),
         callback_mutex_(std::make_shared<std::mutex>()),
         clock_(std::make_unique<Clock>()),
@@ -902,7 +902,6 @@ namespace lwrcl
         node_options_(),
         stop_flag_(false),
         participant_owned_(false),
-        closed_(false),
         parameters_()
   {
     if (!participant_)

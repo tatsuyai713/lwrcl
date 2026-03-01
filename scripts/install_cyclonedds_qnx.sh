@@ -1,21 +1,45 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# QNX CycloneDDS cross-build script (C library + C++ binding + host idlc).
+#
+# The Threads patch comments out find_package(Threads) and
+# target_link_libraries(ddsrt INTERFACE Threads::Threads) which are
+# problematic under QNX cross-compilation.
+#
+# When SHM is AUTO (default), iceoryx is auto-installed if not found.
+#
+# Usage:
+#   ./scripts/install_cyclonedds_qnx.sh install --arch aarch64le
+#   ./scripts/install_cyclonedds_qnx.sh install --arch aarch64le --enable-shm
+#   ./scripts/install_cyclonedds_qnx.sh clean
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+DEFAULT_TOOLCHAIN_FILE="${SCRIPT_DIR}/cmake/qnx_toolchain.cmake"
+
+ACTION="build"
+if [[ $# -gt 0 ]] && [[ "$1" != --* ]]; then
+  ACTION="$1"
+  shift
+fi
+
 CYCLONEDDS_TAG="0.10.5"
 CYCLONEDDS_CXX_TAG="0.10.5"
-INSTALL_PREFIX="/opt/qnx/cyclonedds"
-ICEORYX_PREFIX="/opt/qnx/iceoryx"
 ARCH="aarch64le"
-BUILD_DIR="${HOME}/build-cyclonedds-qnx"
-TOOLCHAIN_FILE=""
-ENABLE_SHM="AUTO" # AUTO | ON | OFF
-SKIP_ICEORYX="OFF" # OFF: auto-install iceoryx when SHM is needed; ON: skip
+OUT_ROOT="/opt/qnx"
+QNX_PATH="qnx800"
+QNX_ENV_FILE=""
+TOOLCHAIN_FILE="${DEFAULT_TOOLCHAIN_FILE}"
+ENABLE_SHM="AUTO"   # AUTO | ON | OFF
+SKIP_ICEORYX="OFF"
 BUILD_HOST_IDLC="ON"
 PATCH_THREADS_FOR_QNX="ON"
 SKIP_SYSTEM_DEPS="OFF"
 FORCE_REINSTALL="OFF"
-QNX_ENV_FILE=""
-QNX_PATH="qnx800"
+
+INSTALL_PREFIX="${OUT_ROOT}/cyclonedds"
+ICEORYX_PREFIX="${OUT_ROOT}/iceoryx"
+BUILD_DIR="${HOME}/build-cyclonedds-qnx"
 
 _nproc="$(nproc 2>/dev/null || echo 4)"
 _mem_kb="$(grep -i MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0)"
@@ -24,24 +48,18 @@ _mem_jobs=$(( _mem_kb / 1572864 ))
 JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
 [[ "${JOBS}" -lt 1 ]] && JOBS=1
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_TOOLCHAIN_FILE="${SCRIPT_DIR}/cmake/qnx_toolchain.cmake"
-
-log_info() {
-  echo "[INFO] $*"
-}
-
-log_warn() {
-  echo "[WARN] $*" >&2
-}
-
-log_error() {
-  echo "[ERROR] $*" >&2
-}
+log_info()  { echo "[INFO] $*"; }
+log_warn()  { echo "[WARN] $*" >&2; }
+log_error() { echo "[ERROR] $*" >&2; }
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [OPTIONS]
+Usage: $(basename "$0") [ACTION] [OPTIONS]
+
+Actions:
+  build    Build but do not install (default)
+  install  Build and install
+  clean    Remove build directory
 
 Options:
   --prefix <path>              Install prefix (default: ${INSTALL_PREFIX})
@@ -56,7 +74,7 @@ Options:
   --jobs <N>                   Parallel jobs (default: auto)
   --enable-shm                 Force CycloneDDS SHM ON (requires QNX iceoryx)
   --disable-shm                Force CycloneDDS SHM OFF
-  --skip-iceoryx               Skip auto-installation of iceoryx (SHM will be OFF if iceoryx is absent)
+  --skip-iceoryx               Skip auto-installation of iceoryx
   --without-host-idlc          Do not build/install host idlc tool
   --without-qnx-threads-patch  Disable QNX Threads patch in ddsrt CMake
   --skip-system-deps           Skip apt dependency installation
@@ -146,8 +164,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${TOOLCHAIN_FILE}" ]]; then
-  TOOLCHAIN_FILE="${DEFAULT_TOOLCHAIN_FILE}"
+if [[ "${ACTION}" == "clean" ]]; then
+  rm -rf "${BUILD_DIR}"
+  log_info "Cleaned ${BUILD_DIR}"
+  exit 0
 fi
 
 if [[ "${FORCE_REINSTALL}" != "ON" ]] \
@@ -158,22 +178,9 @@ if [[ "${FORCE_REINSTALL}" != "ON" ]] \
   exit 0
 fi
 
-SUDO=""
-if [[ "${EUID}" -ne 0 ]]; then
-  if command -v sudo >/dev/null 2>&1; then
-    SUDO="sudo"
-  else
-    log_error "Please run as root or install sudo."
-    exit 1
-  fi
-fi
-
-if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]] && command -v apt-get >/dev/null 2>&1; then
-  ${SUDO} apt-get update -qq
-  ${SUDO} apt-get install -y --no-install-recommends \
-    libssl-dev bison flex git cmake make gcc g++ pkg-config
-fi
-
+# ---------------------------------------------------------------------------
+# Setup QNX environment
+# ---------------------------------------------------------------------------
 if [[ -z "${QNX_HOST:-}" || -z "${QNX_TARGET:-}" ]]; then
   if [[ -z "${QNX_ENV_FILE}" ]]; then
     QNX_ENV_FILE="${HOME}/${QNX_PATH}/qnxsdp-env.sh"
@@ -183,7 +190,7 @@ if [[ -z "${QNX_HOST:-}" || -z "${QNX_TARGET:-}" ]]; then
     exit 1
   fi
   # shellcheck disable=SC1090
-  source "${QNX_ENV_FILE}"
+  _SAVED_SCRIPT_DIR="${SCRIPT_DIR}"; source "${QNX_ENV_FILE}"; SCRIPT_DIR="${_SAVED_SCRIPT_DIR}"
 fi
 
 if [[ -z "${QNX_HOST:-}" || -z "${QNX_TARGET:-}" ]]; then
@@ -191,8 +198,15 @@ if [[ -z "${QNX_HOST:-}" || -z "${QNX_TARGET:-}" ]]; then
   exit 1
 fi
 
+export PATH="${QNX_HOST}/usr/bin:${PATH}"
+
 if ! command -v qcc >/dev/null 2>&1 || ! command -v q++ >/dev/null 2>&1; then
   log_error "qcc/q++ not found in PATH after sourcing QNX environment."
+  exit 1
+fi
+
+if ! command -v cmake >/dev/null 2>&1; then
+  log_error "cmake not found. Install cmake first."
   exit 1
 fi
 
@@ -201,6 +215,26 @@ if [[ ! -f "${TOOLCHAIN_FILE}" ]]; then
   exit 1
 fi
 
+if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]] && command -v apt-get >/dev/null 2>&1; then
+  SUDO=""
+  if [[ "${EUID}" -ne 0 ]]; then
+    SUDO="sudo"
+  fi
+  log_info "Installing build dependencies (libssl-dev, bison, flex, git, cmake 3.x, make, gcc, g++)..."
+  ${SUDO} apt-get update -q
+  _cmake3=$(apt-cache policy cmake 2>/dev/null | grep -oP '\s+\K3\.[0-9]+\.[0-9]+[^\s]*' | head -1)
+  if [[ -n "${_cmake3}" ]]; then
+    ${SUDO} apt-get install -y --no-install-recommends \
+      libssl-dev bison flex git "cmake=${_cmake3}" "cmake-data=${_cmake3}" make gcc g++ pkg-config
+  else
+    ${SUDO} apt-get install -y --no-install-recommends \
+      libssl-dev bison flex git cmake make gcc g++ pkg-config
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Resolve SHM mode and install iceoryx for QNX if needed
+# ---------------------------------------------------------------------------
 if [[ "${ENABLE_SHM}" == "AUTO" ]]; then
   if [[ -f "${ICEORYX_PREFIX}/lib/cmake/iceoryx_posh/iceoryx_poshConfig.cmake" ]]; then
     log_info "iceoryx found at ${ICEORYX_PREFIX} – enabling SHM."
@@ -210,11 +244,10 @@ if [[ "${ENABLE_SHM}" == "AUTO" ]]; then
     ENABLE_SHM="OFF"
   else
     log_info "iceoryx not found – installing iceoryx for QNX SHM support."
-    ICEORYX_INSTALL_ARGS=("--arch" "${ARCH}" "--prefix" "${ICEORYX_PREFIX}")
-    if [[ -n "${TOOLCHAIN_FILE}" ]]; then
-      ICEORYX_INSTALL_ARGS+=("--toolchain-file" "${TOOLCHAIN_FILE}")
-    fi
-    bash "${SCRIPT_DIR}/install_iceoryx_qnx.sh" install "${ICEORYX_INSTALL_ARGS[@]}"
+    bash "${SCRIPT_DIR}/install_iceoryx_qnx.sh" install \
+      --arch "${ARCH}" \
+      --prefix "${ICEORYX_PREFIX}" \
+      --toolchain-file "${TOOLCHAIN_FILE}"
     ENABLE_SHM="ON"
   fi
 fi
@@ -225,12 +258,16 @@ if [[ "${ENABLE_SHM}" == "ON" ]] && [[ ! -f "${ICEORYX_PREFIX}/lib/cmake/iceoryx
     exit 1
   fi
   log_info "--enable-shm set but iceoryx not found – installing iceoryx for QNX."
-  ICEORYX_INSTALL_ARGS=("--arch" "${ARCH}" "--prefix" "${ICEORYX_PREFIX}")
-  if [[ -n "${TOOLCHAIN_FILE}" ]]; then
-    ICEORYX_INSTALL_ARGS+=("--toolchain-file" "${TOOLCHAIN_FILE}")
-  fi
-  bash "${SCRIPT_DIR}/install_iceoryx_qnx.sh" install "${ICEORYX_INSTALL_ARGS[@]}"
+  bash "${SCRIPT_DIR}/install_iceoryx_qnx.sh" install \
+    --arch "${ARCH}" \
+    --prefix "${ICEORYX_PREFIX}" \
+    --toolchain-file "${TOOLCHAIN_FILE}"
 fi
+
+mkdir -p "${INSTALL_PREFIX}"
+chmod 777 "${INSTALL_PREFIX}"
+rm -rf "${BUILD_DIR}"
+mkdir -p "${BUILD_DIR}"
 
 SOURCE_DIR="${BUILD_DIR}/cyclonedds"
 BUILD_QNX_DIR="${BUILD_DIR}/cyclonedds-build-qnx"
@@ -239,25 +276,26 @@ BUILD_CXX_DIR="${BUILD_DIR}/cyclonedds-cxx-build-qnx"
 BUILD_HOST_IDLC_DIR="${BUILD_DIR}/cyclonedds-host-idlc"
 HOST_TOOLS_PREFIX="${INSTALL_PREFIX}/host-tools"
 
-${SUDO} mkdir -p "${INSTALL_PREFIX}"
-${SUDO} chmod 777 -R "${INSTALL_PREFIX}"
-rm -rf "${BUILD_DIR}"
-mkdir -p "${BUILD_DIR}"
-
 log_info "Build CycloneDDS for QNX"
 log_info "  tags: C=${CYCLONEDDS_TAG} C++=${CYCLONEDDS_CXX_TAG} arch=${ARCH}"
 log_info "  prefix=${INSTALL_PREFIX} shm=${ENABLE_SHM}"
 
+# --- CycloneDDS C library ---
+log_info "Cloning CycloneDDS C ${CYCLONEDDS_TAG}..."
 git clone --depth 1 --branch "${CYCLONEDDS_TAG}" \
   https://github.com/eclipse-cyclonedds/cyclonedds.git "${SOURCE_DIR}"
 
+# Patch: comment out Threads that break QNX cross-compilation
 if [[ "${PATCH_THREADS_FOR_QNX}" == "ON" ]]; then
   DDSRT_CMAKE="${SOURCE_DIR}/src/ddsrt/CMakeLists.txt"
   if [[ -f "${DDSRT_CMAKE}" ]]; then
-    sed -i.bak -E \
-      's/^([[:space:]]*)(find_package\(Threads REQUIRED\)|target_link_libraries\(ddsrt INTERFACE Threads::Threads\))/\1# \2/' \
-      "${DDSRT_CMAKE}"
-    rm -f "${DDSRT_CMAKE}.bak"
+    if grep -qE '^\s*find_package\(Threads REQUIRED\)' "${DDSRT_CMAKE}"; then
+      log_info "Patching ddsrt CMakeLists.txt: commenting out Threads"
+      sed -i.bak -E \
+        's/^([[:space:]]*)(find_package\(Threads REQUIRED\)|target_link_libraries\(ddsrt INTERFACE Threads::Threads\))/\1# \2/' \
+        "${DDSRT_CMAKE}"
+      rm -f "${DDSRT_CMAKE}.bak"
+    fi
   fi
 fi
 
@@ -273,6 +311,7 @@ if [[ "${ENABLE_SHM}" == "ON" ]]; then
   )
 fi
 
+log_info "Configuring cmake build (CycloneDDS C)..."
 cmake -S "${SOURCE_DIR}" -B "${BUILD_QNX_DIR}" \
   -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" \
   -DQNX_ARCH="${ARCH}" \
@@ -290,9 +329,14 @@ cmake -S "${SOURCE_DIR}" -B "${BUILD_QNX_DIR}" \
   -DOPENSSL_INCLUDE_DIR="${QNX_TARGET}/usr/include" \
   "${CORE_EXTRA_ARGS[@]}"
 
+log_info "Building CycloneDDS C (jobs=${JOBS})..."
 cmake --build "${BUILD_QNX_DIR}" -j"${JOBS}"
+# C library must always be installed so C++ binding can find it
+log_info "Installing CycloneDDS C to ${INSTALL_PREFIX}..."
 cmake --install "${BUILD_QNX_DIR}"
 
+# --- CycloneDDS C++ binding ---
+log_info "Cloning CycloneDDS C++ ${CYCLONEDDS_CXX_TAG}..."
 git clone --depth 1 --branch "${CYCLONEDDS_CXX_TAG}" \
   https://github.com/eclipse-cyclonedds/cyclonedds-cxx.git "${SOURCE_CXX_DIR}"
 
@@ -301,6 +345,7 @@ if [[ "${ENABLE_SHM}" == "ON" ]]; then
   CXX_PREFIX_PATH="${INSTALL_PREFIX};${ICEORYX_PREFIX};${ICEORYX_PREFIX}/lib/cmake"
 fi
 
+log_info "Configuring cmake build (CycloneDDS C++)..."
 cmake -S "${SOURCE_CXX_DIR}" -B "${BUILD_CXX_DIR}" \
   -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" \
   -DQNX_ARCH="${ARCH}" \
@@ -313,12 +358,19 @@ cmake -S "${SOURCE_CXX_DIR}" -B "${BUILD_CXX_DIR}" \
   -DDDSCXX_NO_STD_OPTIONAL=ON \
   -DENABLE_TOPIC_DISCOVERY=OFF
 
+log_info "Building CycloneDDS C++ (jobs=${JOBS})..."
 cmake --build "${BUILD_CXX_DIR}" -j"${JOBS}"
-cmake --install "${BUILD_CXX_DIR}"
 
+if [[ "${ACTION}" == "install" ]]; then
+  log_info "Installing CycloneDDS C++ to ${INSTALL_PREFIX}..."
+  cmake --install "${BUILD_CXX_DIR}"
+fi
+
+# --- Build host idlc tool (runs on build host, not QNX target) ---
 if [[ "${BUILD_HOST_IDLC}" == "ON" ]]; then
   log_info "Build host idlc and install into ${INSTALL_PREFIX}/bin/idlc"
 
+  log_info "Configuring cmake build (host idlc)..."
   cmake -S "${SOURCE_DIR}" -B "${BUILD_HOST_IDLC_DIR}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="${HOST_TOOLS_PREFIX}" \
@@ -327,14 +379,21 @@ if [[ "${BUILD_HOST_IDLC}" == "ON" ]]; then
     -DBUILD_DDSPERF=OFF \
     -DBUILD_EXAMPLES=OFF \
     -DBUILD_IDLC=ON \
+    -DENABLE_LTO=OFF \
+    -DENABLE_SSL=OFF \
+    -DCMAKE_C_FLAGS="-fno-lto" \
+    -DCMAKE_SHARED_LINKER_FLAGS="-fno-lto" \
+    -DCMAKE_EXE_LINKER_FLAGS="-fno-lto" \
     -DENABLE_SHM=OFF \
     -DENABLE_SOURCE_SPECIFIC_MULTICAST=OFF
 
+  log_info "Building host idlc..."
   cmake --build "${BUILD_HOST_IDLC_DIR}" --target idlc -j"${JOBS}"
+  log_info "Installing host idlc to ${HOST_TOOLS_PREFIX}..."
   cmake --install "${BUILD_HOST_IDLC_DIR}"
 
-  ${SUDO} mkdir -p "${INSTALL_PREFIX}/bin"
-  cat <<'IDLC_WRAPPER' | ${SUDO} tee "${INSTALL_PREFIX}/bin/idlc" >/dev/null
+  mkdir -p "${INSTALL_PREFIX}/bin"
+  cat > "${INSTALL_PREFIX}/bin/idlc" <<'IDLC_WRAPPER'
 #!/usr/bin/env bash
 set -euo pipefail
 THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -342,12 +401,13 @@ HOST_TOOLS_DIR="$(cd "${THIS_DIR}/.." && pwd)/host-tools"
 export LD_LIBRARY_PATH="${HOST_TOOLS_DIR}/lib:${HOST_TOOLS_DIR}/lib64:${LD_LIBRARY_PATH:-}"
 exec "${HOST_TOOLS_DIR}/bin/idlc" "$@"
 IDLC_WRAPPER
-  ${SUDO} chmod +x "${INSTALL_PREFIX}/bin/idlc"
+  chmod +x "${INSTALL_PREFIX}/bin/idlc"
 fi
 
+# --- Generate SHM config XML ---
 if [[ "${ENABLE_SHM}" == "ON" ]]; then
-  ${SUDO} mkdir -p "${INSTALL_PREFIX}/etc"
-  cat <<'CYCLONEDDS_XML' | ${SUDO} tee "${INSTALL_PREFIX}/etc/cyclonedds-lwrcl.xml" >/dev/null
+  mkdir -p "${INSTALL_PREFIX}/etc"
+  cat > "${INSTALL_PREFIX}/etc/cyclonedds-lwrcl.xml" <<'CYCLONEDDS_XML'
 <?xml version="1.0" encoding="UTF-8" ?>
 <CycloneDDS xmlns="https://cdds.io/config">
   <Domain Id="any">
@@ -360,7 +420,8 @@ if [[ "${ENABLE_SHM}" == "ON" ]]; then
 CYCLONEDDS_XML
 fi
 
-log_info "Installed CycloneDDS ${CYCLONEDDS_TAG} (+cxx ${CYCLONEDDS_CXX_TAG}) to ${INSTALL_PREFIX}"
+log_info "CycloneDDS QNX build complete (action=${ACTION})"
+log_info "  install_prefix=${INSTALL_PREFIX}"
 log_info "  SHM=${ENABLE_SHM}  host_idlc=${BUILD_HOST_IDLC}"
 if [[ "${ENABLE_SHM}" == "ON" ]]; then
   log_info "CycloneDDS SHM config: ${INSTALL_PREFIX}/etc/cyclonedds-lwrcl.xml"

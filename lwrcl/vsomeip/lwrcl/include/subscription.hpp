@@ -232,6 +232,7 @@ namespace lwrcl
           event_id_(someip_id::default_event_id()),
           eventgroup_id_(someip_id::default_eventgroup_id())
     {
+      (void)qos; // QoS is not used in vsomeip transport layer
       try
       {
         waitset_.ready(app_);

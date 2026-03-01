@@ -32,8 +32,13 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     LWRCL_PREFIX="/opt/qnx/autosar-ap-libs"
     TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
     AUTOSAR_APP_SOURCE_ROOT="${AUTOSAR_APP_SOURCE_ROOT:-${SCRIPT_DIR}/apps}"
+elif [ "$BACKEND" = "vsomeip" ]; then
+    DDS_PREFIX="/opt/qnx/cyclonedds"
+    VSOMEIP_PREFIX="/opt/qnx/vsomeip"
+    LWRCL_PREFIX="/opt/qnx/vsomeip-libs"
+    TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
 else
-    echo "Usage: $0 <fastdds|cyclonedds|adaptive-autosar> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|adaptive-autosar|vsomeip> [install|clean]"
     exit 1
 fi
 
@@ -48,7 +53,13 @@ fi
 
 mkdir -p "$INSTALL_DIR"
 
-export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+if [ -n "${DDS_PREFIX:-}" ]; then
+    export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
+export LD_LIBRARY_PATH="${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+if [ -n "${VSOMEIP_PREFIX:-}" ]; then
+    export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+fi
 if [ -d "${ICEORYX_PREFIX}/lib" ]; then
     export LD_LIBRARY_PATH="${ICEORYX_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 fi
@@ -60,9 +71,6 @@ if [ -d "${HOST_ICEORYX_PREFIX}/lib" ]; then
 fi
 if [ "$BACKEND" = "adaptive-autosar" ] && [ -d "${AUTOSAR_AP_PREFIX}/lib" ]; then
     export LD_LIBRARY_PATH="${AUTOSAR_AP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
-fi
-if [ "$BACKEND" = "adaptive-autosar" ] && [ -d "${VSOMEIP_PREFIX}/lib" ]; then
-    export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 fi
 
 CMAKE_ARGS=(
@@ -107,6 +115,12 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
     CMAKE_ARGS+=(
         -DICEORYX_PREFIX="${ICEORYX_PREFIX}"
         -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake;${ICEORYX_PREFIX}/lib/cmake"
+    )
+elif [ "$BACKEND" = "vsomeip" ]; then
+    export PATH="${DDS_PREFIX}/bin:${PATH}"
+    CMAKE_ARGS+=(
+        -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
+        -DVSOMEIP_PREFIX="${VSOMEIP_PREFIX}"
     )
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
     IDLC_BIN_DIR=""
