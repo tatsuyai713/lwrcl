@@ -20,7 +20,7 @@ elif [ "$BACKEND" = "vsomeip" ]; then
     VSOMEIP_PREFIX="/opt/vsomeip"
     LWRCL_PREFIX="/opt/vsomeip-libs"
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
-    AUTOSAR_AP_PREFIX="/opt/autosar_ap"
+    AUTOSAR_AP_PREFIX="/opt/autosar-ap"
     DDS_PREFIX="/opt/cyclonedds"
     LWRCL_PREFIX="/opt/autosar-ap-libs"
 else

@@ -18,7 +18,7 @@ elif [ "$BACKEND" = "vsomeip" ]; then
     VSOMEIP_PREFIX="/opt/vsomeip"
     LWRCL_PREFIX="/opt/vsomeip-libs"
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
-    AUTOSAR_AP_PREFIX="/opt/autosar_ap"
+    AUTOSAR_AP_PREFIX="/opt/autosar-ap"
     DDS_PREFIX="/opt/cyclonedds"
     VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
     LWRCL_PREFIX="/opt/autosar-ap-libs"
@@ -97,7 +97,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     mkdir -p "${AUTOSAR_GEN_DIR}"
     if ! command -v "${AUTOSAR_MAPPING_GENERATOR_CMD}" >/dev/null 2>&1; then
         echo "Adaptive AUTOSAR mapping generator command not found: ${AUTOSAR_MAPPING_GENERATOR_CMD}"
-        echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar_ap/bin."
+        echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar-ap/bin."
         exit 1
     fi
     AUTOSAR_MAPPING_GENERATOR_HELP="$("${AUTOSAR_MAPPING_GENERATOR_CMD}" --help 2>&1 || true)"
@@ -139,7 +139,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     fi
     if ! command -v "${AUTOSAR_PROXY_SKELETON_GENERATOR_CMD}" >/dev/null 2>&1; then
         echo "Adaptive AUTOSAR proxy/skeleton generator command not found: ${AUTOSAR_PROXY_SKELETON_GENERATOR_CMD}"
-        echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar_ap/bin."
+        echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar-ap/bin."
         exit 1
     fi
     "${AUTOSAR_PROXY_SKELETON_GENERATOR_CMD}" \

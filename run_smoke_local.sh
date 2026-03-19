@@ -22,7 +22,7 @@ done
 DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
 ICEORYX_PREFIX="${ICEORYX_PREFIX:-/opt/iceoryx}"
 VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
-AUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX:-/opt/autosar_ap}"
+AUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX:-/opt/autosar-ap}"
 LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/autosar-ap-libs}"
 FASTDDS_PREFIX="${FASTDDS_PREFIX:-/opt/fastdds}"
 
@@ -175,7 +175,7 @@ fi
 run_test "Installed artifacts" bash -lc '
   set -euo pipefail
   LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/autosar-ap-libs}"
-  AUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX:-/opt/autosar_ap}"
+  AUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX:-/opt/autosar-ap}"
 
   missing=0
   [ -f "${LWRCL_PREFIX}/lib/liblwrcl.so" ] || { echo "Missing liblwrcl.so"; missing=1; }

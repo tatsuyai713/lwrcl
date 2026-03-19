@@ -35,7 +35,7 @@ generate_adaptive_autosar_artifacts() {
     else
         if ! command -v "${mapping_generator_cmd}" >/dev/null 2>&1; then
             echo "Adaptive AUTOSAR mapping generator command not found: ${mapping_generator_cmd}"
-            echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar_ap/bin."
+            echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar-ap/bin."
             exit 1
         fi
         "${mapping_generator_cmd}" \
@@ -48,7 +48,7 @@ generate_adaptive_autosar_artifacts() {
 
     if ! command -v "${proxy_skeleton_generator_cmd}" >/dev/null 2>&1; then
         echo "Adaptive AUTOSAR proxy/skeleton generator command not found: ${proxy_skeleton_generator_cmd}"
-        echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar_ap/bin."
+        echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar-ap/bin."
         exit 1
     fi
     mkdir -p "${output_proxy_dir}"
@@ -136,7 +136,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     # identical to CycloneDDS-generated types linked against real CycloneDDS.
     DDS_PREFIX="/opt/cyclonedds"
     LWRCL_PREFIX="/opt/autosar-ap-libs"
-    AUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX:-/opt/autosar_ap}"
+    AUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX:-/opt/autosar-ap}"
     # Override backend to cyclonedds for data type generation pipeline
     BACKEND="cyclonedds"
 else

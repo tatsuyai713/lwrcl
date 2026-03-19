@@ -36,7 +36,7 @@ generate_adaptive_autosar_artifacts_qnx() {
     else
         if ! command -v "${mapping_generator_cmd}" >/dev/null 2>&1; then
             echo "Adaptive AUTOSAR mapping generator command not found: ${mapping_generator_cmd}"
-            echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar_ap/bin."
+            echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar-ap/bin."
             exit 1
         fi
                 "${mapping_generator_cmd}" \
@@ -49,7 +49,7 @@ generate_adaptive_autosar_artifacts_qnx() {
 
         if ! command -v "${proxy_skeleton_generator_cmd}" >/dev/null 2>&1; then
             echo "Adaptive AUTOSAR proxy/skeleton generator command not found: ${proxy_skeleton_generator_cmd}"
-            echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar_ap/bin."
+            echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar-ap/bin."
             exit 1
         fi
         mkdir -p "${output_proxy_dir}"
@@ -69,8 +69,8 @@ generate_adaptive_autosar_artifacts_qnx() {
         generator="${AUTOSAR_ARXML_GENERATOR}"
     elif [ -f "${AUTOSAR_AP_PREFIX}/tools/arxml_generator/generate_arxml.py" ]; then
         generator="${AUTOSAR_AP_PREFIX}/tools/arxml_generator/generate_arxml.py"
-    elif [ -f "/opt/autosar_ap/tools/arxml_generator/generate_arxml.py" ]; then
-        generator="/opt/autosar_ap/tools/arxml_generator/generate_arxml.py"
+    elif [ -f "/opt/autosar-ap/tools/arxml_generator/generate_arxml.py" ]; then
+        generator="/opt/autosar-ap/tools/arxml_generator/generate_arxml.py"
     fi
 
     if [ -z "${generator}" ]; then
@@ -134,7 +134,7 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
     TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
     DDS_PREFIX="/opt/qnx/cyclonedds"
-    AUTOSAR_AP_PREFIX="/opt/qnx/autosar_ap/${QNX_ARCH}"
+    AUTOSAR_AP_PREFIX="/opt/qnx/autosar-ap/${QNX_ARCH}"
     LWRCL_PREFIX="/opt/qnx/autosar-ap-libs"
     TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
 elif [ "$BACKEND" = "vsomeip" ]; then

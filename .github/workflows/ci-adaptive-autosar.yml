@@ -15,7 +15,7 @@ env:
   DDS_PREFIX: /opt/cyclonedds
   ICEORYX_PREFIX: /opt/iceoryx
   VSOMEIP_PREFIX: /opt/vsomeip
-  AUTOSAR_AP_PREFIX: /opt/autosar_ap
+  AUTOSAR_AP_PREFIX: /opt/autosar-ap
   LWRCL_PREFIX: /opt/autosar-ap-libs
 
 jobs:
@@ -69,7 +69,7 @@ jobs:
         id: cache-adaptive-autosar
         uses: actions/cache@v4
         with:
-          path: /opt/autosar_ap
+          path: /opt/autosar-ap
           key: adaptive-autosar-runtime-${{ env.ADAPTIVE_AUTOSAR_REF }}-ubuntu2404-v4
 
       - name: Build & install Adaptive AUTOSAR runtime
@@ -112,7 +112,7 @@ jobs:
           test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest.arxml
           test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest.yaml
           test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml
-          if /opt/autosar_ap/bin/autosar-generate-comm-manifest --help 2>&1 | grep -q "iceoryx"; then
+          if /opt/autosar-ap/bin/autosar-generate-comm-manifest --help 2>&1 | grep -q "iceoryx"; then
             test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_iceoryx.yaml
           fi
           test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml

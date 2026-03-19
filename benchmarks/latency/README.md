@@ -66,17 +66,17 @@ LD_LIBRARY_PATH=/opt/fast-dds/lib:/opt/fast-dds-libs/lib \
 
 # lwrcl + Adaptive AUTOSAR (SOME/IP transport)
 ARA_COM_EVENT_BINDING=vsomeip \
-LD_LIBRARY_PATH=/opt/autosar-ap-libs/lib:/opt/autosar_ap/lib:/opt/cyclonedds/lib:/opt/iceoryx/lib:/opt/vsomeip/lib \
+LD_LIBRARY_PATH=/opt/autosar-ap-libs/lib:/opt/autosar-ap/lib:/opt/cyclonedds/lib:/opt/iceoryx/lib:/opt/vsomeip/lib \
   ./benchmarks/latency/bin/lat_lwrcl_autosar
 
 # lwrcl + Adaptive AUTOSAR (DDS transport)
 ARA_COM_EVENT_BINDING=dds \
-LD_LIBRARY_PATH=/opt/autosar-ap-libs/lib:/opt/autosar_ap/lib:/opt/cyclonedds/lib:/opt/iceoryx/lib:/opt/vsomeip/lib \
+LD_LIBRARY_PATH=/opt/autosar-ap-libs/lib:/opt/autosar-ap/lib:/opt/cyclonedds/lib:/opt/iceoryx/lib:/opt/vsomeip/lib \
   ./benchmarks/latency/bin/lat_lwrcl_autosar
 
 # lwrcl + Adaptive AUTOSAR (iceoryx transport — requires RouDi)
 ARA_COM_EVENT_BINDING=iceoryx \
-LD_LIBRARY_PATH=/opt/autosar-ap-libs/lib:/opt/autosar_ap/lib:/opt/cyclonedds/lib:/opt/iceoryx/lib:/opt/vsomeip/lib \
+LD_LIBRARY_PATH=/opt/autosar-ap-libs/lib:/opt/autosar-ap/lib:/opt/cyclonedds/lib:/opt/iceoryx/lib:/opt/vsomeip/lib \
   ./benchmarks/latency/bin/lat_lwrcl_autosar
 
 # ROS 2 + CycloneDDS

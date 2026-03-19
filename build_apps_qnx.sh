@@ -27,7 +27,7 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
     TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
     DDS_PREFIX="/opt/qnx/cyclonedds"
-    AUTOSAR_AP_PREFIX="/opt/qnx/autosar_ap/${QNX_ARCH}"
+    AUTOSAR_AP_PREFIX="/opt/qnx/autosar-ap/${QNX_ARCH}"
     VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/qnx/vsomeip}"
     LWRCL_PREFIX="/opt/qnx/autosar-ap-libs"
     TOOLCHAIN_FILE="${SCRIPT_DIR}/scripts/cmake/qnx_toolchain.cmake"
@@ -155,7 +155,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     mkdir -p "${AUTOSAR_GEN_DIR}"
     if ! command -v "${AUTOSAR_MAPPING_GENERATOR_CMD}" >/dev/null 2>&1; then
         echo "Adaptive AUTOSAR mapping generator command not found: ${AUTOSAR_MAPPING_GENERATOR_CMD}"
-        echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar_ap/bin."
+        echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar-ap/bin."
         exit 1
     fi
     AUTOSAR_MAPPING_GENERATOR_HELP="$("${AUTOSAR_MAPPING_GENERATOR_CMD}" --help 2>&1 || true)"
@@ -197,7 +197,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     fi
     if ! command -v "${AUTOSAR_PROXY_SKELETON_GENERATOR_CMD}" >/dev/null 2>&1; then
         echo "Adaptive AUTOSAR proxy/skeleton generator command not found: ${AUTOSAR_PROXY_SKELETON_GENERATOR_CMD}"
-        echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar_ap/bin."
+        echo "Install codegen tools from Adaptive-AUTOSAR and ensure PATH contains /opt/autosar-ap/bin."
         exit 1
     fi
     "${AUTOSAR_PROXY_SKELETON_GENERATOR_CMD}" \
@@ -210,8 +210,8 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     AUTOSAR_ARXML_GENERATOR_DEFAULT=""
     if [ -f "${AUTOSAR_AP_PREFIX}/tools/arxml_generator/generate_arxml.py" ]; then
         AUTOSAR_ARXML_GENERATOR_DEFAULT="${AUTOSAR_AP_PREFIX}/tools/arxml_generator/generate_arxml.py"
-    elif [ -f "/opt/autosar_ap/tools/arxml_generator/generate_arxml.py" ]; then
-        AUTOSAR_ARXML_GENERATOR_DEFAULT="/opt/autosar_ap/tools/arxml_generator/generate_arxml.py"
+    elif [ -f "/opt/autosar-ap/tools/arxml_generator/generate_arxml.py" ]; then
+        AUTOSAR_ARXML_GENERATOR_DEFAULT="/opt/autosar-ap/tools/arxml_generator/generate_arxml.py"
     fi
     AUTOSAR_ARXML_GENERATOR="${AUTOSAR_ARXML_GENERATOR:-${AUTOSAR_ARXML_GENERATOR_DEFAULT}}"
     if [ -n "${AUTOSAR_ARXML_GENERATOR}" ] && [ -f "${AUTOSAR_ARXML_GENERATOR}" ]; then

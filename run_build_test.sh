@@ -83,7 +83,7 @@ check_dds_installed() {
     elif [ "$backend" = "vsomeip" ]; then
         [ -d "/opt/vsomeip" ] && [ -d "/opt/cyclonedds" ]
     elif [ "$backend" = "adaptive-autosar" ]; then
-        [ -d "/opt/autosar_ap" ] && [ -d "/opt/cyclonedds" ]
+        [ -d "/opt/autosar-ap" ] && [ -d "/opt/cyclonedds" ]
     fi
 }
 

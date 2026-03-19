@@ -10,7 +10,7 @@ mkdir -p "${OUT_DIR}"
 
 ICEORYX_PREFIX="${ICEORYX_PREFIX:-/opt/iceoryx}"
 DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
-AUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX:-/opt/autosar_ap}"
+AUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX:-/opt/autosar-ap}"
 AUTOSAR_AP_LIBS_PREFIX="${AUTOSAR_AP_LIBS_PREFIX:-/opt/autosar-ap-libs}"
 VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
 

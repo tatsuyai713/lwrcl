@@ -295,7 +295,7 @@ source ~/.bashrc
 
 **Adaptive AUTOSAR (ara::com):**
 
-- Install Adaptive AUTOSAR AP runtime to `/opt/autosar_ap` (for example with [`Adaptive-AUTOSAR`](https://github.com/tatsuyai713/Adaptive-AUTOSAR)).
+- Install Adaptive AUTOSAR AP runtime to `/opt/autosar-ap` (for example with [`Adaptive-AUTOSAR`](https://github.com/tatsuyai713/Adaptive-AUTOSAR)).
 - CycloneDDS is still required as the DDS runtime backend used by `ara::com`.
 - Build with `adaptive-autosar` backend (see below).
 
@@ -364,7 +364,7 @@ Required Adaptive-AUTOSAR codegen commands:
 
 - `autosar-generate-comm-manifest`
 - `autosar-generate-proxy-skeleton`
-- Default install location: `/opt/autosar_ap/bin` (added to `PATH` by Adaptive AUTOSAR build scripts)
+- Default install location: `/opt/autosar-ap/bin` (added to `PATH` by Adaptive AUTOSAR build scripts)
 - Script source location in Adaptive-AUTOSAR project: `tools/ara_com_codegen/`
 - If `autosar-generate-comm-manifest --help` does not list `iceoryx` in `--event-binding`, update Adaptive-AUTOSAR codegen tools or override `AUTOSAR_COMM_MANIFEST_GENERATOR`.
 
@@ -396,8 +396,8 @@ Adaptive AUTOSAR runtime transport switch (same app binary, no app code change):
 # (current Adaptive-AUTOSAR reference runtime requires routing manager process)
 unset ARA_COM_BINDING_MANIFEST
 export ARA_COM_EVENT_BINDING=dds
-export VSOMEIP_CONFIGURATION=/opt/autosar_ap/configuration/vsomeip-rpi.json
-/opt/autosar_ap/bin/autosar_vsomeip_routing_manager &
+export VSOMEIP_CONFIGURATION=/opt/autosar-ap/configuration/vsomeip-rpi.json
+/opt/autosar-ap/bin/autosar_vsomeip_routing_manager &
 apps/install-adaptive-autosar/bin/example_class_sub &
 apps/install-adaptive-autosar/bin/example_class_pub
 
@@ -411,8 +411,8 @@ apps/install-adaptive-autosar/bin/example_class_pub
 # SOME/IP transport profile
 unset ARA_COM_BINDING_MANIFEST
 export ARA_COM_EVENT_BINDING=vsomeip
-export VSOMEIP_CONFIGURATION=/opt/autosar_ap/configuration/vsomeip-rpi.json
-/opt/autosar_ap/bin/autosar_vsomeip_routing_manager &
+export VSOMEIP_CONFIGURATION=/opt/autosar-ap/configuration/vsomeip-rpi.json
+/opt/autosar-ap/bin/autosar_vsomeip_routing_manager &
 apps/install-adaptive-autosar/bin/example_class_sub &
 apps/install-adaptive-autosar/bin/example_class_pub
 ```
@@ -448,7 +448,7 @@ Adaptive AUTOSAR Loaned Message API:
 | FastDDS | `/opt/fast-dds` | `/opt/fast-dds-libs` |
 | CycloneDDS | `/opt/cyclonedds` | `/opt/cyclonedds-libs` |
 | vsomeip | `/opt/vsomeip` | `/opt/vsomeip-libs` |
-| Adaptive AUTOSAR | `/opt/autosar_ap` | `/opt/autosar-ap-libs` (includes `yaml-cpp` via `build_libraries.sh adaptive-autosar`) |
+| Adaptive AUTOSAR | `/opt/autosar-ap` | `/opt/autosar-ap-libs` (includes `yaml-cpp` via `build_libraries.sh adaptive-autosar`) |
 
 ---
 
@@ -549,7 +549,7 @@ QNX default installation paths:
 |---------|--------------------|-------|
 | FastDDS | `/opt/qnx/fast-dds` | `/opt/qnx/fast-dds-libs` |
 | CycloneDDS | `/opt/qnx/cyclonedds` (+ iceoryx: `/opt/qnx/iceoryx`) | `/opt/qnx/cyclonedds-libs` |
-| Adaptive AUTOSAR | AUTOSAR AP: `/opt/qnx/autosar_ap/aarch64le`, CycloneDDS: `/opt/qnx/cyclonedds` | `/opt/qnx/autosar-ap-libs` (includes `yaml-cpp` via `build_libraries_qnx.sh adaptive-autosar`) |
+| Adaptive AUTOSAR | AUTOSAR AP: `/opt/qnx/autosar-ap/aarch64le`, CycloneDDS: `/opt/qnx/cyclonedds` | `/opt/qnx/autosar-ap-libs` (includes `yaml-cpp` via `build_libraries_qnx.sh adaptive-autosar`) |
 
 ---
 
