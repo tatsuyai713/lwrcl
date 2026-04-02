@@ -100,7 +100,18 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
         -DAUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX}"
         -DDDS_PREFIX="${DDS_PREFIX}"
         -DICEORYX_PREFIX="${ICEORYX_PREFIX}"
-        -DCMAKE_PREFIX_PATH="${AUTOSAR_AP_PREFIX}/lib/cmake/AdaptiveAutosarAP;${DDS_PREFIX}/lib/cmake;${ICEORYX_PREFIX}/lib/cmake"
+        -DOPENSSL_ROOT_DIR="${QNX_TARGET}/${QNX_ARCH}/usr"
+        -DOPENSSL_INCLUDE_DIR="${QNX_TARGET}/${QNX_ARCH}/usr/include"
+        -DOPENSSL_CRYPTO_LIBRARY="${QNX_TARGET}/${QNX_ARCH}/usr/lib/libcrypto.so"
+        -DOPENSSL_SSL_LIBRARY="${QNX_TARGET}/${QNX_ARCH}/usr/lib/libssl.so"
+        -DCMAKE_SYSROOT="${QNX_TARGET}/${QNX_ARCH}"
+        -DCMAKE_FIND_ROOT_PATH="${QNX_TARGET}/${QNX_ARCH}/usr;${QNX_TARGET}/usr"
+        -DCMAKE_SYSTEM_PREFIX_PATH="${QNX_TARGET}/${QNX_ARCH}/usr/"
+        -DCMAKE_PREFIX_PATH="${AUTOSAR_AP_PREFIX}/lib/cmake/AdaptiveAutosarAP;${DDS_PREFIX}/lib/cmake;${ICEORYX_PREFIX}/lib/cmake;${QNX_TARGET}/${QNX_ARCH}/usr/"
+        -DCMAKE_C_FLAGS="-I${QNX_TARGET}/${QNX_ARCH}/usr/include -I${QNX_TARGET}/usr/include"
+        -DCMAKE_CXX_FLAGS="-I${QNX_TARGET}/${QNX_ARCH}/usr/include -I${QNX_TARGET}/usr/include -isystem ${QNX_TARGET}/${QNX_ARCH}/usr/include/c++/v1"
+        -DCMAKE_EXE_LINKER_FLAGS="-L${QNX_TARGET}/${QNX_ARCH}/usr/lib -Wl,-rpath,${QNX_TARGET}/${QNX_ARCH}/usr/lib"
+        -DCMAKE_SHARED_LINKER_FLAGS="-L${QNX_TARGET}/${QNX_ARCH}/usr/lib -Wl,-rpath,${QNX_TARGET}/${QNX_ARCH}/usr/lib"
     )
 elif [ "$BACKEND" = "vsomeip" ]; then
     CMAKE_ARGS+=(
@@ -108,8 +119,23 @@ elif [ "$BACKEND" = "vsomeip" ]; then
     )
 fi
 
+# Ensure arch-specific sysroot include points to generic sysroot include when missing
+target_inc="$QNX_TARGET/$QNX_ARCH/usr/include"
+generic_inc="$QNX_TARGET/usr/include"
+if [ ! -d "$target_inc" ] && [ -d "$generic_inc" ]; then
+    mkdir -p "$(dirname "$target_inc")"
+    ln -sfn "$generic_inc" "$target_inc"
+    echo "Created symlink: $target_inc -> $generic_inc"
+fi
+
+# Ensure pkg-config will search the target sysroot first so FindOpenSSL and
+# other pkg-config based finds pick target libs instead of host libs.
+export PKG_CONFIG_LIBDIR="${QNX_TARGET}/${QNX_ARCH}/usr/lib/pkgconfig:${QNX_TARGET}/usr/lib/pkgconfig:${PKG_CONFIG_LIBDIR:-}"
+export PKG_CONFIG_SYSROOT_DIR="${QNX_TARGET}/${QNX_ARCH}"
+
 cmake "${CMAKE_ARGS[@]}"
 cmake --build "$BUILD_DIR" -j "$JOBS"
+
 
 if [ "$ACTION" = "install" ]; then
     sudo cmake --install "$BUILD_DIR" --prefix "$LWRCL_PREFIX"
