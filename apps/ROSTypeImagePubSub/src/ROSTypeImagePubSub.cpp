@@ -83,7 +83,7 @@ void ROSTypeImagePubSub::callbackPublish(int test)
 {
   // Update and publish message
   std::shared_ptr<sensor_msgs::msg::Image> publish_msg = std::make_shared<sensor_msgs::msg::Image>();
-  publish_msg->header().stamp().sec() = (test + counter_);
+  publish_msg->header.stamp.sec = (test + counter_);
   counter_++;
 
   publisher_ptr_->publish(publish_msg);
@@ -98,5 +98,5 @@ void ROSTypeImagePubSub::callbackSubscribe(sensor_msgs::msg::Image::SharedPtr me
   }
 
   // Handle the received message
-  std::cout << "Received data: " << message->header().frame_id() << std::endl;
+  std::cout << "Received data: " << message->header.frame_id << std::endl;
 }

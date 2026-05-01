@@ -41,8 +41,8 @@ dds::sub::qos::DataReaderQos qos = subscriber.default_datareader_qos()
             {
                 if (sample.info().valid())
                 {
-                    std_msgs::msg::Header header = sample.data();
-                    std::cout << "Received: " << header.frame_id() << std::endl;
+                    std_msgs::msg::Header header = sample.data;
+                    std::cout << "Received: " << header.frame_id << std::endl;
                 }
             }
         }

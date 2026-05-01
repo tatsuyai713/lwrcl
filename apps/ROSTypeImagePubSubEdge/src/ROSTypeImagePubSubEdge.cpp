@@ -89,19 +89,19 @@ void ROSTypeImagePubSubEdge::callbackSubscribe(sensor_msgs::msg::Image::SharedPt
     return;
   }
 
-  int width = message->width();
-  int height = message->height();
+  int width = message->width;
+  int height = message->height;
 
-  cv::Mat gray_image(height, width, CV_8UC1, message->data().data());
+  cv::Mat gray_image(height, width, CV_8UC1, message->data.data());
 
   cv::Mat edges;
   cv::Canny(gray_image, edges, 50, 150);
 
-  edge_msg_->width(width);
-  edge_msg_->height(height);
-  edge_msg_->encoding("mono8");
-  edge_msg_->step(edges.step);
-  edge_msg_->data(std::vector<uint8_t>(edges.data, edges.data + edges.total() * edges.elemSize()));
+  edge_msg_->width = width;
+  edge_msg_->height = height;
+  edge_msg_->encoding = "mono8";
+  edge_msg_->step = edges.step;
+  edge_msg_->data = std::vector<uint8_t>(edges.data, edges.data + edges.total() * edges.elemSize());
 
   publisher_ptr_->publish(edge_msg_);
 }

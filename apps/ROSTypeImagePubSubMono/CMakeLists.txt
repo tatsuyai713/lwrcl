@@ -18,6 +18,13 @@ project(ROSTypeImagePubSubMono VERSION 1 LANGUAGES CXX)
 
 find_package(OpenCV REQUIRED)
 
+# Auto-convert any ROS 2 .msg files in msg/ into matching .idl files
+include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/RosMsgToIdl.cmake)
+ros_msg_to_idl_convert(
+  PACKAGE ${PROJECT_NAME}
+  DIRS ${CMAKE_CURRENT_SOURCE_DIR}/msg
+)
+
 if(DDS_BACKEND STREQUAL "fastdds")
     file(GLOB_RECURSE Original_IDL_Files
       "${CMAKE_CURRENT_SOURCE_DIR}/*/*.idl"

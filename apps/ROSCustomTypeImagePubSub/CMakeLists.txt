@@ -29,9 +29,16 @@ endif()
 
 
 include(../cmake/IdlcGenerate.cmake)
+include(../cmake/RosMsgToIdl.cmake)
 
 # *.idl は msg/ 直下
 set(IDL_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/msg)
+
+# Auto-convert any ROS 2 .msg files in msg/ into matching .idl files.
+ros_msg_to_idl_convert(
+  PACKAGE ${PROJECT_NAME}
+  DIRS ${IDL_ROOT}
+)
 
 # idlc_generate() 呼び出し
 idlc_generate(

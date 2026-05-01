@@ -118,19 +118,19 @@ private:
     // Simulate LIDAR scan data
     auto scan = std::make_shared<sensor_msgs::msg::Image>();
     auto now = get_clock()->now();
-    scan->header().stamp().sec() = static_cast<int32_t>(now.nanoseconds() / 1000000000LL);
-    scan->header().stamp().nanosec() = static_cast<uint32_t>(now.nanoseconds() % 1000000000LL);
-    scan->header().frame_id() = "lidar_link";
-    scan->width() = 360;
-    scan->height() = 1;
-    scan->encoding() = "32FC1"; // float distances
-    scan->step() = 360 * 4;
-    scan->data().resize(360 * 4, 0);
+    scan->header.stamp.sec = static_cast<int32_t>(now.nanoseconds() / 1000000000LL);
+    scan->header.stamp.nanosec = static_cast<uint32_t>(now.nanoseconds() % 1000000000LL);
+    scan->header.frame_id = "lidar_link";
+    scan->width = 360;
+    scan->height = 1;
+    scan->encoding = "32FC1"; // float distances
+    scan->step = 360 * 4;
+    scan->data.resize(360 * 4, 0);
 
     // Fill with simulated range data
     for (int i = 0; i < 360; i++) {
       float range = 1.0f + static_cast<float>(i % 10) * 0.5f;
-      std::memcpy(&scan->data()[i * 4], &range, sizeof(float));
+      std::memcpy(&scan->data[i * 4], &range, sizeof(float));
     }
 
     scan_pub_->publish(scan);
@@ -156,7 +156,7 @@ private:
     double y = 3.0 + std::cos(angle) * 1.5;
 
     auto msg = std::make_shared<std_msgs::msg::String>();
-    msg->data() = "target: x=" + std::to_string(x)
+    msg->data = "target: x=" + std::to_string(x)
                 + " y=" + std::to_string(y)
                 + " confidence=" + std::to_string(0.95 - (track_count_ % 100) * 0.005);
     track_pub_->publish(msg);
@@ -190,27 +190,27 @@ private:
     std::shared_ptr<sensor_msgs::srv::SetCameraInfo::Response> response)
   {
     // Use camera_info.distortion_model as a command string
-    std::string cmd = request->camera_info().distortion_model();
+    std::string cmd = request->camera_info.distortion_model;
     RCLCPP_INFO(get_logger(), "Received command: '%s'", cmd.c_str());
 
     if (cmd == "scan") {
       transition_to(State::SCANNING);
-      response->success() = true;
-      response->status_message() = "Transitioned to SCANNING";
+      response->success = true;
+      response->status_message = "Transitioned to SCANNING";
     } else if (cmd == "track") {
       transition_to(State::TRACKING);
-      response->success() = true;
-      response->status_message() = "Transitioned to TRACKING";
+      response->success = true;
+      response->status_message = "Transitioned to TRACKING";
     } else if (cmd == "idle") {
       transition_to(State::IDLE);
-      response->success() = true;
-      response->status_message() = "Transitioned to IDLE";
+      response->success = true;
+      response->status_message = "Transitioned to IDLE";
     } else if (cmd == "status") {
-      response->success() = true;
-      response->status_message() = std::string("Current state: ") + state_name(state_);
+      response->success = true;
+      response->status_message = std::string("Current state: ") + state_name(state_);
     } else {
-      response->success() = false;
-      response->status_message() = "Unknown command: " + cmd;
+      response->success = false;
+      response->status_message = "Unknown command: " + cmd;
     }
   }
 
@@ -218,7 +218,7 @@ private:
   void publish_status(const std::string &event)
   {
     auto msg = std::make_shared<std_msgs::msg::String>();
-    msg->data() = "state=" + std::string(state_name(state_))
+    msg->data = "state=" + std::string(state_name(state_))
                 + " event=" + event
                 + " scan_count=" + std::to_string(scan_count_)
                 + " track_count=" + std::to_string(track_count_);
@@ -286,7 +286,7 @@ private:
     }
 
     auto request = std::make_shared<sensor_msgs::srv::SetCameraInfo::Request>();
-    request->camera_info().distortion_model() = cmd;
+    request->camera_info.distortion_model = cmd;
 
     auto future = client_->async_send_request(request);
     auto rc = rclcpp::spin_until_future_complete(shared_from_this(), future, 5s);
@@ -295,8 +295,8 @@ private:
       auto resp = future.get();
       RCLCPP_INFO(get_logger(), "Command '%s': %s — %s",
                   cmd.c_str(),
-                  resp->success() ? "OK" : "FAIL",
-                  resp->status_message().c_str());
+                  resp->success ? "OK" : "FAIL",
+                  resp->status_message.c_str());
     } else {
       RCLCPP_ERROR(get_logger(), "Command '%s' timed out", cmd.c_str());
     }

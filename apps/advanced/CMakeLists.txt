@@ -27,6 +27,14 @@ configure_file(
 # ── IDL generation (backend-specific) ─────────────────────────────────────
 set(IDL_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/msg)
 
+# Auto-convert any ROS 2 .msg files in msg/ into matching .idl files
+# before any backend's IDL generator runs.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/RosMsgToIdl.cmake)
+ros_msg_to_idl_convert(
+  PACKAGE advanced_msgs
+  DIRS ${IDL_ROOT}
+)
+
 # Resolve idlc path for environments where QNX CycloneDDS install does not
 # include host tools.
 if(DEFINED DDS_PREFIX)

@@ -89,19 +89,19 @@ void ROSTypeImagePubSubMono::callbackSubscribe(sensor_msgs::msg::Image::SharedPt
     return;
   }
 
-  int width = message->width();
-  int height = message->height();
+  int width = message->width;
+  int height = message->height;
 
-  cv::Mat cv_image(height, width, CV_8UC3, message->data().data());
+  cv::Mat cv_image(height, width, CV_8UC3, message->data.data());
 
   cv::Mat gray_image;
   cv::cvtColor(cv_image, gray_image, cv::COLOR_BGR2GRAY);
 
-  gray_msg_->width(width);
-  gray_msg_->height(height);
-  gray_msg_->encoding("mono8");
-  gray_msg_->step(gray_image.step);
-  gray_msg_->data(std::vector<uint8_t>(gray_image.data, gray_image.data + gray_image.total() * gray_image.elemSize()));
+  gray_msg_->width = width;
+  gray_msg_->height = height;
+  gray_msg_->encoding = "mono8";
+  gray_msg_->step = gray_image.step;
+  gray_msg_->data = std::vector<uint8_t>(gray_image.data, gray_image.data + gray_image.total() * gray_image.elemSize());
 
   publisher_ptr_->publish(gray_msg_);
 }

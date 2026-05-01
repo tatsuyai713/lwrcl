@@ -40,7 +40,7 @@ private:
       fill_image_data(*message);
       
       RCLCPP_INFO(this->get_logger(), "[Traditional] Publishing image #%zu (%dx%d)", 
-                  count_, message->width(), message->height());
+                  count_, message->width, message->height);
       publisher_->publish(message);
     }
     // Method 2: Zero-copy publish using LoanedMessage
@@ -57,7 +57,7 @@ private:
         fill_image_data(loaned_msg.get());
         
         RCLCPP_INFO(this->get_logger(), "[Zero-copy] Publishing image #%zu (%dx%d)", 
-                    count_, loaned_msg.get().width(), loaned_msg.get().height());
+                    count_, loaned_msg.get().width, loaned_msg.get().height);
         
         // Publish the loaned message (ownership is transferred to middleware)
         publisher_->publish(std::move(loaned_msg));
@@ -76,24 +76,24 @@ private:
 
   void fill_image_data(sensor_msgs::msg::Image &msg)
   {
-    msg.header().stamp().sec() = count_;
-    msg.header().stamp().nanosec() = 0;
-    msg.header().frame_id() = "camera_frame";
-    msg.height() = 480;
-    msg.width() = 640;
-    msg.encoding() = "rgb8";
-    msg.is_bigendian() = false;
-    msg.step() = 640 * 3;
+    msg.header.stamp.sec = count_;
+    msg.header.stamp.nanosec = 0;
+    msg.header.frame_id = "camera_frame";
+    msg.height = 480;
+    msg.width = 640;
+    msg.encoding = "rgb8";
+    msg.is_bigendian = false;
+    msg.step = 640 * 3;
     
     // Create image data (simulated pattern)
     size_t data_size = 640 * 480 * 3;
-    msg.data().resize(data_size);
+    msg.data.resize(data_size);
     
     // Fill with a pattern based on count
     uint8_t pattern = static_cast<uint8_t>(count_ % 256);
     for (size_t i = 0; i < data_size; i++)
     {
-      msg.data()[i] = pattern;
+      msg.data[i] = pattern;
     }
   }
 

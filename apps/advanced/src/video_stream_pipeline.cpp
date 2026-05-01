@@ -89,17 +89,17 @@ private:
     size_t frame_size = is_keyframe ? (width_ * height_ / 4) : (width_ * height_ / 40);
 
     auto msg = std::make_shared<sensor_msgs::msg::Image>();
-    msg->header().stamp().sec() = static_cast<int32_t>(frame_count_ / static_cast<uint64_t>(target_fps_));
-    msg->header().stamp().nanosec() = 0;
-    msg->header().frame_id() = stream_name_;
-    msg->width() = static_cast<uint32_t>(width_);
-    msg->height() = static_cast<uint32_t>(height_);
-    msg->encoding() = is_keyframe ? "h265_keyframe" : "h265_inter";
-    msg->is_bigendian() = false;
-    msg->step() = static_cast<uint32_t>(frame_size);
+    msg->header.stamp.sec = static_cast<int32_t>(frame_count_ / static_cast<uint64_t>(target_fps_));
+    msg->header.stamp.nanosec = 0;
+    msg->header.frame_id = stream_name_;
+    msg->width = static_cast<uint32_t>(width_);
+    msg->height = static_cast<uint32_t>(height_);
+    msg->encoding = is_keyframe ? "h265_keyframe" : "h265_inter";
+    msg->is_bigendian = false;
+    msg->step = static_cast<uint32_t>(frame_size);
 
     // Fill with simulated compressed data
-    msg->data().resize(frame_size, static_cast<uint8_t>(frame_count_ % 256));
+    msg->data.resize(frame_size, static_cast<uint8_t>(frame_count_ % 256));
     bytes_total_ += frame_size;
 
     video_pub_->publish(msg);
@@ -118,19 +118,19 @@ private:
     double bitrate = elapsed > 0 ? (bytes_total_ * 8.0 / 1000.0) / elapsed : 0.0;
 
     auto status = std::make_shared<advanced_msgs::msg::VideoStreamStatus>();
-    status->header().stamp().sec() = static_cast<int32_t>(elapsed);
-    status->header().frame_id() = "encoder";
-    status->stream_name() = stream_name_;
-    status->width() = width_;
-    status->height() = height_;
-    status->encoding() = "h265";
-    status->frame_count() = frame_count_;
-    status->bytes_total() = bytes_total_;
-    status->fps_actual() = actual_fps;
-    status->fps_target() = target_fps_;
-    status->bitrate_kbps() = bitrate;
-    status->is_keyframe() = (frame_count_ % keyframe_interval_) == 1;
-    status->quality_level() = 85;
+    status->header.stamp.sec = static_cast<int32_t>(elapsed);
+    status->header.frame_id = "encoder";
+    status->stream_name = stream_name_;
+    status->width = width_;
+    status->height = height_;
+    status->encoding = "h265";
+    status->frame_count = frame_count_;
+    status->bytes_total = bytes_total_;
+    status->fps_actual = actual_fps;
+    status->fps_target = target_fps_;
+    status->bitrate_kbps = bitrate;
+    status->is_keyframe = (frame_count_ % keyframe_interval_) == 1;
+    status->quality_level = 85;
 
     status_pub_->publish(status);
 
@@ -193,7 +193,7 @@ private:
   void on_video(sensor_msgs::msg::Image::SharedPtr msg)
   {
     frames_received_++;
-    last_encoding_ = msg->encoding();
+    last_encoding_ = msg->encoding;
 
     // Simulate latency measurement
     auto now = std::chrono::steady_clock::now();
@@ -208,8 +208,8 @@ private:
   {
     last_status_ = status;
     RCLCPP_DEBUG(get_logger(), "Status: %s — %.1f fps, %.1f kbps",
-                 status->stream_name().c_str(),
-                 status->fps_actual(), status->bitrate_kbps());
+                 status->stream_name.c_str(),
+                 status->fps_actual, status->bitrate_kbps);
   }
 
   void publish_report()
@@ -224,16 +224,16 @@ private:
     }
 
     if (last_status_) {
-      text += "  Stream: " + last_status_->stream_name() + "\n";
-      text += "  Resolution: " + std::to_string(last_status_->width())
-              + "x" + std::to_string(last_status_->height()) + "\n";
-      text += "  FPS: " + std::to_string(last_status_->fps_actual())
-              + " / " + std::to_string(last_status_->fps_target()) + "\n";
-      text += "  Bitrate: " + std::to_string(last_status_->bitrate_kbps()) + " kbps\n";
-      text += "  Total bytes: " + std::to_string(last_status_->bytes_total()) + "\n";
+      text += "  Stream: " + last_status_->stream_name + "\n";
+      text += "  Resolution: " + std::to_string(last_status_->width)
+              + "x" + std::to_string(last_status_->height) + "\n";
+      text += "  FPS: " + std::to_string(last_status_->fps_actual)
+              + " / " + std::to_string(last_status_->fps_target) + "\n";
+      text += "  Bitrate: " + std::to_string(last_status_->bitrate_kbps) + " kbps\n";
+      text += "  Total bytes: " + std::to_string(last_status_->bytes_total) + "\n";
     }
 
-    report->data() = text;
+    report->data = text;
     report_pub_->publish(report);
     RCLCPP_INFO(get_logger(), "Published report (%lu frames received)", frames_received_);
   }

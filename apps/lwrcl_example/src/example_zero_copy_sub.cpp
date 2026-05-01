@@ -39,8 +39,8 @@ private:
   void callback(sensor_msgs::msg::Image::SharedPtr msg)
   {
     RCLCPP_INFO(this->get_logger(), "[Callback] Received image: %dx%d, stamp: %d.%09d",
-                msg->width(), msg->height(),
-                msg->header().stamp().sec(), msg->header().stamp().nanosec());
+                msg->width, msg->height,
+                msg->header.stamp.sec, msg->header.stamp.nanosec);
   }
 
   // Polling method for zero-copy messages
@@ -55,8 +55,8 @@ private:
       const auto &msg = loaned_msg.get();
       
       RCLCPP_INFO(this->get_logger(), "[Zero-copy] Received image: %dx%d, stamp: %d.%09d",
-                  msg.width(), msg.height(),
-                  msg.header().stamp().sec(), msg.header().stamp().nanosec());
+                  msg.width, msg.height,
+                  msg.header.stamp.sec, msg.header.stamp.nanosec);
 
       // Get sample info (contains reception timestamp, etc.)
       const auto &info = loaned_msg.get_sample_info();

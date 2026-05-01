@@ -15,13 +15,13 @@ int main() {
     dds::pub::DataWriter<std_msgs::msg::Header> writer(publisher, topic, qos);
 
     std_msgs::msg::Header header;
-    header.stamp().sec() = 1627543200;
-    header.stamp().nanosec() = 123456789;
-    header.frame_id() = "frame_1";
+    header.stamp.sec = 1627543200;
+    header.stamp.nanosec = 123456789;
+    header.frame_id = "frame_1";
 
     while (true) {
         writer.write(header);
-        std::cout << "Published: " << header.frame_id() << std::endl;
+        std::cout << "Published: " << header.frame_id << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 

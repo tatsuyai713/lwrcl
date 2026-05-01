@@ -46,22 +46,22 @@ StaticTransformBroadcasterNode::StaticTransformBroadcasterNode(int domain_id, Tr
   lwrcl::Clock clock;
   lwrcl::Time now;
   now = clock.now();
-  tf_msg.header().stamp().sec() = (int32_t)now.seconds();
-  tf_msg.header().stamp().nanosec() = (uint32_t)now.nanoseconds();
-  tf_msg.transform().translation().x() = transformData.translation_x;
-  tf_msg.transform().translation().y() = transformData.translation_y;
-  tf_msg.transform().translation().z() = transformData.translation_z;
-  tf_msg.transform().rotation().x() = transformData.rotation_x;
-  tf_msg.transform().rotation().y() = transformData.rotation_y;
-  tf_msg.transform().rotation().z() = transformData.rotation_z;
-  tf_msg.transform().rotation().w() = transformData.rotation_w;
-  tf_msg.header().frame_id() = transformData.frame_id;
-  tf_msg.child_frame_id() = transformData.child_frame_id;
+  tf_msg.header.stamp.sec = (int32_t)now.seconds();
+  tf_msg.header.stamp.nanosec = (uint32_t)now.nanoseconds();
+  tf_msg.transform.translation.x = transformData.translation_x;
+  tf_msg.transform.translation.y = transformData.translation_y;
+  tf_msg.transform.translation.z = transformData.translation_z;
+  tf_msg.transform.rotation.x = transformData.rotation_x;
+  tf_msg.transform.rotation.y = transformData.rotation_y;
+  tf_msg.transform.rotation.z = transformData.rotation_z;
+  tf_msg.transform.rotation.w = transformData.rotation_w;
+  tf_msg.header.frame_id = transformData.frame_id;
+  tf_msg.child_frame_id = transformData.child_frame_id;
 
   // check frame_id != child_frame_id
-  if (tf_msg.header().frame_id() == tf_msg.child_frame_id()) {
+  if (tf_msg.header.frame_id == tf_msg.child_frame_id) {
     printf("cannot publish static transform from '%s' to '%s', exiting\n",
-      tf_msg.header().frame_id().c_str(), tf_msg.child_frame_id().c_str());
+      tf_msg.header.frame_id.c_str(), tf_msg.child_frame_id.c_str());
     throw std::runtime_error("child_frame_id cannot equal frame_id");
   }
 

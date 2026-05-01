@@ -91,7 +91,7 @@ void ROSCustomTypeImagePubSub::callbackSubscribe(sensor_msgs::msg::Image::Shared
   }
 
   // Handle the received message
-  std::cout << "Received data: " << message->header().frame_id() << std::endl;
+  std::cout << "Received data: " << message->header.frame_id << std::endl;
 
   // Publish same data to another topic
   publisher_ptr_->publish(message);

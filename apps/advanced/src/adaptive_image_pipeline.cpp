@@ -96,12 +96,12 @@ public:
       // Status every second
       if (frame_count_ % current_fps == 0) {
         auto status = std::make_shared<std_msgs::msg::String>();
-        status->data() = "fps=" + std::to_string(current_fps)
+        status->data = "fps=" + std::to_string(current_fps)
                        + " hq_subs=" + std::to_string(hq_subs)
                        + " thumb_subs=" + std::to_string(thumb_subs)
                        + " frames=" + std::to_string(frame_count_);
         status_pub_->publish(status);
-        RCLCPP_INFO(get_logger(), "%s", status->data().c_str());
+        RCLCPP_INFO(get_logger(), "%s", status->data.c_str());
       }
 
       rclcpp::spin_some(this->shared_from_this());
@@ -114,22 +114,22 @@ private:
   {
     auto msg = std::make_shared<sensor_msgs::msg::Image>();
     auto now = get_clock()->now();
-    msg->header().stamp().sec() = static_cast<int32_t>(now.nanoseconds() / 1000000000LL);
-    msg->header().stamp().nanosec() = static_cast<uint32_t>(now.nanoseconds() % 1000000000LL);
-    msg->header().frame_id() = "camera_link";
-    msg->width() = static_cast<uint32_t>(width_);
-    msg->height() = static_cast<uint32_t>(height_);
-    msg->encoding() = "bgr8";
-    msg->is_bigendian() = false;
-    msg->step() = static_cast<uint32_t>(width_ * 3);
+    msg->header.stamp.sec = static_cast<int32_t>(now.nanoseconds() / 1000000000LL);
+    msg->header.stamp.nanosec = static_cast<uint32_t>(now.nanoseconds() % 1000000000LL);
+    msg->header.frame_id = "camera_link";
+    msg->width = static_cast<uint32_t>(width_);
+    msg->height = static_cast<uint32_t>(height_);
+    msg->encoding = "bgr8";
+    msg->is_bigendian = false;
+    msg->step = static_cast<uint32_t>(width_ * 3);
 
     // Simulate image content — gradient pattern
     size_t data_size = static_cast<size_t>(width_ * height_ * 3);
-    msg->data().resize(data_size);
+    msg->data.resize(data_size);
     for (size_t i = 0; i < data_size; i += 3) {
-      msg->data()[i]     = static_cast<uint8_t>((i / 3) % 256);                   // B
-      msg->data()[i + 1] = static_cast<uint8_t>((frame_count_ + i / 3) % 256);    // G
-      msg->data()[i + 2] = static_cast<uint8_t>((frame_count_ * 3 + i / 3) % 256); // R
+      msg->data[i]     = static_cast<uint8_t>((i / 3) % 256);                   // B
+      msg->data[i + 1] = static_cast<uint8_t>((frame_count_ + i / 3) % 256);    // G
+      msg->data[i + 2] = static_cast<uint8_t>((frame_count_ * 3 + i / 3) % 256); // R
     }
 
     hq_pub_->publish(msg);
@@ -142,15 +142,15 @@ private:
 
     auto msg = std::make_shared<sensor_msgs::msg::Image>();
     auto now = get_clock()->now();
-    msg->header().stamp().sec() = static_cast<int32_t>(now.nanoseconds() / 1000000000LL);
-    msg->header().stamp().nanosec() = static_cast<uint32_t>(now.nanoseconds() % 1000000000LL);
-    msg->header().frame_id() = "camera_link";
-    msg->width() = static_cast<uint32_t>(tw);
-    msg->height() = static_cast<uint32_t>(th);
-    msg->encoding() = "bgr8";
-    msg->is_bigendian() = false;
-    msg->step() = static_cast<uint32_t>(tw * 3);
-    msg->data().resize(static_cast<size_t>(tw * th * 3),
+    msg->header.stamp.sec = static_cast<int32_t>(now.nanoseconds() / 1000000000LL);
+    msg->header.stamp.nanosec = static_cast<uint32_t>(now.nanoseconds() % 1000000000LL);
+    msg->header.frame_id = "camera_link";
+    msg->width = static_cast<uint32_t>(tw);
+    msg->height = static_cast<uint32_t>(th);
+    msg->encoding = "bgr8";
+    msg->is_bigendian = false;
+    msg->step = static_cast<uint32_t>(tw * 3);
+    msg->data.resize(static_cast<size_t>(tw * th * 3),
                        static_cast<uint8_t>(frame_count_ % 256));
 
     thumb_pub_->publish(msg);
@@ -209,7 +209,7 @@ public:
           rclcpp::MessageInfo info;
           while (hq_sub_->take(msg, info)) {
             hq_count_++;
-            hq_bytes_ += msg.data().size();
+            hq_bytes_ += msg.data.size();
           }
         }
 
@@ -219,7 +219,7 @@ public:
           rclcpp::MessageInfo info;
           while (thumb_sub_->take(msg, info)) {
             thumb_count_++;
-            thumb_bytes_ += msg.data().size();
+            thumb_bytes_ += msg.data.size();
           }
         }
       }

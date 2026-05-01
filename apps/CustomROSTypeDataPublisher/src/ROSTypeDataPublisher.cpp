@@ -74,9 +74,9 @@ void ROSTypeDataPublisher::callbackPublish(int test)
 {
   // Update and publish message
   std::shared_ptr<CustomROSTypeDataPublisher::msg::CustomMessage> publish_msg = std::make_shared<CustomROSTypeDataPublisher::msg::CustomMessage>();
-  publish_msg->index(publish_msg->index() + 1);
-  std::string s = "BigData" + std::to_string(publish_msg->index() % 10);
-  publish_msg->message(s);
+  publish_msg->index = publish_msg->index + 1;
+  std::string s = "BigData" + std::to_string(publish_msg->index % 10);
+  publish_msg->message = s;
 
   publisher_ptr_->publish(publish_msg);
 }

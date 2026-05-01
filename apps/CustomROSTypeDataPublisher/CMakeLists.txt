@@ -16,6 +16,13 @@ cmake_minimum_required(VERSION 3.16.3)
 
 project(CustomROSTypeDataPublisher VERSION 1 LANGUAGES CXX)
 
+# Auto-convert any ROS 2 .msg files placed under msg/ into matching .idl
+include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/RosMsgToIdl.cmake)
+ros_msg_to_idl_convert(
+  PACKAGE ${PROJECT_NAME}
+  DIRS ${CMAKE_CURRENT_SOURCE_DIR}/msg
+)
+
 file(GLOB_RECURSE Original_IDL_Files
   "${CMAKE_CURRENT_SOURCE_DIR}/*/*.idl"
 )

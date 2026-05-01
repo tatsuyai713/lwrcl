@@ -33,8 +33,8 @@ private:
   void timer_callback()
   {
     auto message = std_msgs::msg::String();
-    message.data() = "Hello from " + this->get_fully_qualified_name() + " #" + std::to_string(count_++);
-    RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message.data().c_str());
+    message.data = "Hello from " + this->get_fully_qualified_name() + " #" + std::to_string(count_++);
+    RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message.data.c_str());
     publisher_->publish(message);
   }
 
@@ -67,12 +67,12 @@ public:
 private:
   void absolute_callback(std_msgs::msg::String::SharedPtr msg)
   {
-    RCLCPP_INFO(this->get_logger(), "[Absolute] Received: '%s'", msg->data().c_str());
+    RCLCPP_INFO(this->get_logger(), "[Absolute] Received: '%s'", msg->data.c_str());
   }
 
   void relative_callback(std_msgs::msg::String::SharedPtr msg)
   {
-    RCLCPP_INFO(this->get_logger(), "[Relative] Received: '%s'", msg->data().c_str());
+    RCLCPP_INFO(this->get_logger(), "[Relative] Received: '%s'", msg->data.c_str());
   }
 
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscription_absolute_;

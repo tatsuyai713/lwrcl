@@ -68,19 +68,19 @@ namespace tf2_ros
 
     // TODO(tfoote) find a way to get the authority
     std::string authority = "Authority undetectable";
-    for (size_t i = 0u; i < message->transforms().size(); i++)
+    for (size_t i = 0u; i < message->transforms.size(); i++)
     {
       try
       {
-        buffer_.setTransform(message->transforms()[i], authority, is_static);
+        buffer_.setTransform(message->transforms[i], authority, is_static);
       }
       catch (const tf2::TransformException &ex)
       {
         // /\todo Use error reporting
         std::string temp = ex.what();
         printf("Failure to set received transform from %s to %s with error: %s\n",
-               message->transforms()[i].child_frame_id().c_str(),
-               message->transforms()[i].header().frame_id().c_str(), temp.c_str());
+               message->transforms[i].child_frame_id.c_str(),
+               message->transforms[i].header.frame_id.c_str(), temp.c_str());
       }
     }
   }

@@ -21,7 +21,7 @@ public:
 private:
   void topic_callback(const std_msgs::msg::String::SharedPtr msg) const
   {
-    RCLCPP_INFO(this->get_logger(), "I heard: '%s'", msg->data().c_str());
+    RCLCPP_INFO(this->get_logger(), "I heard: '%s'", msg->data.c_str());
   }
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscription_;
 };
@@ -40,8 +40,8 @@ private:
   void timer_callback()
   {
     auto message = std_msgs::msg::String();
-    message.data() = "Hello, world! " + std::to_string(count_++);
-    RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message.data().c_str());
+    message.data = "Hello, world! " + std::to_string(count_++);
+    RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message.data.c_str());
     publisher_->publish(message);
   }
   rclcpp::TimerBase::SharedPtr timer_;

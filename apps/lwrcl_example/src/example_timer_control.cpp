@@ -40,9 +40,9 @@ private:
     count_++;
     
     auto message = std_msgs::msg::String();
-    message.data() = "Timer tick #" + std::to_string(count_);
+    message.data = "Timer tick #" + std::to_string(count_);
     
-    RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message.data().c_str());
+    RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message.data.c_str());
     publisher_->publish(message);
   }
 
@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
   std::cout << "  - timer->cancel(): Stop the timer" << std::endl;
   std::cout << "  - timer->reset(): Restart the timer" << std::endl;
   std::cout << "  - timer->is_canceled(): Check if timer is canceled" << std::endl;
-  std::cout << "  - timer->is_ready(): Check if timer is ready to fire" << std::endl;
+  std::cout << "  - timer->is_ready: Check if timer is ready to fire" << std::endl;
   std::cout << "  - timer->get_period(): Get the timer period" << std::endl;
   std::cout << "" << std::endl;
   std::cout << "Watch as the main timer gets canceled and reset every 5 seconds." << std::endl;

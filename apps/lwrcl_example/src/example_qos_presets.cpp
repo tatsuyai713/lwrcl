@@ -67,15 +67,15 @@ private:
   void timer_callback()
   {
     auto message = std::make_shared<sensor_msgs::msg::Image>();
-    message->header().stamp().sec() = count_;
-    message->header().stamp().nanosec() = 0;
-    message->header().frame_id() = "demo_frame";
-    message->height() = 480;
-    message->width() = 640;
-    message->encoding() = "rgb8";
-    message->is_bigendian() = false;
-    message->step() = 640 * 3;
-    message->data() = std::vector<uint8_t>(640 * 480 * 3, static_cast<uint8_t>(count_ % 256));
+    message->header.stamp.sec = count_;
+    message->header.stamp.nanosec = 0;
+    message->header.frame_id = "demo_frame";
+    message->height = 480;
+    message->width = 640;
+    message->encoding = "rgb8";
+    message->is_bigendian = false;
+    message->step = 640 * 3;
+    message->data = std::vector<uint8_t>(640 * 480 * 3, static_cast<uint8_t>(count_ % 256));
 
     RCLCPP_INFO(this->get_logger(), "Publishing image #%zu", count_);
     
@@ -90,7 +90,7 @@ private:
   void sensor_callback(sensor_msgs::msg::Image::SharedPtr msg)
   {
     RCLCPP_INFO(this->get_logger(), "Received image: %dx%d, frame_id: %s",
-                msg->width(), msg->height(), msg->header().frame_id().c_str());
+                msg->width, msg->height, msg->header.frame_id.c_str());
   }
 
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr sensor_publisher_;

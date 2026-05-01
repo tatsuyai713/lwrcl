@@ -13,8 +13,15 @@ set(UPDATE_HEADERS_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/update_headers.sh")
 set(IDLC_EXECUTABLE /opt/cyclonedds/bin/idlc)
 
 include(../cmake/IdlcGenerate.cmake)
+include(../cmake/RosMsgToIdl.cmake)
 
 set(IDL_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/msg)
+
+# Auto-convert any ROS 2 .msg files in msg/ into matching .idl files.
+ros_msg_to_idl_convert(
+  PACKAGE ${PROJECT_NAME}
+  DIRS ${IDL_ROOT}
+)
 
 idlc_generate(
   NAME  ffmpeg_image_transport_msgs

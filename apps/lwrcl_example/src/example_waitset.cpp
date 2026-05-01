@@ -56,15 +56,15 @@ int main(int argc, char * argv[])
     lastTime = curTime;
 
     sensor_msgs::msg::Image pub_message;
-    pub_message.header().stamp().sec() = data_value;
-    pub_message.header().stamp().nanosec() = data_value;
-    pub_message.header().frame_id() = "TEST";
-    pub_message.height() = 100;
-    pub_message.width() = 200;
-    pub_message.encoding() = "H265";
-    pub_message.is_bigendian() = false;
-    pub_message.step() = 1;
-    pub_message.data() = {0, 0, 0, 0, 0, 0};
+    pub_message.header.stamp.sec = data_value;
+    pub_message.header.stamp.nanosec = data_value;
+    pub_message.header.frame_id = "TEST";
+    pub_message.height = 100;
+    pub_message.width = 200;
+    pub_message.encoding = "H265";
+    pub_message.is_bigendian = false;
+    pub_message.step = 1;
+    pub_message.data = {0, 0, 0, 0, 0, 0};
 
     publisher_ptr->publish(pub_message);
 
@@ -75,16 +75,16 @@ int main(int argc, char * argv[])
       if (subscription_ptr->take(received_msg, info)) {
         RCLCPP_INFO(node->get_logger(),
           "Received Image data via WaitSet: width=%u height=%u encoding=%s",
-          received_msg.width(),
-          received_msg.height(),
-          received_msg.encoding().c_str());
+          received_msg.width,
+          received_msg.height,
+          received_msg.encoding.c_str());
       }
     } else if (wait_result.kind() == rclcpp::WaitResultKind::Timeout) {
       RCLCPP_WARN(node->get_logger(), "WaitSet timed out, no data received in 2 seconds.");
     }
 
     RCLCPP_WARN(node->get_logger(),
-      "Publishing: '%s'", pub_message.encoding().c_str());
+      "Publishing: '%s'", pub_message.encoding.c_str());
 
     data_value++;
     rate.sleep();

@@ -54,10 +54,10 @@ namespace tf2_ros
     for (auto it_in = msgtf.begin(); it_in != msgtf.end(); ++it_in)
     {
       bool match_found = false;
-      for (auto it_msg = net_message_->transforms().begin(); it_msg != net_message_->transforms().end();
+      for (auto it_msg = net_message_->transforms.begin(); it_msg != net_message_->transforms.end();
            ++it_msg)
       {
-        if (it_in->child_frame_id() == it_msg->child_frame_id())
+        if (it_in->child_frame_id == it_msg->child_frame_id)
         {
           *it_msg = *it_in;
           match_found = true;
@@ -66,7 +66,7 @@ namespace tf2_ros
       }
       if (!match_found)
       {
-        net_message_->transforms().push_back(*it_in);
+        net_message_->transforms.push_back(*it_in);
       }
     }
 

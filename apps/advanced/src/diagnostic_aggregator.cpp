@@ -77,11 +77,11 @@ private:
 
     // Timestamp
     auto now = get_clock()->now();
-    entry->header().stamp().sec() = static_cast<int32_t>(now.nanoseconds() / 1000000000LL);
-    entry->header().stamp().nanosec() = static_cast<uint32_t>(now.nanoseconds() % 1000000000LL);
-    entry->header().frame_id() = "hw_monitor";
-    entry->node_name() = get_fully_qualified_name();
-    entry->hardware_id() = hardware_id_;
+    entry->header.stamp.sec = static_cast<int32_t>(now.nanoseconds() / 1000000000LL);
+    entry->header.stamp.nanosec = static_cast<uint32_t>(now.nanoseconds() % 1000000000LL);
+    entry->header.frame_id = "hw_monitor";
+    entry->node_name = get_fully_qualified_name();
+    entry->hardware_id = hardware_id_;
 
     // Simulate sensor readings
     std::uniform_real_distribution<double> temp_dist(40.0, 95.0);
@@ -94,40 +94,40 @@ private:
 
     // Determine level
     if (temperature >= error_temp_) {
-      entry->level() = 2; // ERROR
-      entry->message() = "CRITICAL: Temperature exceeded error threshold!";
+      entry->level = 2; // ERROR
+      entry->message = "CRITICAL: Temperature exceeded error threshold!";
     } else if (temperature >= warn_temp_) {
-      entry->level() = 1; // WARN
-      entry->message() = "WARNING: Temperature approaching limit";
+      entry->level = 1; // WARN
+      entry->message = "WARNING: Temperature approaching limit";
     } else {
-      entry->level() = 0; // OK
-      entry->message() = "All systems nominal";
+      entry->level = 0; // OK
+      entry->message = "All systems nominal";
     }
 
     // Key-value telemetry data
-    auto &values = entry->values();
+    auto &values = entry->values;
     {
       advanced_msgs::msg::KeyValue kv;
-      kv.key() = "temperature_c";
-      kv.value() = std::to_string(temperature);
+      kv.key = "temperature_c";
+      kv.value = std::to_string(temperature);
       values.push_back(kv);
     }
     {
       advanced_msgs::msg::KeyValue kv;
-      kv.key() = "voltage_v";
-      kv.value() = std::to_string(voltage);
+      kv.key = "voltage_v";
+      kv.value = std::to_string(voltage);
       values.push_back(kv);
     }
     {
       advanced_msgs::msg::KeyValue kv;
-      kv.key() = "memory_pct";
-      kv.value() = std::to_string(mem_usage);
+      kv.key = "memory_pct";
+      kv.value = std::to_string(mem_usage);
       values.push_back(kv);
     }
     {
       advanced_msgs::msg::KeyValue kv;
-      kv.key() = "uptime_ticks";
-      kv.value() = std::to_string(tick_count_);
+      kv.key = "uptime_ticks";
+      kv.value = std::to_string(tick_count_);
       values.push_back(kv);
     }
 
@@ -135,7 +135,7 @@ private:
 
     const char *level_str[] = {"OK", "WARN", "ERROR", "STALE"};
     RCLCPP_INFO(get_logger(), "[%s] %s — temp=%.1f°C, volt=%.2fV, mem=%d%%",
-                hardware_id_.c_str(), level_str[entry->level()],
+                hardware_id_.c_str(), level_str[entry->level],
                 temperature, voltage, mem_usage);
   }
 
@@ -195,11 +195,11 @@ private:
   {
     std::lock_guard<std::mutex> lock(mtx_);
     // Store latest entry per hardware_id
-    latest_[entry->hardware_id()] = entry;
+    latest_[entry->hardware_id] = entry;
 
-    if (entry->level() >= 2) {
+    if (entry->level >= 2) {
       RCLCPP_WARN(get_logger(), "*** ALERT from [%s]: %s",
-                  entry->hardware_id().c_str(), entry->message().c_str());
+                  entry->hardware_id.c_str(), entry->message.c_str());
     }
   }
 
@@ -211,14 +211,14 @@ private:
     // Use the response's success field to indicate overall health
     bool all_ok = true;
     for (auto &pair : latest_) {
-      if (pair.second->level() >= 2) {
+      if (pair.second->level >= 2) {
         all_ok = false;
         break;
       }
     }
-    response->success() = all_ok;
+    response->success = all_ok;
     // Pack summary into status_message
-    response->status_message() = build_summary_text();
+    response->status_message = build_summary_text();
 
     RCLCPP_INFO(get_logger(), "Health query result: %s", all_ok ? "HEALTHY" : "DEGRADED");
   }
@@ -227,7 +227,7 @@ private:
   {
     std::lock_guard<std::mutex> lock(mtx_);
     auto msg = std::make_shared<std_msgs::msg::String>();
-    msg->data() = build_summary_text();
+    msg->data = build_summary_text();
     summary_pub_->publish(msg);
   }
 
@@ -238,10 +238,10 @@ private:
     oss << "=== System Health Summary (" << latest_.size() << " sources) ===\n";
     for (auto &pair : latest_) {
       auto &e = pair.second;
-      oss << "  [" << level_str[e->level()] << "] " << e->hardware_id()
-          << " — " << e->message() << "\n";
-      for (auto &kv : e->values()) {
-        oss << "       " << kv.key() << " = " << kv.value() << "\n";
+      oss << "  [" << level_str[e->level] << "] " << e->hardware_id
+          << " — " << e->message << "\n";
+      for (auto &kv : e->values) {
+        oss << "       " << kv.key << " = " << kv.value << "\n";
       }
     }
     return oss.str();
@@ -290,9 +290,9 @@ private:
     if (rc == rclcpp::FutureReturnCode::SUCCESS) {
       auto response = future.get();
       RCLCPP_INFO(get_logger(), "System health: %s",
-                  response->success() ? "HEALTHY" : "DEGRADED");
-      if (!response->status_message().empty()) {
-        RCLCPP_INFO(get_logger(), "\n%s", response->status_message().c_str());
+                  response->success ? "HEALTHY" : "DEGRADED");
+      if (!response->status_message.empty()) {
+        RCLCPP_INFO(get_logger(), "\n%s", response->status_message.c_str());
       }
     } else {
       RCLCPP_ERROR(get_logger(), "Health check timed out");

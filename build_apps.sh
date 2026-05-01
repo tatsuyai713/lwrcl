@@ -56,6 +56,7 @@ CMAKE_ARGS=(
 )
 
 if [ "$BACKEND" = "fastdds" ]; then
+    export PATH="/opt/fast-dds-gen/bin:${DDS_PREFIX}/bin:${PATH}"
     CMAKE_ARGS+=(
         -DCMAKE_SYSTEM_PREFIX_PATH="$LWRCL_PREFIX"
         -DCMAKE_PREFIX_PATH="$LWRCL_PREFIX"

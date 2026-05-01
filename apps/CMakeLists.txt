@@ -55,6 +55,10 @@ if(DDS_BACKEND STREQUAL "fastdds")
     add_subdirectory(CustomROSTypeDataPublisher)
     add_subdirectory(HelloWorldExample)
 
+    # ROS 2 .msg auto-conversion demo
+    add_subdirectory(ros_msg_example)
+    add_subdirectory(ros_msg_mixed_example)
+
     # Advanced examples
     add_subdirectory(advanced)
 
@@ -140,6 +144,10 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
 
     add_subdirectory(ROSCustomTypeImagePubSub)
 
+    # ROS 2 .msg auto-conversion demo
+    add_subdirectory(ros_msg_example)
+    add_subdirectory(ros_msg_mixed_example)
+
     # Advanced examples
     add_subdirectory(advanced)
 
@@ -186,6 +194,10 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
     endif()
 
     add_subdirectory(ROSCustomTypeImagePubSub)
+
+    # ROS 2 .msg auto-conversion demo
+    add_subdirectory(ros_msg_example)
+    add_subdirectory(ros_msg_mixed_example)
 
     # Advanced examples
     add_subdirectory(advanced)
@@ -282,6 +294,10 @@ elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
     endif()
 
     add_subdirectory(ROSCustomTypeImagePubSub)
+
+    # ROS 2 .msg auto-conversion demo
+    add_subdirectory(ros_msg_example)
+    add_subdirectory(ros_msg_mixed_example)
 
     # Advanced examples
     add_subdirectory(advanced)
