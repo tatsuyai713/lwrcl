@@ -55,12 +55,12 @@ TEST(tf2, setTransformValid)
 {
   tf2::BufferCore tfc;
   geometry_msgs::msg::TransformStamped st;
-  st.header().frame_id() = "foo";
-  st.header().stamp() = builtin_interfaces::msg::Time();
-  st.header().stamp().sec() = 1;
-  st.header().stamp().nanosec() = 0;
-  st.child_frame_id() = "child";
-  st.transform().rotation().w() = 1;
+  st.header.frame_id = "foo";
+  st.header.stamp = builtin_interfaces::msg::Time();
+  st.header.stamp.sec = 1;
+  st.header.stamp.nanosec = 0;
+  st.child_frame_id = "child";
+  st.transform.rotation.w = 1;
   EXPECT_TRUE(tfc.setTransform(st, "authority1"));
 }
 
@@ -100,12 +100,12 @@ TEST(tf2, setTransformValidWithCallback)
   ASSERT_NE(request_handle, 0u);
 
   geometry_msgs::msg::TransformStamped transform_msg;
-  transform_msg.header().frame_id() = target_frame;
-  transform_msg.header().stamp() = builtin_interfaces::msg::Time();
-  transform_msg.header().stamp().sec() = 1;
-  transform_msg.header().stamp().nanosec() = 0;
-  transform_msg.child_frame_id() = source_frame;
-  transform_msg.transform().rotation().w() = 1;
+  transform_msg.header.frame_id = target_frame;
+  transform_msg.header.stamp = builtin_interfaces::msg::Time();
+  transform_msg.header.stamp.sec = 1;
+  transform_msg.header.stamp.nanosec = 0;
+  transform_msg.child_frame_id = source_frame;
+  transform_msg.transform.rotation.w = 1;
   EXPECT_TRUE(buffer.setTransform(transform_msg, "authority1"));
 
   // Setting the transform() should trigger the callback
@@ -119,12 +119,12 @@ TEST(tf2, setTransformInvalidQuaternion)
 {
   tf2::BufferCore tfc;
   geometry_msgs::msg::TransformStamped st;
-  st.header().frame_id() = "foo";
-  st.header().stamp() = builtin_interfaces::msg::Time();
-  st.header().stamp().sec() = 1;
-  st.header().stamp().nanosec() = 0;
-  st.child_frame_id() = "child";
-  st.transform().rotation().w() = 0;
+  st.header.frame_id = "foo";
+  st.header.stamp = builtin_interfaces::msg::Time();
+  st.header.stamp.sec = 1;
+  st.header.stamp.nanosec = 0;
+  st.child_frame_id = "child";
+  st.transform.rotation.w = 0;
   EXPECT_FALSE(tfc.setTransform(st, "authority1"));
 }
 
@@ -148,12 +148,12 @@ TEST(tf2_lookupTransform, LookupException_One_Exists)
 {
   tf2::BufferCore tfc;
   geometry_msgs::msg::TransformStamped st;
-  st.header().frame_id() = "foo";
-  st.header().stamp() = builtin_interfaces::msg::Time();
-  st.header().stamp().sec() = 1;
-  st.header().stamp().nanosec() = 0;
-  st.child_frame_id() = "child";
-  st.transform().rotation().w() = 1;
+  st.header.frame_id = "foo";
+  st.header.stamp = builtin_interfaces::msg::Time();
+  st.header.stamp.sec = 1;
+  st.header.stamp.nanosec = 0;
+  st.child_frame_id = "child";
+  st.transform.rotation.w = 1;
   EXPECT_TRUE(tfc.setTransform(st, "authority1"));
   EXPECT_THROW(
     tfc.lookupTransform(
@@ -166,12 +166,12 @@ TEST(tf2_canTransform, One_Exists)
 {
   tf2::BufferCore tfc;
   geometry_msgs::msg::TransformStamped st;
-  st.header().frame_id() = "foo";
-  st.header().stamp() = builtin_interfaces::msg::Time();
-  st.header().stamp().sec() = 1;
-  st.header().stamp().nanosec() = 0;
-  st.child_frame_id() = "child";
-  st.transform().rotation().w() = 1;
+  st.header.frame_id = "foo";
+  st.header.stamp = builtin_interfaces::msg::Time();
+  st.header.stamp.sec = 1;
+  st.header.stamp.nanosec = 0;
+  st.child_frame_id = "child";
+  st.transform.rotation.w = 1;
   EXPECT_TRUE(tfc.setTransform(st, "authority1"));
   EXPECT_FALSE(tfc.canTransform("foo", "bar", tf2::TimePoint(std::chrono::seconds(1))));
 }
@@ -180,12 +180,12 @@ TEST(tf2_clear, LookUp_Static_Transfrom_Succeed)
 {
   tf2::BufferCore tfc;
   geometry_msgs::msg::TransformStamped st;
-  st.header().frame_id() = "foo";
-  st.header().stamp() = builtin_interfaces::msg::Time();
-  st.header().stamp().sec() = 1;
-  st.header().stamp().nanosec() = 0;
-  st.child_frame_id() = "bar";
-  st.transform().rotation().w() = 1;
+  st.header.frame_id = "foo";
+  st.header.stamp = builtin_interfaces::msg::Time();
+  st.header.stamp.sec = 1;
+  st.header.stamp.nanosec = 0;
+  st.child_frame_id = "bar";
+  st.transform.rotation.w = 1;
   tfc.clear();
   EXPECT_TRUE(tfc.setTransform(st, "authority1", true));
   EXPECT_NO_THROW(
@@ -197,12 +197,12 @@ TEST(tf2_clear, LookUp_Static_Transfrom_Fail)
 {
   tf2::BufferCore tfc;
   geometry_msgs::msg::TransformStamped st;
-  st.header().frame_id() = "foo";
-  st.header().stamp() = builtin_interfaces::msg::Time();
-  st.header().stamp().sec() = 1;
-  st.header().stamp().nanosec() = 0;
-  st.child_frame_id() = "bar";
-  st.transform().rotation().w() = 1;
+  st.header.frame_id = "foo";
+  st.header.stamp = builtin_interfaces::msg::Time();
+  st.header.stamp.sec = 1;
+  st.header.stamp.nanosec = 0;
+  st.child_frame_id = "bar";
+  st.transform.rotation.w = 1;
   EXPECT_TRUE(tfc.setTransform(st, "authority1"));
   tfc.clear();
   EXPECT_TRUE(tfc.setTransform(st, "authority1", true));
