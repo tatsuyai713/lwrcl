@@ -27,7 +27,7 @@ public:
     pub_ = create_publisher<std_msgs::msg::String>("exec_topic", 10);
     timer_ = create_wall_timer(100ms, [this]() {
       auto m = std_msgs::msg::String();
-      m.data() = "msg_" + std::to_string(count_++);
+      m.data = "msg_" + std::to_string(count_++);
       pub_->publish(m);
     });
   }
@@ -42,7 +42,7 @@ public:
     sub_ = create_subscription<std_msgs::msg::String>(
         "exec_topic", 10,
         [this](std_msgs::msg::String::SharedPtr msg) {
-          last_ = msg->data();
+          last_ = msg->data;
           count_++;
         });
   }

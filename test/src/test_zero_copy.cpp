@@ -37,7 +37,7 @@ TEST_F(ZeroCopyTest, BorrowAndPublishLoanedMessage) {
   auto sub = node->create_subscription<sensor_msgs::msg::Image>(
       "zc_image_topic", qos,
       [&](sensor_msgs::msg::Image::SharedPtr msg) {
-        rx_width = msg->width();
+        rx_width = msg->width;
         received++;
       });
 
@@ -47,12 +47,12 @@ TEST_F(ZeroCopyTest, BorrowAndPublishLoanedMessage) {
   auto loaned = pub->borrow_loaned_message();
   EXPECT_TRUE(loaned.is_valid());
 
-  loaned.get().header().stamp().sec() = 42;
-  loaned.get().width() = 320;
-  loaned.get().height() = 240;
-  loaned.get().encoding() = "rgb8";
-  loaned.get().step() = 320 * 3;
-  loaned.get().data().resize(320 * 240 * 3, 0);
+  loaned.get().header.stamp.sec = 42;
+  loaned.get().width = 320;
+  loaned.get().height = 240;
+  loaned.get().encoding = "rgb8";
+  loaned.get().step = 320 * 3;
+  loaned.get().data.resize(320 * 240 * 3, 0);
 
   pub->publish(std::move(loaned));
 

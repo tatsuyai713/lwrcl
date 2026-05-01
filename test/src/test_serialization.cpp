@@ -49,7 +49,7 @@ TEST_F(SerializationTest, MoveConstruct) {
 
 TEST_F(SerializationTest, SerializeDeserializeString) {
   std_msgs::msg::String original;
-  original.data() = "serialize_me";
+  original.data = "serialize_me";
 
   lwrcl::SerializedMessage serialized;
   lwrcl::Serialization<std_msgs::msg::String>::serialize_message(&original, &serialized);
@@ -57,5 +57,5 @@ TEST_F(SerializationTest, SerializeDeserializeString) {
 
   std_msgs::msg::String deserialized;
   lwrcl::Serialization<std_msgs::msg::String>::deserialize_message(&serialized, &deserialized);
-  EXPECT_EQ(deserialized.data(), "serialize_me");
+  EXPECT_EQ(deserialized.data, "serialize_me");
 }

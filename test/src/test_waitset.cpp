@@ -37,7 +37,7 @@ TEST_F(WaitSetTest, WaitSetReady) {
 
   // Publish
   auto msg = std_msgs::msg::String();
-  msg.data() = "waitset_data";
+  msg.data = "waitset_data";
   pub->publish(msg);
 
   // Wait on the WaitSet
@@ -49,7 +49,7 @@ TEST_F(WaitSetTest, WaitSetReady) {
   rclcpp::MessageInfo info;
   bool taken = sub->take(out, info);
   EXPECT_TRUE(taken);
-  EXPECT_EQ(out.data(), "waitset_data");
+  EXPECT_EQ(out.data, "waitset_data");
 }
 
 TEST_F(WaitSetTest, WaitSetTimeout) {

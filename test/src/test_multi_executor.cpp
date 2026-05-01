@@ -27,7 +27,7 @@ public:
     pub_ = create_publisher<std_msgs::msg::String>("me_topic", 10);
     timer_ = create_wall_timer(100ms, [this]() {
       auto m = std_msgs::msg::String();
-      m.data() = "multi_" + std::to_string(count_++);
+      m.data = "multi_" + std::to_string(count_++);
       pub_->publish(m);
     });
   }

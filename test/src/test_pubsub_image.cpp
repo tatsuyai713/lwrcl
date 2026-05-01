@@ -34,9 +34,9 @@ TEST_F(PubSubImageTest, ImagePublishAndReceive) {
   auto sub = node->create_subscription<sensor_msgs::msg::Image>(
       "test_image_topic", 10,
       [&](sensor_msgs::msg::Image::SharedPtr msg) {
-        rx_width = msg->width();
-        rx_height = msg->height();
-        rx_encoding = msg->encoding();
+        rx_width = msg->width;
+        rx_height = msg->height;
+        rx_encoding = msg->encoding;
         received++;
       });
 
@@ -44,15 +44,15 @@ TEST_F(PubSubImageTest, ImagePublishAndReceive) {
 
   // Publish an image
   auto img = std::make_shared<sensor_msgs::msg::Image>();
-  img->header().stamp().sec() = 1;
-  img->header().stamp().nanosec() = 0;
-  img->header().frame_id() = "camera";
-  img->height() = 480;
-  img->width() = 640;
-  img->encoding() = "rgb8";
-  img->is_bigendian() = false;
-  img->step() = 640 * 3;
-  img->data().resize(640 * 480 * 3, 128);
+  img->header.stamp.sec = 1;
+  img->header.stamp.nanosec = 0;
+  img->header.frame_id = "camera";
+  img->height = 480;
+  img->width = 640;
+  img->encoding = "rgb8";
+  img->is_bigendian = false;
+  img->step = 640 * 3;
+  img->data.resize(640 * 480 * 3, 128);
   pub->publish(img);
 
   auto deadline = std::chrono::steady_clock::now() + 5s;

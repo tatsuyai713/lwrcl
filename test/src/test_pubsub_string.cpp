@@ -38,7 +38,7 @@ TEST_F(PubSubStringTest, PublishAndReceiveSharedPtr) {
   auto sub = node->create_subscription<std_msgs::msg::String>(
       "test_topic_str", 10,
       [&](std_msgs::msg::String::SharedPtr msg) {
-        last_msg = msg->data();
+        last_msg = msg->data;
         received++;
       });
   ASSERT_TRUE(sub != nullptr);
@@ -47,7 +47,7 @@ TEST_F(PubSubStringTest, PublishAndReceiveSharedPtr) {
   std::this_thread::sleep_for(1s);
 
   auto msg = std::make_shared<std_msgs::msg::String>();
-  msg->data() = "hello_gtest";
+  msg->data = "hello_gtest";
   pub->publish(msg);
 
   // Let the message propagate
@@ -74,7 +74,7 @@ TEST_F(PubSubStringTest, PublishConstRef) {
   std::this_thread::sleep_for(1s);
 
   std_msgs::msg::String msg;
-  msg.data() = "const_ref_test";
+  msg.data = "const_ref_test";
   pub->publish(msg);
 
   auto deadline = std::chrono::steady_clock::now() + 5s;

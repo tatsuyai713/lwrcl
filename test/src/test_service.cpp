@@ -38,8 +38,8 @@ TEST_F(ServiceTest, ServiceRequestResponse) {
       [&](const std::shared_ptr<sensor_msgs::srv::SetCameraInfo::Request>,
           std::shared_ptr<sensor_msgs::srv::SetCameraInfo::Response> response) {
         request_received = true;
-        response->success() = true;
-        response->status_message() = "OK";
+        response->success = true;
+        response->status_message = "OK";
       });
 
   std::thread server_thread([&server_node]() { rclcpp::spin(server_node); });

@@ -34,7 +34,7 @@ TEST_F(SpinSomeTest, SpinSomeProcessesMessages) {
 
   // Publish
   auto msg = std::make_shared<std_msgs::msg::String>();
-  msg->data() = "spin_some_msg";
+  msg->data = "spin_some_msg";
   pub->publish(msg);
 
   // Use spin_some in a polling loop
