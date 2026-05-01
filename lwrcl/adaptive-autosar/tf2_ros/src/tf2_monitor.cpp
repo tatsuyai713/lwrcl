@@ -88,17 +88,17 @@ public:
 
     double average_offset = 0;
     std::unique_lock<std::mutex> my_lock(map_mutex_);
-    for (size_t i = 0; i < in_message->transforms().size(); i++) {
-      frame_authority_map[in_message->transforms()[i].child_frame_id()] = authority;
+    for (size_t i = 0; i < in_message->transforms.size(); i++) {
+      frame_authority_map[in_message->transforms[i].child_frame_id] = authority;
 
       double offset = clock_->now().seconds() - tf2_ros::timeToSec(
-        in_message->transforms()[i].header().stamp());
+        in_message->transforms[i].header.stamp);
       average_offset += offset;
 
       std::map<std::string, std::vector<double>>::iterator it = delay_map.find(
-        in_message->transforms()[i].child_frame_id());
+        in_message->transforms[i].child_frame_id);
       if (it == delay_map.end()) {
-        delay_map[in_message->transforms()[i].child_frame_id()] = std::vector<double>(1, offset);
+        delay_map[in_message->transforms[i].child_frame_id] = std::vector<double>(1, offset);
       } else {
         it->second.push_back(offset);
         if (it->second.size() > 1000) {
@@ -107,7 +107,7 @@ public:
       }
     }
 
-    average_offset /= std::max(static_cast<size_t>(1), in_message->transforms().size());
+    average_offset /= std::max(static_cast<size_t>(1), in_message->transforms.size());
 
     // create the authority log
     std::map<std::string, std::vector<double>>::iterator it2 = authority_map.find(authority);
@@ -212,7 +212,7 @@ public:
       counter++;
       if (using_specific_chain_) {
         auto tmp = buffer_->lookupTransform(framea_, frameb_, tf2::TimePointZero);
-        double diff = clock_->now().seconds() - tf2_ros::timeToSec(tmp.header().stamp());
+        double diff = clock_->now().seconds() - tf2_ros::timeToSec(tmp.header.stamp);
         avg_diff = lowpass * diff + (1 - lowpass) * avg_diff;
         if (diff > max_diff) {
           max_diff = diff;

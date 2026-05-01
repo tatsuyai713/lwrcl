@@ -53,7 +53,7 @@ namespace tf2_ros
     for (std::vector<geometry_msgs::msg::TransformStamped>::const_iterator it = msgtf.begin();
          it != msgtf.end(); ++it)
     {
-      message->transforms().push_back(*it);
+      message->transforms.push_back(*it);
     }
 
     publisher_->publish(message);

@@ -183,20 +183,20 @@ bool BufferCore::setTransform(
   const std::string & authority, bool is_static)
 {
   tf2::Transform tf2_transform(tf2::Quaternion(
-      transform.transform().rotation().x(),
-      transform.transform().rotation().y(),
-      transform.transform().rotation().z(),
-      transform.transform().rotation().w()),
+      transform.transform.rotation.x,
+      transform.transform.rotation.y,
+      transform.transform.rotation.z,
+      transform.transform.rotation.w),
     tf2::Vector3(
-      transform.transform().translation().x(),
-      transform.transform().translation().y(),
-      transform.transform().translation().z()));
-  TimePoint time_point(std::chrono::nanoseconds(transform.header().stamp().nanosec()) +
+      transform.transform.translation.x,
+      transform.transform.translation.y,
+      transform.transform.translation.z));
+  TimePoint time_point(std::chrono::nanoseconds(transform.header.stamp.nanosec) +
     std::chrono::duration_cast<std::chrono::nanoseconds>(
       std::chrono::seconds(
-        transform.header().stamp().sec())));
+        transform.header.stamp.sec)));
   return setTransformImpl(
-    tf2_transform, transform.header().frame_id(), transform.child_frame_id(),
+    tf2_transform, transform.header.frame_id, transform.child_frame_id,
     time_point, authority, is_static);
 }
 
@@ -678,17 +678,17 @@ geometry_msgs::msg::VelocityStamped BufferCore::lookupVelocity(
   std::chrono::seconds s = std::chrono::duration_cast<std::chrono::seconds>(
     tf2::timeFromSec(start_time + averaging_interval_seconds * 0.5).time_since_epoch());
   geometry_msgs::msg::VelocityStamped velocity;
-  velocity.header().stamp().sec() = static_cast<int32_t>(s.count());
-  velocity.header().stamp().nanosec() = static_cast<uint32_t>(ns.count() % 1000000000ull);
-  velocity.header().frame_id() = reference_frame;
-  velocity.body_frame_id() = tracking_frame;
+  velocity.header.stamp.sec = static_cast<int32_t>(s.count());
+  velocity.header.stamp.nanosec = static_cast<uint32_t>(ns.count() % 1000000000ull);
+  velocity.header.frame_id = reference_frame;
+  velocity.body_frame_id = tracking_frame;
 
-  velocity.velocity().linear().x() = out_vel.x();
-  velocity.velocity().linear().y() = out_vel.y();
-  velocity.velocity().linear().z() = out_vel.z();
-  velocity.velocity().angular().x() = out_rot.x();
-  velocity.velocity().angular().y() = out_rot.y();
-  velocity.velocity().angular().z() = out_rot.z();
+  velocity.velocity.linear.x = out_vel.x();
+  velocity.velocity.linear.y = out_vel.y();
+  velocity.velocity.linear.z = out_vel.z();
+  velocity.velocity.angular.x = out_rot.x();
+  velocity.velocity.angular.y = out_rot.y();
+  velocity.velocity.angular.z = out_rot.z();
 
   return velocity;
 }
@@ -702,21 +702,21 @@ BufferCore::lookupTransform(
   TimePoint time_out;
   lookupTransformImpl(target_frame, source_frame, time, transform, time_out);
   geometry_msgs::msg::TransformStamped msg;
-  msg.transform().translation().x() = transform.getOrigin().x();
-  msg.transform().translation().y() = transform.getOrigin().y();
-  msg.transform().translation().z() = transform.getOrigin().z();
-  msg.transform().rotation().x() = transform.getRotation().x();
-  msg.transform().rotation().y() = transform.getRotation().y();
-  msg.transform().rotation().z() = transform.getRotation().z();
-  msg.transform().rotation().w() = transform.getRotation().w();
+  msg.transform.translation.x = transform.getOrigin().x();
+  msg.transform.translation.y = transform.getOrigin().y();
+  msg.transform.translation.z = transform.getOrigin().z();
+  msg.transform.rotation.x = transform.getRotation().x();
+  msg.transform.rotation.y = transform.getRotation().y();
+  msg.transform.rotation.z = transform.getRotation().z();
+  msg.transform.rotation.w = transform.getRotation().w();
   std::chrono::nanoseconds ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
     time_out.time_since_epoch());
   std::chrono::seconds s = std::chrono::duration_cast<std::chrono::seconds>(
     time_out.time_since_epoch());
-  msg.header().stamp().sec() = static_cast<int32_t>(s.count());
-  msg.header().stamp().nanosec() = static_cast<uint32_t>(ns.count() % 1000000000ull);
-  msg.header().frame_id() = target_frame;
-  msg.child_frame_id() = source_frame;
+  msg.header.stamp.sec = static_cast<int32_t>(s.count());
+  msg.header.stamp.nanosec = static_cast<uint32_t>(ns.count() % 1000000000ull);
+  msg.header.frame_id = target_frame;
+  msg.child_frame_id = source_frame;
 
   return msg;
 }
@@ -733,21 +733,21 @@ BufferCore::lookupTransform(
     target_frame, target_time, source_frame, source_time,
     fixed_frame, transform, time_out);
   geometry_msgs::msg::TransformStamped msg;
-  msg.transform().translation().x() = transform.getOrigin().x();
-  msg.transform().translation().y() = transform.getOrigin().y();
-  msg.transform().translation().z() = transform.getOrigin().z();
-  msg.transform().rotation().x() = transform.getRotation().x();
-  msg.transform().rotation().y() = transform.getRotation().y();
-  msg.transform().rotation().z() = transform.getRotation().z();
-  msg.transform().rotation().w() = transform.getRotation().w();
+  msg.transform.translation.x = transform.getOrigin().x();
+  msg.transform.translation.y = transform.getOrigin().y();
+  msg.transform.translation.z = transform.getOrigin().z();
+  msg.transform.rotation.x = transform.getRotation().x();
+  msg.transform.rotation.y = transform.getRotation().y();
+  msg.transform.rotation.z = transform.getRotation().z();
+  msg.transform.rotation.w = transform.getRotation().w();
   std::chrono::nanoseconds ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
     time_out.time_since_epoch());
   std::chrono::seconds s = std::chrono::duration_cast<std::chrono::seconds>(
     time_out.time_since_epoch());
-  msg.header().stamp().sec() = static_cast<int32_t>(s.count());
-  msg.header().stamp().nanosec() = static_cast<uint32_t>(ns.count() % 1000000000ull);
-  msg.header().frame_id() = target_frame;
-  msg.child_frame_id() = source_frame;
+  msg.header.stamp.sec = static_cast<int32_t>(s.count());
+  msg.header.stamp.nanosec = static_cast<uint32_t>(ns.count() % 1000000000ull);
+  msg.header.frame_id = target_frame;
+  msg.child_frame_id = source_frame;
 
   return msg;
 }
