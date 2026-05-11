@@ -48,6 +48,10 @@ endif()
 
 if(DDS_BACKEND STREQUAL "fastdds")
   # ── Fast DDS: fastddsgen to compile custom IDL ──────────────────────────
+  find_program(FASTDDSGEN_EXECUTABLE fastddsgen
+    HINTS /opt/fast-dds-gen/bin ${DDS_PREFIX}/bin
+    REQUIRED)
+
   file(GLOB_RECURSE ADVANCED_IDL_FILES "${IDL_ROOT}/*.idl")
 
   foreach(idl_file ${ADVANCED_IDL_FILES})
@@ -57,13 +61,17 @@ if(DDS_BACKEND STREQUAL "fastdds")
     file(MAKE_DIRECTORY ${workingdir})
     configure_file(${idl_file} ${workingdir}/${idl}.idl COPYONLY)
     execute_process(
-      COMMAND fastddsgen ${idl}.idl
+      COMMAND ${FASTDDSGEN_EXECUTABLE} ${idl}.idl
               -I ${ROS_DATA_TYPES_INCLUDE_PATH}
               -I ${idl_dir}
               -typeros2 -replace -cs
       WORKING_DIRECTORY ${workingdir}
       INPUT_FILE ${idl}.idl
+      RESULT_VARIABLE fastddsgen_result
     )
+    if(NOT fastddsgen_result EQUAL 0)
+      message(FATAL_ERROR "fastddsgen failed for ${idl_file}")
+    endif()
   endforeach()
 
   file(GLOB_RECURSE ADVANCED_GEN_CXX "${CMAKE_CURRENT_BINARY_DIR}/*.cxx")

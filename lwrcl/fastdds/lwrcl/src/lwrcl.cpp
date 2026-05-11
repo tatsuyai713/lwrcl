@@ -1034,19 +1034,28 @@ namespace lwrcl
 
     while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
     {
+      bool did_work = false;
       if (has_subs)
       {
         eprosima::fastdds::dds::ConditionSeq active;
-        // 100ms safety timeout — stop_guard_ normally triggers immediately.
-        eprosima::fastrtps::Duration_t timeout{0, 100000000};
+        eprosima::fastrtps::Duration_t timeout{0, 1000000};
         ReturnCode_t ret = unified_ws.wait(active, timeout);
         if (global_stop_flag.load() || stop_flag_) break;
         if (ret == ReturnCode_t::RETCODE_OK)
         {
-          for (auto &sub : subs) sub->invoke_if_data();
+          for (auto &sub : subs)
+          {
+            if (sub->invoke_if_data()) did_work = true;
+          }
         }
       }
-      else
+      std::vector<std::shared_ptr<ITimerBase>> timers;
+      for (auto &timer : timer_list_) timers.push_back(timer);
+      for (auto &timer : timers)
+      {
+        if (timer->execute_if_ready()) did_work = true;
+      }
+      if (!has_subs && !did_work)
       {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }
@@ -1074,6 +1083,15 @@ namespace lwrcl
     for (auto &sub : subscription_list_)
     {
       if (sub->invoke_if_data())
+      {
+        did_work = true;
+      }
+    }
+    std::vector<std::shared_ptr<ITimerBase>> timers;
+    for (auto &timer : timer_list_) timers.push_back(timer);
+    for (auto &timer : timers)
+    {
+      if (timer->execute_if_ready())
       {
         did_work = true;
       }

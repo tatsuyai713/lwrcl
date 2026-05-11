@@ -296,6 +296,10 @@ namespace lwrcl
       }
       auto front = std::move(pollable_buffer_.front());
       pollable_buffer_.pop_front();
+      if (!loaned_buffer_.empty())
+      {
+        loaned_buffer_.pop_front();
+      }
       out_msg = std::move(front.first);
       info = front.second;
       return true;
@@ -326,34 +330,33 @@ namespace lwrcl
         {
           auto sample = std::move(loaned_buffer_.front());
           loaned_buffer_.pop_front();
+          if (!pollable_buffer_.empty())
+          {
+            pollable_buffer_.pop_front();
+          }
           out_loaned = LoanedSubscriptionMessage<T>(std::move(sample));
           return out_loaned.is_valid();
         }
       }
 
-      std::lock_guard<std::mutex> proxy_lock(proxy_mutex_);
-      if (!proxy_)
+      if (!run_once())
       {
         return false;
       }
 
-      const auto state = proxy_->Event.GetSubscriptionState();
-      count_.store(state == ara::com::SubscriptionState::kSubscribed ? 1 : 0);
-
-      bool taken = false;
-      auto result = proxy_->Event.GetNewSamples(
-          [&out_loaned, &taken](ara::com::SamplePtr<T> payload_sample)
-          {
-            if (taken || !payload_sample)
-            {
-              return;
-            }
-            out_loaned = LoanedSubscriptionMessage<T>(std::move(payload_sample));
-            taken = out_loaned.is_valid();
-          },
-          1);
-
-      return result.HasValue() && taken;
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+      if (loaned_buffer_.empty())
+      {
+        return false;
+      }
+      auto sample = std::move(loaned_buffer_.front());
+      loaned_buffer_.pop_front();
+      if (!pollable_buffer_.empty())
+      {
+        pollable_buffer_.pop_front();
+      }
+      out_loaned = LoanedSubscriptionMessage<T>(std::move(sample));
+      return out_loaned.is_valid();
     }
 
   private:

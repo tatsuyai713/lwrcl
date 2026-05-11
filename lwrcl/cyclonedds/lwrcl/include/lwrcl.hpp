@@ -877,46 +877,22 @@ namespace lwrcl
   FutureReturnCode spin_until_future_complete(
       std::shared_ptr<lwrcl::Node> node, std::shared_ptr<FutureBase> future, const Duration &timeout)
   {
-    std::thread spin_thread([node]()
-                            { lwrcl::spin(node); });
-
-    if (
-        future->wait_for(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)) ==
-        std::future_status::ready)
-    {
-      node->stop_spin();
-      spin_thread.join();
-      return SUCCESS;
-    }
-    else
-    {
-      node->stop_spin();
-      spin_thread.join();
-      return TIMEOUT;
-    }
+    (void)node;
+    return future->wait_for(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)) ==
+                   std::future_status::ready
+               ? SUCCESS
+               : TIMEOUT;
   }
 
   template <typename ResponseT, typename Duration>
   FutureReturnCode spin_until_future_complete(
       std::shared_ptr<lwrcl::Node> node, std::shared_future<ResponseT> &future, const Duration &timeout)
   {
-    std::thread spin_thread([node]()
-                            { lwrcl::spin(node); });
-
-    if (
-        future.wait_for(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)) ==
-        std::future_status::ready)
-    {
-      node->stop_spin();
-      spin_thread.join();
-      return SUCCESS;
-    }
-    else
-    {
-      node->stop_spin();
-      spin_thread.join();
-      return TIMEOUT;
-    }
+    (void)node;
+    return future.wait_for(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)) ==
+                   std::future_status::ready
+               ? SUCCESS
+               : TIMEOUT;
   }
 
   struct lwrcl_serialized_message_t

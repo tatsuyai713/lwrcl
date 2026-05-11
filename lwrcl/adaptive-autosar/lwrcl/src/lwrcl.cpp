@@ -933,20 +933,25 @@ namespace lwrcl
 
     while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
     {
-      // Wait for subscription wakeup or 100 ms safety timeout.
-      // stop_spin() notifies cv for immediate wakeup.
       {
         std::unique_lock<std::mutex> lk(*node_cv_mutex_);
-        node_cv_->wait_for(lk, std::chrono::milliseconds(100),
+        node_cv_->wait_for(lk, std::chrono::milliseconds(1),
             [this]() { return node_data_pending_->load() || closed_.load()
                         || global_stop_flag.load() || stop_flag_; });
-        node_data_pending_->store(false);
       }
       if (stop_flag_ || global_stop_flag.load()) break;
-      // Process any pending data on subscriptions.
-      for (auto &sub : subs)
+      if (node_data_pending_->exchange(false))
       {
-        sub->invoke_if_data();
+        for (auto &sub : subs)
+        {
+          sub->invoke_if_data();
+        }
+      }
+      std::vector<std::shared_ptr<ITimerBase>> timers;
+      for (auto &timer : timer_list_) timers.push_back(timer);
+      for (auto &timer : timers)
+      {
+        timer->execute_if_ready();
       }
     }
 
@@ -969,6 +974,15 @@ namespace lwrcl
     for (auto &sub : subscription_list_)
     {
       if (sub->invoke_if_data())
+      {
+        did_work = true;
+      }
+    }
+    std::vector<std::shared_ptr<ITimerBase>> timers;
+    for (auto &timer : timer_list_) timers.push_back(timer);
+    for (auto &timer : timers)
+    {
+      if (timer->execute_if_ready())
       {
         did_work = true;
       }

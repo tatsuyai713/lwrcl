@@ -56,6 +56,13 @@ namespace lwrcl
     {
     }
 
+    explicit LoanedSubscriptionMessage(std::shared_ptr<T> shared_message)
+        : shared_message_(std::move(shared_message)),
+          data_ptr_(shared_message_.get()),
+          is_valid_(data_ptr_ != nullptr)
+    {
+    }
+
     ~LoanedSubscriptionMessage() = default;
 
     // Move only — no copy
@@ -64,6 +71,7 @@ namespace lwrcl
 
     LoanedSubscriptionMessage(LoanedSubscriptionMessage &&other) noexcept
         : samples_(std::move(other.samples_)),
+          shared_message_(std::move(other.shared_message_)),
           data_ptr_(other.data_ptr_),
           is_valid_(other.is_valid_)
     {
@@ -76,6 +84,7 @@ namespace lwrcl
       if (this != &other)
       {
         samples_ = std::move(other.samples_);
+        shared_message_ = std::move(other.shared_message_);
         data_ptr_ = other.data_ptr_;
         is_valid_ = other.is_valid_;
         other.data_ptr_ = nullptr;
@@ -125,12 +134,14 @@ namespace lwrcl
     void release()
     {
       samples_.reset();
+      shared_message_.reset();
       data_ptr_ = nullptr;
       is_valid_ = false;
     }
 
   private:
     std::shared_ptr<dds::sub::LoanedSamples<T>> samples_;
+    std::shared_ptr<T> shared_message_;
     const T* data_ptr_ = nullptr;
     bool is_valid_ = false;
   };
@@ -282,36 +293,18 @@ namespace lwrcl
      */
     bool take_loaned(LoanedSubscriptionMessage<T> &out_loaned)
     {
-      if (!reader_)
+      std::shared_ptr<T> message;
+      lwrcl::MessageInfo info;
+      if (!take(message, info))
       {
-        return false;
-      }
-
-      try
-      {
-        dds::sub::LoanedSamples<T> samples = reader_->take();
-        if (samples.length() > 0)
+        invoke_if_data();
+        if (!take(message, info))
         {
-          // Find the first valid sample using iterator-based access
-          // (dds::sub::LoanedSamples does not support operator[] with uint32_t)
-          for (auto &s : samples)
-          {
-            if (s.info().valid())
-            {
-              const T* data_ptr = &s.data();
-              auto loan_guard =
-                  std::make_shared<dds::sub::LoanedSamples<T>>(std::move(samples));
-              out_loaned = LoanedSubscriptionMessage<T>(loan_guard, data_ptr);
-              return true;
-            }
-          }
+          return false;
         }
       }
-      catch (const dds::core::Exception &)
-      {
-        // No data available
-      }
-      return false;
+      out_loaned = LoanedSubscriptionMessage<T>(std::move(message));
+      return true;
     }
 
     /**

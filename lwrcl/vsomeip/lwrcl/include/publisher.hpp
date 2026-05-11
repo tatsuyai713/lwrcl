@@ -55,21 +55,6 @@ namespace lwrcl
       (void)qos; // QoS is not used in vsomeip transport layer
       try
       {
-        // Offer the service
-        app_->offer_service(service_id_, instance_id_);
-
-        // Offer the event for pub/sub
-        std::set<vsomeip::eventgroup_t> eventgroups;
-        eventgroups.insert(eventgroup_id_);
-        app_->offer_event(
-            service_id_, instance_id_, event_id_, eventgroups,
-            vsomeip::event_type_e::ET_EVENT,
-            std::chrono::milliseconds::zero(),
-            false,  // change_resets_cycle
-            true,   // update_on_change
-            nullptr // epsilon_change_func
-        );
-
         // Register subscription handler to track subscriber count
         // Use vsomeip_sec_client_t-aware API (non-deprecated)
         app_->register_subscription_handler(
@@ -93,6 +78,21 @@ namespace lwrcl
               }
               return true; // accept subscription
             });
+
+        // Offer the service
+        app_->offer_service(service_id_, instance_id_);
+
+        // Offer the event for pub/sub
+        std::set<vsomeip::eventgroup_t> eventgroups;
+        eventgroups.insert(eventgroup_id_);
+        app_->offer_event(
+            service_id_, instance_id_, event_id_, eventgroups,
+            vsomeip::event_type_e::ET_EVENT,
+            std::chrono::milliseconds::zero(),
+            false,  // change_resets_cycle
+            true,   // update_on_change
+            nullptr // epsilon_change_func
+        );
       }
       catch (const std::exception &e)
       {

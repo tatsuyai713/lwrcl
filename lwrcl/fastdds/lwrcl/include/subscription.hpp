@@ -52,7 +52,18 @@ namespace lwrcl
         : reader_(reader),
           data_seq_(std::move(data_seq)),
           info_seq_(std::move(info_seq)),
+          shared_message_(nullptr),
           is_valid_(data_seq_.length() > 0 && info_seq_.length() > 0 && info_seq_[0].valid_data)
+    {
+    }
+
+    LoanedSubscriptionMessage(
+        std::shared_ptr<T> shared_message,
+        std::shared_ptr<eprosima::fastdds::dds::SampleInfo> shared_info)
+        : reader_(nullptr),
+          shared_message_(std::move(shared_message)),
+          shared_info_(std::move(shared_info)),
+          is_valid_(shared_message_ != nullptr)
     {
     }
 
@@ -69,6 +80,8 @@ namespace lwrcl
         : reader_(other.reader_),
           data_seq_(std::move(other.data_seq_)),
           info_seq_(std::move(other.info_seq_)),
+          shared_message_(std::move(other.shared_message_)),
+          shared_info_(std::move(other.shared_info_)),
           is_valid_(other.is_valid_)
     {
       other.reader_ = nullptr;
@@ -83,6 +96,8 @@ namespace lwrcl
         reader_ = other.reader_;
         data_seq_ = std::move(other.data_seq_);
         info_seq_ = std::move(other.info_seq_);
+        shared_message_ = std::move(other.shared_message_);
+        shared_info_ = std::move(other.shared_info_);
         is_valid_ = other.is_valid_;
         other.reader_ = nullptr;
         other.is_valid_ = false;
@@ -105,6 +120,10 @@ namespace lwrcl
       {
         throw std::runtime_error("Attempting to access invalid loaned message");
       }
+      if (shared_message_)
+      {
+        return *shared_message_;
+      }
       return data_seq_[0];
     }
 
@@ -113,6 +132,10 @@ namespace lwrcl
       if (!is_valid_)
       {
         throw std::runtime_error("Attempting to access invalid loaned message");
+      }
+      if (shared_message_)
+      {
+        return *shared_message_;
       }
       return data_seq_[0];
     }
@@ -131,6 +154,10 @@ namespace lwrcl
       if (!is_valid_)
       {
         throw std::runtime_error("Attempting to access sample info of invalid loaned message");
+      }
+      if (shared_info_)
+      {
+        return *shared_info_;
       }
       return info_seq_[0];
     }
@@ -154,12 +181,16 @@ namespace lwrcl
         reader_ = nullptr;
         is_valid_ = false;
       }
+      shared_message_.reset();
+      shared_info_.reset();
     }
 
   private:
     eprosima::fastdds::dds::DataReader *reader_ = nullptr;
     eprosima::fastdds::dds::LoanableSequence<T> data_seq_;
     eprosima::fastdds::dds::SampleInfoSeq info_seq_;
+    std::shared_ptr<T> shared_message_;
+    std::shared_ptr<eprosima::fastdds::dds::SampleInfo> shared_info_;
     bool is_valid_ = false;
   };
 
@@ -294,8 +325,8 @@ namespace lwrcl
       }
       auto front = std::move(pollable_buffer_.front());
       pollable_buffer_.pop_front();
-      out_msg = std::move(front.first);
-      info = front.second;
+      out_msg = std::move(front.message);
+      info = front.info;
       return true;
     }
 
@@ -322,6 +353,12 @@ namespace lwrcl
       return !pollable_buffer_.empty();
     }
 
+    void clear_buffer()
+    {
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+      pollable_buffer_.clear();
+    }
+
     /**
      * @brief Take a loaned message directly from the reader (zero-copy)
      * 
@@ -334,39 +371,18 @@ namespace lwrcl
      */
     bool take_loaned(LoanedSubscriptionMessage<T> &out_loaned)
     {
-      if (!reader_)
+      BufferedMessage buffered_message;
+      if (!take_buffered(buffered_message))
       {
-        return false;
-      }
-
-      // Create sequences for loan-based reading
-      eprosima::fastdds::dds::LoanableSequence<T> data_seq;
-      eprosima::fastdds::dds::SampleInfoSeq info_seq;
-
-      ReturnCode_t ret = reader_->take(
-          data_seq,
-          info_seq,
-          1, // max_samples
-          eprosima::fastdds::dds::ANY_SAMPLE_STATE,
-          eprosima::fastdds::dds::ANY_VIEW_STATE,
-          eprosima::fastdds::dds::ANY_INSTANCE_STATE);
-
-      if (ret == ReturnCode_t::RETCODE_OK && data_seq.length() > 0)
-      {
-        if (info_seq[0].valid_data)
+        invoke_if_data();
+        if (!take_buffered(buffered_message))
         {
-          // Transfer ownership of sequences to LoanedSubscriptionMessage
-          // The loan will be returned when LoanedSubscriptionMessage is destroyed
-          out_loaned = LoanedSubscriptionMessage<T>(
-              reader_,
-              std::move(data_seq),
-              std::move(info_seq));
-          return true;
+          return false;
         }
-        // Invalid data, return the loan immediately
-        reader_->return_loan(data_seq, info_seq);
       }
-      return false;
+      out_loaned = LoanedSubscriptionMessage<T>(
+          std::move(buffered_message.message), std::move(buffered_message.sample_info));
+      return true;
     }
 
     /**
@@ -375,34 +391,97 @@ namespace lwrcl
     eprosima::fastdds::dds::DataReader *get_reader() { return reader_; }
 
   private:
+    struct BufferedMessage
+    {
+      std::shared_ptr<T> message;
+      lwrcl::MessageInfo info;
+      std::shared_ptr<eprosima::fastdds::dds::SampleInfo> sample_info;
+    };
+
+    bool take_buffered(BufferedMessage &out_message)
+    {
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+      if (pollable_buffer_.empty())
+      {
+        return false;
+      }
+      out_message = std::move(pollable_buffer_.front());
+      pollable_buffer_.pop_front();
+      return true;
+    }
+
+    struct LoanedSampleBatch
+    {
+      explicit LoanedSampleBatch(eprosima::fastdds::dds::DataReader *reader)
+          : reader(reader), has_loan(false)
+      {
+      }
+
+      ~LoanedSampleBatch()
+      {
+        if (reader && has_loan)
+        {
+          ReturnCode_t ret = reader->return_loan(data_seq, info_seq);
+          if (ret != ReturnCode_t::RETCODE_OK)
+          {
+            std::cerr << "Warning: Failed to return loan to DataReader" << std::endl;
+          }
+        }
+      }
+
+      eprosima::fastdds::dds::DataReader *reader;
+      bool has_loan;
+      eprosima::fastdds::dds::LoanableSequence<T> data_seq;
+      eprosima::fastdds::dds::SampleInfoSeq info_seq;
+    };
+
     // Take all available samples and invoke the callback directly.
     void take_available()
     {
-      lwrcl::MessageInfo new_info;
-      while (reader_->take_next_sample(message_ptr_.get(), &info_) == ReturnCode_t::RETCODE_OK)
+      while (true)
       {
-        if (info_.valid_data)
-        {
-          auto message_ready = std::move(message_ptr_);
-          message_ptr_ = std::make_shared<T>();
+        auto batch = std::make_shared<LoanedSampleBatch>(reader_);
+        ReturnCode_t ret = reader_->take(
+            batch->data_seq,
+            batch->info_seq,
+            1,
+            eprosima::fastdds::dds::ANY_SAMPLE_STATE,
+            eprosima::fastdds::dds::ANY_VIEW_STATE,
+            eprosima::fastdds::dds::ANY_INSTANCE_STATE);
 
-          new_info.source_timestamp = std::chrono::system_clock::now();
-          new_info.from_intra_process = false;
-          {
-            std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
-            pollable_buffer_.emplace_back(message_ready, new_info);
-            if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
-              pollable_buffer_.pop_front();
-          }
-          // Direct invocation — no channel/executor hop.
-          {
-            std::lock_guard<std::mutex> lock(*node_mutex_);
-            try { callback_function_(message_ready); }
-            catch (const std::exception &e) {
-              std::cerr << "Exception in subscription callback: " << e.what() << std::endl;
-            } catch (...) {
-              std::cerr << "Unknown exception in subscription callback." << std::endl;
-            }
+        if (ret != ReturnCode_t::RETCODE_OK || batch->data_seq.length() == 0)
+        {
+          break;
+        }
+        batch->has_loan = true;
+
+        if (!batch->info_seq[0].valid_data)
+        {
+          continue;
+        }
+
+        auto message_ready = std::shared_ptr<T>(batch, &batch->data_seq[0]);
+
+        lwrcl::MessageInfo new_info;
+        new_info.source_timestamp = std::chrono::system_clock::now();
+        new_info.from_intra_process = false;
+        {
+          std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+          pollable_buffer_.push_back(
+              BufferedMessage{
+                  message_ready,
+                  new_info,
+                  std::make_shared<eprosima::fastdds::dds::SampleInfo>(batch->info_seq[0])});
+          if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
+            pollable_buffer_.pop_front();
+        }
+        {
+          std::lock_guard<std::mutex> lock(*node_mutex_);
+          try { callback_function_(message_ready); }
+          catch (const std::exception &e) {
+            std::cerr << "Exception in subscription callback: " << e.what() << std::endl;
+          } catch (...) {
+            std::cerr << "Unknown exception in subscription callback." << std::endl;
           }
         }
       }
@@ -442,7 +521,7 @@ namespace lwrcl
     std::shared_ptr<T> message_ptr_;
     std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
     eprosima::fastdds::dds::SampleInfo info_;
-    std::deque<std::pair<std::shared_ptr<T>, lwrcl::MessageInfo>> pollable_buffer_;
+    std::deque<BufferedMessage> pollable_buffer_;
     std::atomic<int32_t> count_{0};
   };
 
@@ -594,6 +673,7 @@ namespace lwrcl
     ~Subscription()
     {
       waitset_.stop();
+      waitset_.clear_buffer();
       if (reader_ != nullptr)
       {
         subscriber_->delete_datareader(reader_);

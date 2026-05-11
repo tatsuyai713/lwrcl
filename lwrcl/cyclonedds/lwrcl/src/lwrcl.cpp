@@ -992,17 +992,16 @@ namespace lwrcl
 
     while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
     {
+      bool did_work = false;
       if (has_subs)
       {
-        // Block until data arrives on any subscription or stop is signaled.
-        // 100 ms safety timeout — stop_guard normally triggers immediately.
         try
         {
-          unified_ws.wait(dds::core::Duration::from_millisecs(100));
+          unified_ws.wait(dds::core::Duration::from_millisecs(1));
           if (stop_flag_ || global_stop_flag.load()) break;
           for (auto &sub : subs)
           {
-            sub->invoke_if_data();
+            if (sub->invoke_if_data()) did_work = true;
           }
         }
         catch (const dds::core::TimeoutError &) {}
@@ -1011,9 +1010,14 @@ namespace lwrcl
           std::cerr << "DDS Exception in Node::spin: " << e.what() << std::endl;
         }
       }
-      else
+      std::vector<std::shared_ptr<ITimerBase>> timers;
+      for (auto &timer : timer_list_) timers.push_back(timer);
+      for (auto &timer : timers)
       {
-        // No subscriptions — just yield briefly (timers run on their own threads).
+        if (timer->execute_if_ready()) did_work = true;
+      }
+      if (!has_subs && !did_work)
+      {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }
     }
@@ -1043,6 +1047,15 @@ namespace lwrcl
     for (auto &sub : subscription_list_)
     {
       if (sub->invoke_if_data())
+      {
+        did_work = true;
+      }
+    }
+    std::vector<std::shared_ptr<ITimerBase>> timers;
+    for (auto &timer : timer_list_) timers.push_back(timer);
+    for (auto &timer : timers)
+    {
+      if (timer->execute_if_ready())
       {
         did_work = true;
       }
