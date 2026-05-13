@@ -861,10 +861,30 @@ namespace lwrcl
       std::shared_ptr<lwrcl::Node> node, std::shared_ptr<FutureBase> future, const Duration &timeout)
   {
     (void)node;
-    return future->wait_for(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)) ==
-                   std::future_status::ready
-               ? SUCCESS
-               : TIMEOUT;
+    const auto timeout_ms = std::chrono::duration_cast<std::chrono::milliseconds>(timeout);
+    const auto poll_interval = std::chrono::milliseconds(100);
+    if (timeout_ms.count() < 0)
+    {
+      while (ok())
+      {
+        if (future->wait_for(poll_interval) == std::future_status::ready) return SUCCESS;
+      }
+      return INTERRUPTED;
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout_ms;
+    while (true)
+    {
+      auto now = std::chrono::steady_clock::now();
+      if (now >= deadline)
+      {
+        return future->wait_for(std::chrono::milliseconds(0)) == std::future_status::ready ? SUCCESS : TIMEOUT;
+      }
+      if (!ok()) return INTERRUPTED;
+      auto wait_time = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+      if (wait_time > poll_interval) wait_time = poll_interval;
+      if (future->wait_for(wait_time) == std::future_status::ready) return SUCCESS;
+    }
   }
 
   template <typename ResponseT, typename Duration>
@@ -872,10 +892,30 @@ namespace lwrcl
       std::shared_ptr<lwrcl::Node> node, std::shared_future<ResponseT> &future, const Duration &timeout)
   {
     (void)node;
-    return future.wait_for(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)) ==
-                   std::future_status::ready
-               ? SUCCESS
-               : TIMEOUT;
+    const auto timeout_ms = std::chrono::duration_cast<std::chrono::milliseconds>(timeout);
+    const auto poll_interval = std::chrono::milliseconds(100);
+    if (timeout_ms.count() < 0)
+    {
+      while (ok())
+      {
+        if (future.wait_for(poll_interval) == std::future_status::ready) return SUCCESS;
+      }
+      return INTERRUPTED;
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout_ms;
+    while (true)
+    {
+      auto now = std::chrono::steady_clock::now();
+      if (now >= deadline)
+      {
+        return future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready ? SUCCESS : TIMEOUT;
+      }
+      if (!ok()) return INTERRUPTED;
+      auto wait_time = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+      if (wait_time > poll_interval) wait_time = poll_interval;
+      if (future.wait_for(wait_time) == std::future_status::ready) return SUCCESS;
+    }
   }
 
   struct lwrcl_serialized_message_t
@@ -957,6 +997,15 @@ namespace lwrcl
     {
       if (this != &other)
       {
+        if (other.data_.length == 0 || other.data_.buffer == nullptr)
+        {
+          if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
+          data_.buffer = nullptr;
+          data_.length = 0;
+          data_.capacity = 0;
+          is_own_buffer_ = true;
+          return *this;
+        }
         if (is_own_buffer_ && data_.capacity >= other.data_.length && data_.buffer != nullptr)
         {
           std::memcpy(data_.buffer, other.data_.buffer, other.data_.length);
@@ -977,6 +1026,15 @@ namespace lwrcl
 
     SerializedMessage &operator=(const lwrcl_serialized_message_t &other)
     {
+      if (other.length == 0 || other.buffer == nullptr)
+      {
+        if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
+        data_.buffer = nullptr;
+        data_.length = 0;
+        data_.capacity = 0;
+        is_own_buffer_ = true;
+        return *this;
+      }
       if (data_.buffer != other.buffer)
       {
         if (is_own_buffer_ && data_.capacity >= other.length && data_.buffer != nullptr)

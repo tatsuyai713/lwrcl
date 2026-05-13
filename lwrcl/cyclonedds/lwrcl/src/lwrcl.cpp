@@ -4,10 +4,14 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
+#include <cctype>
 #include <cassert>
+#include <climits>
 #include <condition_variable>
 #include <csignal>
 #include <cstdarg>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <iomanip>
@@ -19,6 +23,8 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+
+#include <unistd.h>
 
 namespace lwrcl
 {
@@ -34,16 +40,78 @@ namespace lwrcl
   {
     if ((signal == SIGINT || signal == SIGTERM))
     {
-      printf("SIGINT/SIGTERM received, shutting down...\n");
+      static const char message[] = "SIGINT/SIGTERM received, shutting down...\n";
+      (void)::write(STDERR_FILENO, message, sizeof(message) - 1);
       global_stop_flag.store(true);
       s_signal_status = signal;
-      s_waiting_cv.notify_all();
     }
   }
 
   class Node;
 
   NodeParameters node_parameters;
+
+  namespace
+  {
+    bool parse_parameter_int(const std::string &text, int &value)
+    {
+      if (text.empty()) return false;
+      char *end = nullptr;
+      errno = 0;
+      long parsed = std::strtol(text.c_str(), &end, 10);
+      if (end == text.c_str() || *end != '\0' || errno == ERANGE ||
+          parsed < INT_MIN || parsed > INT_MAX)
+      {
+        return false;
+      }
+      value = static_cast<int>(parsed);
+      return true;
+    }
+
+    bool parse_parameter_double(const std::string &text, double &value)
+    {
+      if (text.empty()) return false;
+      char *end = nullptr;
+      errno = 0;
+      double parsed = std::strtod(text.c_str(), &end);
+      if (end == text.c_str() || *end != '\0' || errno == ERANGE)
+      {
+        return false;
+      }
+      value = parsed;
+      return true;
+    }
+
+    bool parse_parameter_bool(const std::string &text, bool &value)
+    {
+      std::string lower = text;
+      std::transform(lower.begin(), lower.end(), lower.begin(),
+                     [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+      if (lower == "true" || lower == "yes" || lower == "on")
+      {
+        value = true;
+        return true;
+      }
+      if (lower == "false" || lower == "no" || lower == "off")
+      {
+        value = false;
+        return true;
+      }
+      return false;
+    }
+
+    Parameter make_parameter_from_yaml_scalar(const std::string &name, const YAML::Node &node)
+    {
+      const std::string text = node.as<std::string>();
+      int int_value{};
+      if (parse_parameter_int(text, int_value)) return Parameter(name, int_value);
+      double double_value{};
+      if (parse_parameter_double(text, double_value)) return Parameter(name, double_value);
+      bool bool_value{};
+      if (parse_parameter_bool(text, bool_value)) return Parameter(name, bool_value);
+      return Parameter(name, text);
+    }
+  }
 
   Parameter::Parameter(const std::string &name, bool value)
       : name_(name), string_value_(value ? "true" : "false"), type_(Type::BOOL)
@@ -268,8 +336,15 @@ namespace lwrcl
     char timestamp_buf[80];
     struct tm local_time_buf;
     auto local_time = localtime_r(&timestamp, &local_time_buf);
-    std::strftime(
-        timestamp_buf, sizeof(timestamp_buf), "%Y-%m-%d %H:%M:%S", local_time);
+    if (local_time != nullptr)
+    {
+      std::strftime(timestamp_buf, sizeof(timestamp_buf), "%Y-%m-%d %H:%M:%S", local_time);
+    }
+    else
+    {
+      std::snprintf(timestamp_buf, sizeof(timestamp_buf), "0000-00-00 00:00:00");
+      ms = std::chrono::milliseconds(0);
+    }
 
     switch (level)
     {
@@ -1009,12 +1084,31 @@ namespace lwrcl
         {
           std::cerr << "DDS Exception in Node::spin: " << e.what() << std::endl;
         }
+        catch (const std::exception &e)
+        {
+          std::cerr << "Exception in Node::spin: " << e.what() << std::endl;
+        }
+        catch (...)
+        {
+          std::cerr << "Unknown exception in Node::spin." << std::endl;
+        }
       }
       std::vector<std::shared_ptr<ITimerBase>> timers;
       for (auto &timer : timer_list_) timers.push_back(timer);
       for (auto &timer : timers)
       {
-        if (timer->execute_if_ready()) did_work = true;
+        try
+        {
+          if (timer->execute_if_ready()) did_work = true;
+        }
+        catch (const std::exception &e)
+        {
+          std::cerr << "Exception in timer execution: " << e.what() << std::endl;
+        }
+        catch (...)
+        {
+          std::cerr << "Unknown exception in timer execution." << std::endl;
+        }
       }
       if (!has_subs && !did_work)
       {
@@ -1546,36 +1640,7 @@ namespace lwrcl
            ++param_it)
       {
         std::string param_name = param_it->first.as<std::string>();
-        auto param_value = param_it->second;
-        try
-        {
-          param_value.as<int>();
-          int value = param_value.as<int>();
-          params[param_name] = Parameter(param_name, value);
-        }
-        catch (const YAML::BadConversion &)
-        {
-          try
-          {
-            param_value.as<double>();
-            double value = param_value.as<double>();
-            params[param_name] = Parameter(param_name, value);
-          }
-          catch (const YAML::BadConversion &)
-          {
-            try
-            {
-              param_value.as<bool>();
-              bool value = param_value.as<bool>();
-              params[param_name] = Parameter(param_name, value);
-            }
-            catch (const YAML::BadConversion &)
-            {
-              std::string value = param_value.as<std::string>();
-              params[param_name] = Parameter(param_name, value);
-            }
-          }
-        }
+        params[param_name] = make_parameter_from_yaml_scalar(param_name, param_it->second);
       }
       node_parameters[node_name] = params;
     }

@@ -363,6 +363,7 @@ namespace lwrcl
       if (app_)
       {
         app_->unregister_message_handler(service_id_, instance_id_, event_id_);
+        app_->unregister_availability_handler(service_id_, instance_id_);
         app_->unsubscribe(service_id_, instance_id_, eventgroup_id_);
         app_->release_event(service_id_, instance_id_, event_id_);
         app_->release_service(service_id_, instance_id_);

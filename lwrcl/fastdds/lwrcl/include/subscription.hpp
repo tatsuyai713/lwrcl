@@ -178,11 +178,11 @@ namespace lwrcl
         {
           std::cerr << "Warning: Failed to return loan to DataReader" << std::endl;
         }
-        reader_ = nullptr;
-        is_valid_ = false;
       }
+      reader_ = nullptr;
       shared_message_.reset();
       shared_info_.reset();
+      is_valid_ = false;
     }
 
   private:
@@ -551,7 +551,8 @@ namespace lwrcl
           waitset_(callback_function, node_mutex),
           topic_(nullptr),
           subscriber_(nullptr),
-          reader_(nullptr)
+              reader_(nullptr),
+              topic_owned_(false)
     {
       using ParentType = typename ParentTypeTraits<T>::Type;
       message_type_ = lwrcl::MessageType(new ParentType());
