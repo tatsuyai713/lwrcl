@@ -49,8 +49,10 @@ endif()
 if(DDS_BACKEND STREQUAL "fastdds")
   # ── Fast DDS: fastddsgen to compile custom IDL ──────────────────────────
   find_program(FASTDDSGEN_EXECUTABLE fastddsgen
-    HINTS /opt/fast-dds-gen/bin ${DDS_PREFIX}/bin
-    REQUIRED)
+    HINTS /opt/fast-dds-gen/bin ${DDS_PREFIX}/bin)
+  if(NOT FASTDDSGEN_EXECUTABLE)
+    message(FATAL_ERROR "fastddsgen executable not found")
+  endif()
 
   file(GLOB_RECURSE ADVANCED_IDL_FILES "${IDL_ROOT}/*.idl")
 

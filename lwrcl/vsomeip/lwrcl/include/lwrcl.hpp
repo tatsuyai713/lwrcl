@@ -12,6 +12,7 @@
 #include <mutex>
 #include <queue>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -880,6 +881,8 @@ namespace lwrcl
         app_->unregister_availability_handler(service_id_, instance_id_);
         app_->release_service(service_id_, instance_id_);
       }
+      fail_pending_requests("vsomeip client stopped before response was received");
+      cv_.notify_all();
     }
 
     SharedFuture async_send_request(SharedRequest request)
@@ -887,9 +890,20 @@ namespace lwrcl
       auto promise = std::make_shared<std::promise<SharedResponse>>();
       auto future = promise->get_future().share();
 
+      if (stopped_.load())
       {
-        std::lock_guard<std::mutex> lock(mutex_);
-        response_promises_.push(promise);
+        set_promise_exception(promise, "vsomeip client is stopped");
+        return future;
+      }
+      if (!app_)
+      {
+        set_promise_exception(promise, "vsomeip application is not available");
+        return future;
+      }
+      if (!service_is_ready())
+      {
+        set_promise_exception(promise, "vsomeip service is not available");
+        return future;
       }
 
       SerializedMessage serialized;
@@ -906,7 +920,28 @@ namespace lwrcl
       message->set_instance(instance_id_);
       message->set_method(method_id_);
       message->set_payload(payload);
-      app_->send(message);
+
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (stopped_.load())
+        {
+          set_promise_exception(promise, "vsomeip client is stopped");
+          return future;
+        }
+        response_promises_.push(promise);
+      }
+
+      try
+      {
+        app_->send(message);
+      }
+      catch (...)
+      {
+        remove_pending_request(promise);
+        try { throw; }
+        catch (const std::exception &e) { set_promise_exception(promise, e.what()); }
+        catch (...) { set_promise_exception(promise, "vsomeip request send failed"); }
+      }
 
       return future;
     }
@@ -930,10 +965,55 @@ namespace lwrcl
     }
 
     bool service_is_ready() const {
-      return service_available_.load() || app_->is_available(service_id_, instance_id_);
+      return !stopped_.load() && app_ &&
+          (service_available_.load() || app_->is_available(service_id_, instance_id_));
     }
 
   private:
+    void fail_pending_requests(const std::string &message)
+    {
+      std::queue<std::shared_ptr<std::promise<SharedResponse>>> pending;
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        pending.swap(response_promises_);
+      }
+      while (!pending.empty())
+      {
+        set_promise_exception(pending.front(), message);
+        pending.pop();
+      }
+    }
+
+    void remove_pending_request(const std::shared_ptr<std::promise<SharedResponse>> &promise)
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      std::queue<std::shared_ptr<std::promise<SharedResponse>>> remaining;
+      while (!response_promises_.empty())
+      {
+        auto queued = response_promises_.front();
+        response_promises_.pop();
+        if (queued != promise)
+        {
+          remaining.push(queued);
+        }
+      }
+      response_promises_.swap(remaining);
+    }
+
+    static void set_promise_exception(
+        const std::shared_ptr<std::promise<SharedResponse>> &promise,
+        const std::string &message)
+    {
+      if (!promise) return;
+      try
+      {
+        promise->set_exception(std::make_exception_ptr(std::runtime_error(message)));
+      }
+      catch (const std::future_error &)
+      {
+      }
+    }
+
     std::shared_ptr<vsomeip::application> app_;
     std::string service_name_;
     std::shared_ptr<typename T::Response> response_;
