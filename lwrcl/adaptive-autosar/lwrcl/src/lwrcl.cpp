@@ -1119,7 +1119,7 @@ namespace lwrcl
       client->stop();
     }
     client_list_.clear();
-    closed_ = true;
+    closed_.store(true);
   }
 
   Clock::SharedPtr Node::get_clock() { return clock_; }

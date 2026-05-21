@@ -1109,6 +1109,10 @@ namespace lwrcl
       std::lock_guard<std::mutex> lock(stop_guard_mutex_);
       stop_guard_ = &stop_cond;
     }
+    std::shared_ptr<void> stop_guard_cleanup(nullptr, [this](void *) {
+      std::lock_guard<std::mutex> lock(stop_guard_mutex_);
+      stop_guard_ = nullptr;
+    });
     for (auto &sub : subs) sub->add_to_waitset(unified_ws);
     const bool has_subs = !subs.empty();
 
@@ -1163,10 +1167,6 @@ namespace lwrcl
       }
     }
 
-    {
-      std::lock_guard<std::mutex> lock(stop_guard_mutex_);
-      stop_guard_ = nullptr;
-    }
     stop_cond.set_trigger_value(true);
     if (global_stop_flag.load()) shutdown();
   }
@@ -1235,7 +1235,7 @@ namespace lwrcl
       client->stop();
     }
     client_list_.clear();
-    closed_ = true;
+    closed_.store(true);
   }
 
   Clock::SharedPtr Node::get_clock() { return clock_; }

@@ -625,7 +625,8 @@ namespace lwrcl
           publisher_(nullptr),
           subscription_(nullptr),
           request_topic_name_(service_name_ + "_Request"),
-          response_topic_name_(service_name_ + "_Response")
+          response_topic_name_(service_name_ + "_Response"),
+          stopped_(false)
     {
       RMWQoSProfile rmw_qos_profile_services = rmw_qos_profile_services_default;
       QoS service_qos(KeepLast(10), rmw_qos_profile_services);
@@ -635,9 +636,16 @@ namespace lwrcl
 
       request_callback_function_ = [this](std::shared_ptr<typename T::Request> request)
       {
+        if (stopped_.load())
+        {
+          return;
+        }
         std::shared_ptr<typename T::Response> response = std::make_shared<typename T::Response>();
         callback_function_(request, response);
-        publisher_->publish(response);
+        if (!stopped_.load() && publisher_)
+        {
+          publisher_->publish(response);
+        }
       };
 
       subscription_ = std::make_shared<Subscription<typename T::Request>>(
@@ -645,7 +653,10 @@ namespace lwrcl
           request_callback_function_, std::make_shared<std::mutex>());
     }
 
-    ~Service() = default;
+    ~Service()
+    {
+      stop();
+    }
 
     Service(const Service &) = delete;
     Service &operator=(const Service &) = delete;
@@ -654,10 +665,16 @@ namespace lwrcl
 
     void stop() override
     {
+      if (stopped_.exchange(true))
+      {
+        return;
+      }
       if (subscription_)
       {
         subscription_->stop();
       }
+      subscription_.reset();
+      publisher_.reset();
     }
 
   private:
@@ -670,6 +687,7 @@ namespace lwrcl
     std::shared_ptr<Subscription<typename T::Request>> subscription_;
     std::string request_topic_name_;
     std::string response_topic_name_;
+    std::atomic<bool> stopped_;
   };
 
   class IClient

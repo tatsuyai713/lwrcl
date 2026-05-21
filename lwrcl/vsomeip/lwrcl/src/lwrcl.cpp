@@ -1089,7 +1089,7 @@ namespace lwrcl
         vsomeip_thread_.join();
     }
 
-    closed_ = true;
+    closed_.store(true);
   }
 
   Clock::SharedPtr Node::get_clock() { return clock_; }
