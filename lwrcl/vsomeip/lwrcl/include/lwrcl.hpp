@@ -358,12 +358,15 @@ namespace lwrcl
     void get_parameter(const std::string &name, std::string &string_data) const;
 
     bool has_parameter(const std::string &name) const {
+      std::lock_guard<std::mutex> lock(parameters_mutex_);
       return parameters_.find(name) != parameters_.end();
     }
     void undeclare_parameter(const std::string &name) {
+      std::lock_guard<std::mutex> lock(parameters_mutex_);
       parameters_.erase(name);
     }
     void set_parameter(const Parameter &param) {
+      std::lock_guard<std::mutex> lock(parameters_mutex_);
       parameters_[param.get_name()] = param;
     }
     std::vector<Parameter> get_parameters(const std::vector<std::string> &names) const {
@@ -377,6 +380,7 @@ namespace lwrcl
     std::vector<std::string> list_parameters(
         const std::vector<std::string> &prefixes, uint64_t /*depth*/) const {
       std::vector<std::string> result;
+      std::lock_guard<std::mutex> lock(parameters_mutex_);
       for (const auto &kv : parameters_) {
         if (prefixes.empty()) {
           result.push_back(kv.first);
@@ -441,6 +445,7 @@ namespace lwrcl
     std::forward_list<std::shared_ptr<ITimerBase>> timer_list_;
     std::forward_list<std::shared_ptr<IService>> service_list_;
     std::forward_list<std::shared_ptr<IClient>> client_list_;
+    mutable std::mutex parameters_mutex_;
     Parameters parameters_;
 
     std::string get_topic_prefix() const

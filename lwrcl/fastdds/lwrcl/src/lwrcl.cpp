@@ -1245,8 +1245,18 @@ namespace lwrcl
     for (const auto &param : parameters)
     {
       std::string node_name = this->get_name();
-      std::lock_guard<std::mutex> lock(node_parameters_mutex);
-      std::string param_name = param->get_name();
+      std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+      std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
+      if (!param)
+      {
+        throw std::runtime_error("Parameter pointer is null");
+      }
+      auto parameter = std::dynamic_pointer_cast<Parameter>(param);
+      if (!parameter)
+      {
+        throw std::runtime_error("Parameter type is invalid");
+      }
+      std::string param_name = parameter->get_name();
 
       // Check if the node exists in node_parameters
       auto node_it = node_parameters.find(node_name);
@@ -1258,8 +1268,8 @@ namespace lwrcl
         if (params.find(param_name) != params.end())
         {
           // Update the existing parameter
-          params[param_name] = *std::dynamic_pointer_cast<Parameter>(param);
-          parameters_[param_name] = *std::dynamic_pointer_cast<Parameter>(param);
+          params[param_name] = *parameter;
+          parameters_[param_name] = *parameter;
 
           std::cout << "Parameter updated: " << param_name << std::endl;
         }
@@ -1288,7 +1298,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const bool &default_value)
   {
     std::string node_name = this->get_name();
-    std::lock_guard<std::mutex> lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1311,7 +1322,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const int &default_value)
   {
     std::string node_name = this->get_name();
-    std::lock_guard<std::mutex> lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1334,7 +1346,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const double &default_value)
   {
     std::string node_name = this->get_name();
-    std::lock_guard<std::mutex> lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1357,7 +1370,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::string &default_value)
   {
     std::string node_name = this->get_name();
-    std::lock_guard<std::mutex> lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1380,7 +1394,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const char *default_value)
   {
     std::string node_name = this->get_name();
-    std::lock_guard<std::mutex> lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1403,7 +1418,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<bool> default_value)
   {
     std::string node_name = this->get_name();
-    std::lock_guard<std::mutex> lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1426,7 +1442,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<int> default_value)
   {
     std::string node_name = this->get_name();
-    std::lock_guard<std::mutex> lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1449,7 +1466,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<double> default_value)
   {
     std::string node_name = this->get_name();
-    std::lock_guard<std::mutex> lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1472,7 +1490,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<std::string> default_value)
   {
     std::string node_name = this->get_name();
-    std::lock_guard<std::mutex> lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1495,7 +1514,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<uint8_t> default_value)
   {
     std::string node_name = this->get_name();
-    std::lock_guard<std::mutex> lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1517,6 +1537,7 @@ namespace lwrcl
 
   Parameter Node::get_parameter(const std::string &name) const
   {
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
     auto it = parameters_.find(name);
     if (it != parameters_.end())
     {
@@ -1531,6 +1552,7 @@ namespace lwrcl
 
   void Node::get_parameter(const std::string &name, bool &bool_data) const
   {
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
     auto it = parameters_.find(name);
     if (it != parameters_.end())
     {
@@ -1545,6 +1567,7 @@ namespace lwrcl
 
   void Node::get_parameter(const std::string &name, int &int_data) const
   {
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
     auto it = parameters_.find(name);
     if (it != parameters_.end())
     {
@@ -1559,6 +1582,7 @@ namespace lwrcl
 
   void Node::get_parameter(const std::string &name, double &double_data) const
   {
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
     auto it = parameters_.find(name);
     if (it != parameters_.end())
     {
@@ -1573,6 +1597,7 @@ namespace lwrcl
 
   void Node::get_parameter(const std::string &name, std::string &string_data) const
   {
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
     auto it = parameters_.find(name);
     if (it != parameters_.end())
     {
@@ -1692,7 +1717,7 @@ namespace lwrcl
   void load_parameters(const std::string &file_path)
   {
     YAML::Node config = YAML::LoadFile(file_path);
-    std::lock_guard<std::mutex> lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
 
     for (YAML::const_iterator it = config.begin(); it != config.end(); ++it)
     {
