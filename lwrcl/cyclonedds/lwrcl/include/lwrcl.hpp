@@ -930,9 +930,10 @@ namespace lwrcl
   FutureReturnCode spin_until_future_complete(
       std::shared_ptr<lwrcl::Node> node, std::shared_ptr<FutureBase> future, const Duration &timeout)
   {
+    const auto timeout_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(timeout);
     const auto timeout_ms = std::chrono::duration_cast<std::chrono::milliseconds>(timeout);
     const auto poll_interval = std::chrono::milliseconds(1);
-    if (timeout_ms.count() < 0)
+    if (timeout_ns.count() < 0)
     {
       while (ok())
       {
@@ -964,9 +965,10 @@ namespace lwrcl
   FutureReturnCode spin_until_future_complete(
       std::shared_ptr<lwrcl::Node> node, std::shared_future<ResponseT> &future, const Duration &timeout)
   {
+    const auto timeout_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(timeout);
     const auto timeout_ms = std::chrono::duration_cast<std::chrono::milliseconds>(timeout);
     const auto poll_interval = std::chrono::milliseconds(1);
-    if (timeout_ms.count() < 0)
+    if (timeout_ns.count() < 0)
     {
       while (ok())
       {

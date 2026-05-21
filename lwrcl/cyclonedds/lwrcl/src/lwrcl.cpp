@@ -55,6 +55,24 @@ namespace lwrcl
 
   namespace
   {
+    std::chrono::milliseconds timer_wait_timeout(const std::vector<std::shared_ptr<ITimerBase>> &timers)
+    {
+      const auto max_wait = std::chrono::milliseconds(100);
+      if (timers.empty()) return max_wait;
+
+      auto timeout = max_wait;
+      for (const auto &timer : timers)
+      {
+        const auto until_next = timer->time_until_next_call();
+        if (until_next <= std::chrono::nanoseconds::zero()) return std::chrono::milliseconds::zero();
+        if (until_next == std::chrono::nanoseconds::max()) continue;
+        auto until_next_ms = std::chrono::duration_cast<std::chrono::milliseconds>(until_next);
+        if (until_next_ms < until_next) ++until_next_ms;
+        if (until_next_ms < timeout) timeout = until_next_ms;
+      }
+      return timeout;
+    }
+
     bool parse_parameter_int(const std::string &text, int &value)
     {
       if (text.empty()) return false;
@@ -1099,7 +1117,7 @@ namespace lwrcl
       {
         try
         {
-          unified_ws.wait(dds::core::Duration::from_millisecs(timers.empty() ? 100 : 1));
+          unified_ws.wait(dds::core::Duration::from_millisecs(timer_wait_timeout(timers).count()));
           if (stop_flag_.load() || global_stop_flag.load()) break;
           for (auto &sub : subs)
           {
@@ -1137,9 +1155,7 @@ namespace lwrcl
       }
       if (!has_subs && !did_work)
       {
-        std::this_thread::sleep_for(timers.empty()
-            ? std::chrono::milliseconds(100)
-            : std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(timer_wait_timeout(timers));
       }
     }
 
