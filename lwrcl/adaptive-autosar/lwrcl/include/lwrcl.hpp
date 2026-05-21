@@ -298,7 +298,10 @@ namespace lwrcl
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::SYSTEM_TIME;
       auto duration = Duration(period);
       auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), callback_mutex_, clock_type);
-      timer_list_.push_front(timer);
+      {
+        std::lock_guard<std::mutex> lock(timer_list_mutex_);
+        timer_list_.push_front(timer);
+      }
       return timer;
     }
 
@@ -309,7 +312,10 @@ namespace lwrcl
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::STEADY_TIME;
       auto duration = Duration(period);
       auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), callback_mutex_, clock_type);
-      timer_list_.push_front(timer);
+      {
+        std::lock_guard<std::mutex> lock(timer_list_mutex_);
+        timer_list_.push_front(timer);
+      }
       return timer;
     }
 
@@ -449,6 +455,7 @@ namespace lwrcl
     std::forward_list<std::shared_ptr<IPublisher>> publisher_list_;
     std::forward_list<std::shared_ptr<ISubscription>> subscription_list_;
     std::forward_list<std::shared_ptr<ITimerBase>> timer_list_;
+    mutable std::mutex timer_list_mutex_;
     std::forward_list<std::shared_ptr<IService>> service_list_;
     std::forward_list<std::shared_ptr<IClient>> client_list_;
     mutable std::mutex parameters_mutex_;

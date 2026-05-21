@@ -40,11 +40,12 @@ namespace lwrcl
 
     TimerBase(
       Duration period, std::function<void()> callback_function,
-      std::shared_ptr<std::mutex> /*node_mutex*/, Clock::ClockType /*clock_type*/)
+      std::shared_ptr<std::mutex> node_mutex, Clock::ClockType /*clock_type*/)
         : ITimerBase(),
           std::enable_shared_from_this<TimerBase>(),
           period_(period),
           callback_function_(std::move(callback_function)),
+          node_mutex_(std::move(node_mutex)),
           next_execution_time_(std::chrono::steady_clock::now() + std::chrono::nanoseconds(period_.nanoseconds())),
           stop_flag_(false),
           is_canceled_(false)
@@ -133,6 +134,11 @@ namespace lwrcl
   private:
     void execute_callback()
     {
+      std::unique_lock<std::mutex> callback_lock;
+      if (node_mutex_)
+      {
+        callback_lock = std::unique_lock<std::mutex>(*node_mutex_);
+      }
       try { callback_function_(); }
       catch (const std::exception &e) {
         std::fprintf(stderr, "Exception in timer callback: %s\n", e.what());
@@ -143,6 +149,7 @@ namespace lwrcl
 
     Duration period_;
     std::function<void()> callback_function_;
+    std::shared_ptr<std::mutex> node_mutex_;
     std::chrono::steady_clock::time_point next_execution_time_;
     std::atomic<bool> stop_flag_;
     std::atomic<bool> is_canceled_;

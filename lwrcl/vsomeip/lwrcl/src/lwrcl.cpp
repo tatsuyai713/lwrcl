@@ -984,9 +984,16 @@ namespace lwrcl
 
     while (!closed_.load() && !global_stop_flag.load() && !stop_flag_.load())
     {
+      std::vector<std::shared_ptr<ITimerBase>> timers;
+      {
+        std::lock_guard<std::mutex> lock(timer_list_mutex_);
+        for (auto &timer : timer_list_) timers.push_back(timer);
+      }
       {
         std::unique_lock<std::mutex> lk(*node_cv_mutex_);
-        node_cv_->wait_for(lk, std::chrono::milliseconds(1),
+        node_cv_->wait_for(lk, timers.empty()
+            ? std::chrono::milliseconds(100)
+            : std::chrono::milliseconds(1),
             [this]() { return node_data_pending_->load() || closed_.load()
                         || global_stop_flag.load() || stop_flag_.load(); });
       }
@@ -1009,8 +1016,6 @@ namespace lwrcl
           }
         }
       }
-      std::vector<std::shared_ptr<ITimerBase>> timers;
-      for (auto &timer : timer_list_) timers.push_back(timer);
       for (auto &timer : timers)
       {
         try
@@ -1052,7 +1057,10 @@ namespace lwrcl
       }
     }
     std::vector<std::shared_ptr<ITimerBase>> timers;
-    for (auto &timer : timer_list_) timers.push_back(timer);
+    {
+      std::lock_guard<std::mutex> lock(timer_list_mutex_);
+      for (auto &timer : timer_list_) timers.push_back(timer);
+    }
     for (auto &timer : timers)
     {
       if (timer->execute_if_ready())
@@ -1082,9 +1090,12 @@ namespace lwrcl
     for (auto &subscriber : subscription_list_)
       subscriber->stop();
     subscription_list_.clear();
-    for (auto &timer : timer_list_)
-      std::static_pointer_cast<TimerBase>(timer)->stop();
-    timer_list_.clear();
+    {
+      std::lock_guard<std::mutex> lock(timer_list_mutex_);
+      for (auto &timer : timer_list_)
+        std::static_pointer_cast<TimerBase>(timer)->stop();
+      timer_list_.clear();
+    }
     for (auto &service : service_list_)
       service->stop();
     service_list_.clear();

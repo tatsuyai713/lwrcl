@@ -1132,12 +1132,19 @@ namespace lwrcl
     while (!closed_.load() && !global_stop_flag.load() && !stop_flag_.load())
     {
       bool did_work = false;
+      std::vector<std::shared_ptr<ITimerBase>> timers;
+      {
+        std::lock_guard<std::mutex> lock(timer_list_mutex_);
+        for (auto &timer : timer_list_) timers.push_back(timer);
+      }
       if (has_subs)
       {
         try
         {
           eprosima::fastdds::dds::ConditionSeq active;
-          eprosima::fastrtps::Duration_t timeout{0, 1000000};
+          eprosima::fastrtps::Duration_t timeout = timers.empty()
+              ? eprosima::fastrtps::Duration_t{0, 100000000}
+              : eprosima::fastrtps::Duration_t{0, 1000000};
           ReturnCode_t ret = unified_ws.wait(active, timeout);
           if (global_stop_flag.load() || stop_flag_.load()) break;
           if (ret == ReturnCode_t::RETCODE_OK)
@@ -1157,8 +1164,6 @@ namespace lwrcl
           std::cerr << "Unknown exception in Node::spin." << std::endl;
         }
       }
-      std::vector<std::shared_ptr<ITimerBase>> timers;
-      for (auto &timer : timer_list_) timers.push_back(timer);
       for (auto &timer : timers)
       {
         try
@@ -1176,7 +1181,9 @@ namespace lwrcl
       }
       if (!has_subs && !did_work)
       {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(timers.empty()
+            ? std::chrono::milliseconds(100)
+            : std::chrono::milliseconds(1));
       }
     }
 
@@ -1207,7 +1214,10 @@ namespace lwrcl
       }
     }
     std::vector<std::shared_ptr<ITimerBase>> timers;
-    for (auto &timer : timer_list_) timers.push_back(timer);
+    {
+      std::lock_guard<std::mutex> lock(timer_list_mutex_);
+      for (auto &timer : timer_list_) timers.push_back(timer);
+    }
     for (auto &timer : timers)
     {
       if (timer->execute_if_ready())
@@ -1232,11 +1242,14 @@ namespace lwrcl
       subscriber->stop();
     }
     subscription_list_.clear();
-    for (auto &timer : timer_list_)
     {
-      std::static_pointer_cast<TimerBase>(timer)->stop();
+      std::lock_guard<std::mutex> lock(timer_list_mutex_);
+      for (auto &timer : timer_list_)
+      {
+        std::static_pointer_cast<TimerBase>(timer)->stop();
+      }
+      timer_list_.clear();
     }
-    timer_list_.clear();
 
     for (auto &service : service_list_)
     {
