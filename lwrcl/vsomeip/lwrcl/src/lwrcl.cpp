@@ -470,25 +470,36 @@ namespace lwrcl
 
     void MultiThreadedExecutor::spin()
     {
-      stop_flag_ = false;
-      for (auto node : nodes_)
       {
-        threads_.emplace_back([this, node]()
-                              {
+        std::lock_guard<std::mutex> lock(mutex_);
+        stop_flag_.store(false);
+        for (auto node : nodes_)
+        {
+          threads_.emplace_back([node]()
+                                {
           if (node != nullptr) {
             if (!node->closed_.load())
               lwrcl::spin(node);
           } else {
             std::cerr << "[WARN] Node pointer is null in executor spin." << std::endl;
           } });
+        }
       }
 
-      for (auto &thread : threads_)
+      while (true)
       {
+        std::thread thread;
+        {
+          std::lock_guard<std::mutex> lock(mutex_);
+          if (threads_.empty())
+            break;
+          thread = std::move(threads_.back());
+          threads_.pop_back();
+        }
+
         if (thread.joinable())
           thread.join();
       }
-      threads_.clear();
 
       if (global_stop_flag.load())
         clear();
