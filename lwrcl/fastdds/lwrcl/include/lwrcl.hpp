@@ -914,14 +914,15 @@ namespace lwrcl
   FutureReturnCode spin_until_future_complete(
       std::shared_ptr<lwrcl::Node> node, std::shared_ptr<FutureBase> future, const Duration &timeout)
   {
-    (void)node;
     const auto timeout_ms = std::chrono::duration_cast<std::chrono::milliseconds>(timeout);
-    const auto poll_interval = std::chrono::milliseconds(100);
+    const auto poll_interval = std::chrono::milliseconds(1);
     if (timeout_ms.count() < 0)
     {
       while (ok())
       {
-        if (future->wait_for(poll_interval) == std::future_status::ready) return SUCCESS;
+        if (future->wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) return SUCCESS;
+        if (node && !node->closed_.load()) node->try_spin_some();
+        std::this_thread::sleep_for(poll_interval);
       }
       return INTERRUPTED;
     }
@@ -937,7 +938,9 @@ namespace lwrcl
       if (!ok()) return INTERRUPTED;
       auto wait_time = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
       if (wait_time > poll_interval) wait_time = poll_interval;
-      if (future->wait_for(wait_time) == std::future_status::ready) return SUCCESS;
+      if (future->wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) return SUCCESS;
+      if (node && !node->closed_.load()) node->try_spin_some();
+      std::this_thread::sleep_for(wait_time);
     }
   }
 
@@ -945,14 +948,15 @@ namespace lwrcl
   FutureReturnCode spin_until_future_complete(
       std::shared_ptr<lwrcl::Node> node, std::shared_future<ResponseT> &future, const Duration &timeout)
   {
-    (void)node;
     const auto timeout_ms = std::chrono::duration_cast<std::chrono::milliseconds>(timeout);
-    const auto poll_interval = std::chrono::milliseconds(100);
+    const auto poll_interval = std::chrono::milliseconds(1);
     if (timeout_ms.count() < 0)
     {
       while (ok())
       {
-        if (future.wait_for(poll_interval) == std::future_status::ready) return SUCCESS;
+        if (future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) return SUCCESS;
+        if (node && !node->closed_.load()) node->try_spin_some();
+        std::this_thread::sleep_for(poll_interval);
       }
       return INTERRUPTED;
     }
@@ -968,7 +972,9 @@ namespace lwrcl
       if (!ok()) return INTERRUPTED;
       auto wait_time = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
       if (wait_time > poll_interval) wait_time = poll_interval;
-      if (future.wait_for(wait_time) == std::future_status::ready) return SUCCESS;
+      if (future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) return SUCCESS;
+      if (node && !node->closed_.load()) node->try_spin_some();
+      std::this_thread::sleep_for(wait_time);
     }
   }
 

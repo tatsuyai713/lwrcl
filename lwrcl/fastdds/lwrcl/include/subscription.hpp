@@ -371,18 +371,32 @@ namespace lwrcl
      */
     bool take_loaned(LoanedSubscriptionMessage<T> &out_loaned)
     {
-      BufferedMessage buffered_message;
-      if (!take_buffered(buffered_message))
+      if (!reader_)
       {
-        invoke_if_data();
-        if (!take_buffered(buffered_message))
-        {
-          return false;
-        }
+        return false;
       }
-      out_loaned = LoanedSubscriptionMessage<T>(
-          std::move(buffered_message.message), std::move(buffered_message.sample_info));
-      return true;
+
+      eprosima::fastdds::dds::LoanableSequence<T> data_seq;
+      eprosima::fastdds::dds::SampleInfoSeq info_seq;
+      ReturnCode_t ret = reader_->take(
+          data_seq,
+          info_seq,
+          1,
+          eprosima::fastdds::dds::ANY_SAMPLE_STATE,
+          eprosima::fastdds::dds::ANY_VIEW_STATE,
+          eprosima::fastdds::dds::ANY_INSTANCE_STATE);
+
+      if (ret == ReturnCode_t::RETCODE_OK && data_seq.length() > 0)
+      {
+        if (info_seq[0].valid_data)
+        {
+          out_loaned = LoanedSubscriptionMessage<T>(
+              reader_, std::move(data_seq), std::move(info_seq));
+          return true;
+        }
+        reader_->return_loan(data_seq, info_seq);
+      }
+      return false;
     }
 
     /**
@@ -410,57 +424,23 @@ namespace lwrcl
       return true;
     }
 
-    struct LoanedSampleBatch
-    {
-      explicit LoanedSampleBatch(eprosima::fastdds::dds::DataReader *reader)
-          : reader(reader), has_loan(false)
-      {
-      }
-
-      ~LoanedSampleBatch()
-      {
-        if (reader && has_loan)
-        {
-          ReturnCode_t ret = reader->return_loan(data_seq, info_seq);
-          if (ret != ReturnCode_t::RETCODE_OK)
-          {
-            std::cerr << "Warning: Failed to return loan to DataReader" << std::endl;
-          }
-        }
-      }
-
-      eprosima::fastdds::dds::DataReader *reader;
-      bool has_loan;
-      eprosima::fastdds::dds::LoanableSequence<T> data_seq;
-      eprosima::fastdds::dds::SampleInfoSeq info_seq;
-    };
-
     // Take all available samples and invoke the callback directly.
     void take_available()
     {
       while (true)
       {
-        auto batch = std::make_shared<LoanedSampleBatch>(reader_);
-        ReturnCode_t ret = reader_->take(
-            batch->data_seq,
-            batch->info_seq,
-            1,
-            eprosima::fastdds::dds::ANY_SAMPLE_STATE,
-            eprosima::fastdds::dds::ANY_VIEW_STATE,
-            eprosima::fastdds::dds::ANY_INSTANCE_STATE);
-
-        if (ret != ReturnCode_t::RETCODE_OK || batch->data_seq.length() == 0)
+        if (reader_->take_next_sample(message_ptr_.get(), &info_) != ReturnCode_t::RETCODE_OK)
         {
           break;
         }
-        batch->has_loan = true;
 
-        if (!batch->info_seq[0].valid_data)
+        if (!info_.valid_data)
         {
           continue;
         }
 
-        auto message_ready = std::shared_ptr<T>(batch, &batch->data_seq[0]);
+        auto message_ready = std::move(message_ptr_);
+        message_ptr_ = std::make_shared<T>();
 
         lwrcl::MessageInfo new_info;
         new_info.source_timestamp = std::chrono::system_clock::now();
@@ -471,7 +451,7 @@ namespace lwrcl
               BufferedMessage{
                   message_ready,
                   new_info,
-                  std::make_shared<eprosima::fastdds::dds::SampleInfo>(batch->info_seq[0])});
+                  std::make_shared<eprosima::fastdds::dds::SampleInfo>(info_)});
           if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
             pollable_buffer_.pop_front();
         }

@@ -293,18 +293,33 @@ namespace lwrcl
      */
     bool take_loaned(LoanedSubscriptionMessage<T> &out_loaned)
     {
-      std::shared_ptr<T> message;
-      lwrcl::MessageInfo info;
-      if (!take(message, info))
+      if (!reader_)
       {
-        invoke_if_data();
-        if (!take(message, info))
+        return false;
+      }
+
+      try
+      {
+        dds::sub::LoanedSamples<T> samples = reader_->take();
+        if (samples.length() > 0)
         {
-          return false;
+          auto loan_guard =
+              std::make_shared<dds::sub::LoanedSamples<T>>(std::move(samples));
+          for (auto &s : *loan_guard)
+          {
+            if (s.info().valid())
+            {
+              const T* data_ptr = &s.data();
+              out_loaned = LoanedSubscriptionMessage<T>(loan_guard, data_ptr);
+              return true;
+            }
+          }
         }
       }
-      out_loaned = LoanedSubscriptionMessage<T>(std::move(message));
-      return true;
+      catch (const dds::core::Exception &)
+      {
+      }
+      return false;
     }
 
     /**
@@ -321,8 +336,7 @@ namespace lwrcl
           auto loan_guard = std::make_shared<dds::sub::LoanedSamples<T>>(std::move(samples));
           for (auto &sample : *loan_guard) {
             if (sample.info().valid()) {
-              auto message_view =
-                  std::shared_ptr<T>(loan_guard, const_cast<T *>(&sample.data()));
+              auto message_view = std::make_shared<T>(sample.data());
               lwrcl::MessageInfo new_info;
               new_info.source_timestamp = std::chrono::system_clock::now();
               new_info.from_intra_process = false;
