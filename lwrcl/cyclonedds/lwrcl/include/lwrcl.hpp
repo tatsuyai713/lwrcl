@@ -796,7 +796,8 @@ namespace lwrcl
           response_topic_name_(service_name_ + "_Response"),
           mutex_(),
           cv_(),
-          response_received_(false)
+          response_received_(false),
+          stopped_(false)
     {
       RMWQoSProfile rmw_qos_profile_services = rmw_qos_profile_services_default;
       QoS client_qos(KeepLast(10), rmw_qos_profile_services);
@@ -811,7 +812,10 @@ namespace lwrcl
           std::make_shared<std::mutex>());
     }
 
-    ~Client() = default;
+    ~Client()
+    {
+      stop();
+    }
 
     Client(const Client &) = delete;
     Client &operator=(const Client &) = delete;
@@ -820,6 +824,10 @@ namespace lwrcl
 
     void handle_response(std::shared_ptr<typename T::Response> response)
     {
+      if (stopped_.load())
+      {
+        return;
+      }
       std::shared_ptr<std::promise<std::shared_ptr<typename T::Response>>> promise;
       {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -841,16 +849,28 @@ namespace lwrcl
 
     void stop() override
     {
+      if (stopped_.exchange(true))
+      {
+        return;
+      }
       if (subscription_)
       {
         subscription_->stop();
       }
+      subscription_.reset();
+      publisher_.reset();
     }
 
     SharedFuture async_send_request(SharedRequest request)
     {
       auto promise = std::make_shared<std::promise<SharedResponse>>();
       auto future = promise->get_future().share();
+
+      if (stopped_.load() || !publisher_)
+      {
+        promise->set_exception(std::make_exception_ptr(std::runtime_error("Client is stopped")));
+        return future;
+      }
 
       {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -881,7 +901,7 @@ namespace lwrcl
     }
 
     bool service_is_ready() const {
-      return publisher_->get_subscriber_count() > 0;
+      return publisher_ && publisher_->get_subscriber_count() > 0;
     }
 
   private:
@@ -896,6 +916,7 @@ namespace lwrcl
     std::mutex mutex_;
     std::condition_variable cv_;
     std::atomic<bool> response_received_{false};
+    std::atomic<bool> stopped_;
   };
 
   template <typename Duration>
