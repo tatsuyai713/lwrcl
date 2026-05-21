@@ -26,6 +26,7 @@ enable_testing()
 
 # --- DDS backend setup ------------------------------------------------------
 if(DDS_BACKEND STREQUAL "fastdds")
+    find_package(OpenSSL REQUIRED)
     find_package(fastcdr REQUIRED)
     find_package(foonathan_memory REQUIRED)
     find_package(fastrtps REQUIRED)
