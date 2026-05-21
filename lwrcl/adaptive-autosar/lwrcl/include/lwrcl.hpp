@@ -162,6 +162,7 @@ namespace lwrcl
   typedef std::unordered_map<std::string, Parameters> NodeParameters;
   // Global variable for parameters
   extern NodeParameters node_parameters;
+  extern std::mutex node_parameters_mutex;
 
   // Load parameters from file
   std::string get_params_file_path(int argc, char *argv[]);

@@ -261,6 +261,7 @@ namespace lwrcl
       other.publisher_ = nullptr;
       other.message_ = nullptr;
       other.is_valid_ = false;
+      other.loaned_ = false;
     }
 
     // Move assignment
@@ -276,6 +277,7 @@ namespace lwrcl
         other.publisher_ = nullptr;
         other.message_ = nullptr;
         other.is_valid_ = false;
+        other.loaned_ = false;
       }
       return *this;
     }
@@ -364,8 +366,13 @@ namespace lwrcl
       throw std::runtime_error("Cannot publish invalid loaned message");
     }
 
+    if (writer_ == nullptr)
+    {
+      throw std::runtime_error("Failed to publish loaned message: DataWriter is null");
+    }
+
     T *msg = loaned_message.release_ownership();
-    if (writer_ && msg)
+    if (msg)
     {
       try
       {
@@ -390,28 +397,6 @@ namespace lwrcl
         }
         throw;
       }
-    }
-    else if (msg)
-    {
-      if (loaned_message.is_loaned())
-      {
-        try
-        {
-          if (writer_)
-          {
-            writer_->delegate()->return_loan(*msg);
-          }
-        }
-        catch (...)
-        {
-          // Best-effort cleanup.
-        }
-      }
-      else
-      {
-        delete msg;
-      }
-      throw std::runtime_error("Failed to publish loaned message: DataWriter is null");
     }
 
     if (!loaned_message.is_loaned())

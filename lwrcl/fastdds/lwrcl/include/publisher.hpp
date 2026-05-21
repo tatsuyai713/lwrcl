@@ -261,7 +261,8 @@ namespace lwrcl
         : publisher_(&publisher), message_(nullptr), is_valid_(false)
     {
       void *sample = nullptr;
-      if (publisher_->get_writer()->loan_sample(sample) == ReturnCode_t::RETCODE_OK)
+      auto *writer = publisher_->get_writer();
+      if (writer != nullptr && writer->loan_sample(sample) == ReturnCode_t::RETCODE_OK)
       {
         message_ = static_cast<T *>(sample);
         is_valid_ = true;
@@ -282,6 +283,7 @@ namespace lwrcl
       other.publisher_ = nullptr;
       other.message_ = nullptr;
       other.is_valid_ = false;
+      other.loaned_ = false;
     }
 
     // Move assignment
@@ -297,6 +299,7 @@ namespace lwrcl
         other.publisher_ = nullptr;
         other.message_ = nullptr;
         other.is_valid_ = false;
+        other.loaned_ = false;
       }
       return *this;
     }
@@ -357,7 +360,11 @@ namespace lwrcl
         if (loaned_ && publisher_ != nullptr)
         {
           void *sample = message_;
-          publisher_->get_writer()->discard_loan(sample);
+          auto *writer = publisher_->get_writer();
+          if (writer != nullptr)
+          {
+            writer->discard_loan(sample);
+          }
         }
         else if (!loaned_)
         {
@@ -392,14 +399,39 @@ namespace lwrcl
     if (loaned_message.is_loaned())
     {
       // True zero-copy publish
+      if (writer_ == nullptr)
+      {
+        throw std::runtime_error("Failed to publish loaned message: DataWriter is null");
+      }
       T *msg = loaned_message.release_ownership();
-      writer_->write(msg);
+      try
+      {
+        writer_->write(msg);
+      }
+      catch (...)
+      {
+        void *sample = msg;
+        writer_->discard_loan(sample);
+        throw;
+      }
     }
     else
     {
       // Fallback publish (was heap allocated)
       T *msg = loaned_message.release_ownership();
-      writer_->write(msg);
+      try
+      {
+        if (writer_ == nullptr)
+        {
+          throw std::runtime_error("Failed to publish loaned message: DataWriter is null");
+        }
+        writer_->write(msg);
+      }
+      catch (...)
+      {
+        delete msg;
+        throw;
+      }
       delete msg;
     }
   }

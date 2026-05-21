@@ -165,6 +165,7 @@ namespace lwrcl
   typedef std::unordered_map<std::string, Parameters> NodeParameters;
   // Global variable for parameters
   extern NodeParameters node_parameters;
+  extern std::mutex node_parameters_mutex;
 
   // Load parameters from file
   std::string get_params_file_path(int argc, char *argv[]);
@@ -453,6 +454,7 @@ namespace lwrcl
     std::string namespace_;
     NodeOptions node_options_;
     std::atomic<bool> stop_flag_{false};
+    std::mutex stop_guard_mutex_;
     dds::core::cond::GuardCondition *stop_guard_{nullptr}; // used by spin() for immediate wakeup
     bool participant_owned_;  // <-- declared AFTER public bool closed_ (above)
 

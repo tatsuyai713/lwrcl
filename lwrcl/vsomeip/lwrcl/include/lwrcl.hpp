@@ -149,6 +149,7 @@ namespace lwrcl
   typedef std::unordered_map<std::string, Parameter> Parameters;
   typedef std::unordered_map<std::string, Parameters> NodeParameters;
   extern NodeParameters node_parameters;
+  extern std::mutex node_parameters_mutex;
 
   std::string get_params_file_path(int argc, char *argv[]);
   void load_parameters(const std::string &file_path);

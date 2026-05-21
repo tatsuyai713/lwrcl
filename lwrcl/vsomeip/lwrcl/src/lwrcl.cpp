@@ -16,6 +16,7 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -48,6 +49,7 @@ namespace lwrcl
   class Node;
 
   NodeParameters node_parameters;
+  std::mutex node_parameters_mutex;
 
   namespace
   {
@@ -223,7 +225,7 @@ namespace lwrcl
   std::string Parameter::double_to_string(double value)
   {
     std::ostringstream oss;
-    oss << value;
+    oss << std::setprecision(std::numeric_limits<double>::max_digits10) << value;
     return oss.str();
   }
 
@@ -367,7 +369,7 @@ namespace lwrcl
       std::lock_guard<std::mutex> lock(mutex_);
       for (auto &node : nodes_)
       {
-        if (node != nullptr && node->closed_ == false)
+        if (node != nullptr && !node->closed_.load())
           node->shutdown();
       }
       nodes_.clear();
@@ -383,14 +385,14 @@ namespace lwrcl
     void SingleThreadedExecutor::spin()
     {
       stop_flag_ = false;
-      while (global_stop_flag.load() == false && stop_flag_ == false)
+      while (!global_stop_flag.load() && !stop_flag_.load())
       {
         bool did_work = false;
         {
           std::lock_guard<std::mutex> lock(mutex_);
           for (const auto& node : nodes_)
           {
-            if (node != nullptr && node->closed_ == false)
+            if (node != nullptr && !node->closed_.load())
             {
               if (node->try_spin_some()) did_work = true;
             }
@@ -403,7 +405,7 @@ namespace lwrcl
         }
       }
 
-      if (global_stop_flag.load() == true)
+      if (global_stop_flag.load())
         clear();
     }
 
@@ -412,7 +414,7 @@ namespace lwrcl
       std::lock_guard<std::mutex> lock(mutex_);
       for (const auto& node : nodes_)
       {
-        if (node != nullptr && node->closed_ == false)
+        if (node != nullptr && !node->closed_.load())
           lwrcl::spin_some(node);
       }
     }
@@ -441,7 +443,7 @@ namespace lwrcl
       std::lock_guard<std::mutex> lock(mutex_);
       for (const auto& node : nodes_)
       {
-        if (node != nullptr && node->closed_ == false)
+        if (node != nullptr && !node->closed_.load())
           node->stop_spin();
       }
       stop_flag_ = true;
@@ -454,7 +456,7 @@ namespace lwrcl
       {
         if (node != nullptr)
         {
-          if (node->closed_ == false)
+          if (!node->closed_.load())
             node->shutdown();
         }
         else
@@ -474,7 +476,7 @@ namespace lwrcl
         threads_.emplace_back([this, node]()
                               {
           if (node != nullptr) {
-            if (node->closed_ == false)
+            if (!node->closed_.load())
               lwrcl::spin(node);
           } else {
             std::cerr << "[WARN] Node pointer is null in executor spin." << std::endl;
@@ -488,7 +490,7 @@ namespace lwrcl
       }
       threads_.clear();
 
-      if (global_stop_flag.load() == true)
+      if (global_stop_flag.load())
         clear();
     }
 
@@ -497,7 +499,7 @@ namespace lwrcl
       std::lock_guard<std::mutex> lock(mutex_);
       for (const auto& node : nodes_)
       {
-        if (node != nullptr && node->closed_ == false)
+        if (node != nullptr && !node->closed_.load())
         {
           lwrcl::spin_some(node);
         }
@@ -969,15 +971,15 @@ namespace lwrcl
     // Register shared wakeup cv with all subscriptions (direct callback invocation).
     for (auto &sub : subs) sub->add_to_waitset(node_cv_, node_cv_mutex_, node_data_pending_);
 
-    while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
+    while (!closed_.load() && !global_stop_flag.load() && !stop_flag_.load())
     {
       {
         std::unique_lock<std::mutex> lk(*node_cv_mutex_);
         node_cv_->wait_for(lk, std::chrono::milliseconds(1),
             [this]() { return node_data_pending_->load() || closed_.load()
-                        || global_stop_flag.load() || stop_flag_; });
+                        || global_stop_flag.load() || stop_flag_.load(); });
       }
-      if (stop_flag_ || global_stop_flag.load()) break;
+      if (stop_flag_.load() || global_stop_flag.load()) break;
       if (node_data_pending_->exchange(false))
       {
         for (auto &sub : subs)
@@ -1015,7 +1017,7 @@ namespace lwrcl
       }
     }
 
-    if (global_stop_flag.load() == true)
+    if (global_stop_flag.load())
     {
       shutdown();
     }
@@ -1100,6 +1102,7 @@ namespace lwrcl
     for (const auto &param : parameters)
     {
       std::string node_name = this->get_name();
+      std::lock_guard<std::mutex> lock(node_parameters_mutex);
       std::string param_name = param->get_name();
 
       auto node_it = node_parameters.find(node_name);
@@ -1135,6 +1138,7 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const bool &default_value)
   {
     std::string node_name = this->get_name();
+      std::lock_guard<std::mutex> lock(node_parameters_mutex);
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
     {
@@ -1155,6 +1159,7 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const int &default_value)
   {
     std::string node_name = this->get_name();
+      std::lock_guard<std::mutex> lock(node_parameters_mutex);
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
     {
@@ -1173,6 +1178,7 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const double &default_value)
   {
     std::string node_name = this->get_name();
+      std::lock_guard<std::mutex> lock(node_parameters_mutex);
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
     {
@@ -1191,6 +1197,7 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::string &default_value)
   {
     std::string node_name = this->get_name();
+      std::lock_guard<std::mutex> lock(node_parameters_mutex);
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
     {
@@ -1209,6 +1216,7 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const char *default_value)
   {
     std::string node_name = this->get_name();
+      std::lock_guard<std::mutex> lock(node_parameters_mutex);
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
     {
@@ -1227,6 +1235,7 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<bool> default_value)
   {
     std::string node_name = this->get_name();
+      std::lock_guard<std::mutex> lock(node_parameters_mutex);
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
     {
@@ -1245,6 +1254,7 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<int> default_value)
   {
     std::string node_name = this->get_name();
+      std::lock_guard<std::mutex> lock(node_parameters_mutex);
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
     {
@@ -1263,6 +1273,7 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<double> default_value)
   {
     std::string node_name = this->get_name();
+      std::lock_guard<std::mutex> lock(node_parameters_mutex);
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
     {
@@ -1281,6 +1292,7 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<std::string> default_value)
   {
     std::string node_name = this->get_name();
+      std::lock_guard<std::mutex> lock(node_parameters_mutex);
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
     {
@@ -1299,6 +1311,7 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<uint8_t> default_value)
   {
     std::string node_name = this->get_name();
+      std::lock_guard<std::mutex> lock(node_parameters_mutex);
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
     {
@@ -1396,7 +1409,7 @@ namespace lwrcl
   {
     if (node != nullptr)
     {
-      if (node->closed_ == false)
+      if (!node->closed_.load())
         node->spin();
     }
     else
@@ -1411,7 +1424,7 @@ namespace lwrcl
   {
     if (node != nullptr)
     {
-      if (node->closed_ == false)
+      if (!node->closed_.load())
         node->spin_some();
     }
     else
@@ -1446,6 +1459,7 @@ namespace lwrcl
   void load_parameters(const std::string &file_path)
   {
     YAML::Node config = YAML::LoadFile(file_path);
+    std::lock_guard<std::mutex> lock(node_parameters_mutex);
 
     for (YAML::const_iterator it = config.begin(); it != config.end(); ++it)
     {
