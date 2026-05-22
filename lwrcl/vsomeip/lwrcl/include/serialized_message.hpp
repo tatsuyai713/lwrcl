@@ -170,16 +170,20 @@ namespace lwrcl
 
     SerializedMessage &operator=(lwrcl_serialized_message_t &&other) noexcept
     {
-      if (data_.buffer != other.buffer)
+      if (&other == &data_)
+      {
+        return *this;
+      }
+      if (owned_buffer_.get() != other.buffer)
       {
         owned_buffer_.reset(other.buffer);
-        data_.buffer = owned_buffer_.get();
-        data_.length = other.length;
-        data_.capacity = other.capacity;
-        other.buffer = nullptr;
-        other.length = 0;
-        other.capacity = 0;
       }
+      data_.buffer = owned_buffer_.get();
+      data_.length = other.length;
+      data_.capacity = other.capacity;
+      other.buffer = nullptr;
+      other.length = 0;
+      other.capacity = 0;
       return *this;
     }
 
