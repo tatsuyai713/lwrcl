@@ -81,8 +81,20 @@ namespace lwrcl
       other.data_.capacity = 0;
     }
 
-    SerializedMessage(lwrcl_serialized_message_t &&other) noexcept : data_(), owned_buffer_(other.buffer)
+    SerializedMessage(lwrcl_serialized_message_t &&other) noexcept : data_(), owned_buffer_()
     {
+      if (other.buffer == nullptr || other.length == 0)
+      {
+        delete[] other.buffer;
+        data_.buffer = nullptr;
+        data_.length = 0;
+        data_.capacity = 0;
+        other.buffer = nullptr;
+        other.length = 0;
+        other.capacity = 0;
+        return;
+      }
+      owned_buffer_.reset(other.buffer);
       data_.buffer = owned_buffer_.get();
       data_.length = other.length;
       data_.capacity = other.capacity;
@@ -172,6 +184,25 @@ namespace lwrcl
     {
       if (&other == &data_)
       {
+        return *this;
+      }
+      if (other.buffer == nullptr || other.length == 0)
+      {
+        if (owned_buffer_.get() == other.buffer)
+        {
+          owned_buffer_.reset();
+        }
+        else
+        {
+          owned_buffer_.reset();
+          delete[] other.buffer;
+        }
+        data_.buffer = nullptr;
+        data_.length = 0;
+        data_.capacity = 0;
+        other.buffer = nullptr;
+        other.length = 0;
+        other.capacity = 0;
         return *this;
       }
       if (owned_buffer_.get() != other.buffer)
