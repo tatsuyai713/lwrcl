@@ -409,7 +409,6 @@ namespace lwrcl
     {
       std::shared_ptr<T> message;
       lwrcl::MessageInfo info;
-      std::shared_ptr<eprosima::fastdds::dds::SampleInfo> sample_info;
     };
 
     // Take all available samples and invoke the callback directly.
@@ -438,8 +437,7 @@ namespace lwrcl
           pollable_buffer_.push_back(
               BufferedMessage{
                   message_ready,
-                  new_info,
-                  std::make_shared<eprosima::fastdds::dds::SampleInfo>(info_)});
+                new_info});
           if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
             pollable_buffer_.pop_front();
         }
