@@ -72,6 +72,15 @@ namespace lwrcl
       return timeout;
     }
 
+    dds::core::Duration to_cyclonedds_duration(std::chrono::nanoseconds timeout)
+    {
+      const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);
+      const auto nanoseconds = timeout - seconds;
+      return dds::core::Duration(
+          static_cast<int32_t>(seconds.count()),
+          static_cast<uint32_t>(nanoseconds.count()));
+    }
+
     bool parse_parameter_int(const std::string &text, int &value)
     {
       if (text.empty()) return false;
@@ -1117,7 +1126,7 @@ namespace lwrcl
       {
         try
         {
-          unified_ws.wait(dds::core::Duration::from_millisecs(timer_wait_timeout(timers).count()));
+          unified_ws.wait(to_cyclonedds_duration(timer_wait_timeout(timers)));
           if (stop_flag_.load() || global_stop_flag.load()) break;
           for (auto &sub : subs)
           {

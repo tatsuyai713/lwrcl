@@ -71,12 +71,13 @@ namespace lwrcl
       return timeout;
     }
 
-    eprosima::fastrtps::Duration_t to_fastdds_duration(std::chrono::milliseconds timeout)
+    eprosima::fastrtps::Duration_t to_fastdds_duration(std::chrono::nanoseconds timeout)
     {
-      const auto count = timeout.count();
+      const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);
+      const auto nanoseconds = timeout - seconds;
       return eprosima::fastrtps::Duration_t{
-          static_cast<int32_t>(count / 1000),
-          static_cast<uint32_t>((count % 1000) * 1000000)};
+          static_cast<int32_t>(seconds.count()),
+          static_cast<uint32_t>(nanoseconds.count())};
     }
 
     bool parse_parameter_int(const std::string &text, int &value)
