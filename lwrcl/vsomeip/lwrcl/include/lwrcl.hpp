@@ -979,19 +979,12 @@ namespace lwrcl
     template <typename Duration>
     bool wait_for_service(const Duration &timeout)
     {
-      auto start_time = std::chrono::steady_clock::now();
-      auto end_time = start_time + timeout;
-
-      while (std::chrono::steady_clock::now() < end_time)
+      auto end_time = std::chrono::steady_clock::now() + timeout;
+      std::unique_lock<std::mutex> lock(mutex_);
+      return cv_.wait_until(lock, end_time, [this]
       {
-        if (service_is_ready())
-        {
-          return true;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      }
-
-      return false;
+        return stopped_.load() || service_is_ready();
+      }) && service_is_ready();
     }
 
     bool service_is_ready() const {
