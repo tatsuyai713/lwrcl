@@ -663,7 +663,16 @@ namespace lwrcl
   private:
     void handle_request(const std::shared_ptr<vsomeip::message> &message)
     {
+      if (stopped_.load())
+      {
+        return;
+      }
       if (!message || !message->get_payload())
+      {
+        return;
+      }
+      auto app = app_;
+      if (!app)
       {
         return;
       }
@@ -679,8 +688,17 @@ namespace lwrcl
         auto request = std::make_shared<typename T::Request>();
         Serialization<typename T::Request>::deserialize_message(&serialized_request, request.get());
 
+        if (stopped_.load())
+        {
+          return;
+        }
         auto response = std::make_shared<typename T::Response>();
         callback_function_(request, response);
+
+        if (stopped_.load())
+        {
+          return;
+        }
 
         SerializedMessage serialized_response;
         Serialization<typename T::Response>::serialize_message(response.get(), &serialized_response);
@@ -693,7 +711,7 @@ namespace lwrcl
 
         auto response_message = vsomeip::runtime::get()->create_response(message);
         response_message->set_payload(response_payload);
-        app_->send(response_message);
+        app->send(response_message);
       }
       catch (const std::exception &e)
       {
@@ -829,6 +847,10 @@ namespace lwrcl
 
     void handle_response(const std::shared_ptr<vsomeip::message> &message)
     {
+      if (stopped_.load())
+      {
+        return;
+      }
       if (!message || !message->get_payload())
       {
         return;
@@ -853,6 +875,10 @@ namespace lwrcl
       std::shared_ptr<std::promise<std::shared_ptr<typename T::Response>>> promise;
       {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (stopped_.load())
+        {
+          return;
+        }
         if (!response_promises_.empty())
         {
           promise = response_promises_.front();

@@ -412,18 +412,6 @@ namespace lwrcl
       std::shared_ptr<eprosima::fastdds::dds::SampleInfo> sample_info;
     };
 
-    bool take_buffered(BufferedMessage &out_message)
-    {
-      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
-      if (pollable_buffer_.empty())
-      {
-        return false;
-      }
-      out_message = std::move(pollable_buffer_.front());
-      pollable_buffer_.pop_front();
-      return true;
-    }
-
     // Take all available samples and invoke the callback directly.
     void take_available()
     {
