@@ -853,6 +853,7 @@ namespace lwrcl
       }
       if (!message || !message->get_payload())
       {
+        set_promise_exception(pop_pending_request(), "vsomeip service response payload is missing");
         return;
       }
 
@@ -869,6 +870,9 @@ namespace lwrcl
       catch (const std::exception &e)
       {
         std::cerr << "vsomeip service response handling error: " << e.what() << std::endl;
+        set_promise_exception(
+            pop_pending_request(),
+            std::string("vsomeip service response deserialization failed: ") + e.what());
         return;
       }
 
@@ -1024,6 +1028,18 @@ namespace lwrcl
         }
       }
       response_promises_.swap(remaining);
+    }
+
+    std::shared_ptr<std::promise<SharedResponse>> pop_pending_request()
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (response_promises_.empty())
+      {
+        return nullptr;
+      }
+      auto promise = response_promises_.front();
+      response_promises_.pop();
+      return promise;
     }
 
     static void set_promise_exception(
