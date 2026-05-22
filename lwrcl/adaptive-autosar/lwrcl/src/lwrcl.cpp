@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <csignal>
 #include <cstdarg>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <functional>

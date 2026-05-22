@@ -336,7 +336,7 @@ namespace lwrcl
           auto loan_guard = std::make_shared<dds::sub::LoanedSamples<T>>(std::move(samples));
           for (auto &sample : *loan_guard) {
             if (sample.info().valid()) {
-              auto message_view = std::make_shared<T>(sample.data());
+              auto message_view = std::shared_ptr<T>(loan_guard, const_cast<T *>(&sample.data()));
               lwrcl::MessageInfo new_info;
               new_info.source_timestamp = std::chrono::system_clock::now();
               new_info.from_intra_process = false;

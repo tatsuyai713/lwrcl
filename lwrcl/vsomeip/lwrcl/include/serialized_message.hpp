@@ -83,7 +83,7 @@ namespace lwrcl
 
     SerializedMessage(lwrcl_serialized_message_t &&other) noexcept : data_(), owned_buffer_()
     {
-      if (other.buffer == nullptr || other.length == 0)
+      if (other.buffer == nullptr || other.capacity == 0)
       {
         delete[] other.buffer;
         data_.buffer = nullptr;
@@ -186,7 +186,7 @@ namespace lwrcl
       {
         return *this;
       }
-      if (other.buffer == nullptr || other.length == 0)
+      if (other.buffer == nullptr || other.capacity == 0)
       {
         if (owned_buffer_.get() == other.buffer)
         {
