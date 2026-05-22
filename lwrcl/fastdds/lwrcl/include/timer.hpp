@@ -42,13 +42,14 @@ namespace lwrcl
 
     TimerBase(
       Duration period, std::function<void()> callback_function,
-      std::shared_ptr<std::mutex> node_mutex, Clock::ClockType /*clock_type*/)
+      std::shared_ptr<std::mutex> node_mutex, Clock::ClockType clock_type)
         : ITimerBase(),
           std::enable_shared_from_this<TimerBase>(),
           period_(period),
           callback_function_(std::move(callback_function)),
           node_mutex_(std::move(node_mutex)),
-          next_execution_time_(std::chrono::steady_clock::now() + std::chrono::nanoseconds(period_.nanoseconds())),
+          clock_(clock_type),
+          next_execution_time_(clock_.now() + period_),
           stop_flag_(false),
           is_canceled_(false)
     {
@@ -66,7 +67,7 @@ namespace lwrcl
       is_canceled_.store(false);
       stop_flag_.store(false);
       std::lock_guard<std::mutex> lock(next_execution_mutex_);
-      next_execution_time_ = std::chrono::steady_clock::now() + std::chrono::nanoseconds(period_.nanoseconds());
+      next_execution_time_ = clock_.now() + period_;
     }
 
     void stop() override
@@ -81,7 +82,7 @@ namespace lwrcl
         return false;
       }
 
-      auto now = std::chrono::steady_clock::now();
+      auto now = clock_.now();
       {
         std::lock_guard<std::mutex> lock(next_execution_mutex_);
         if (now < next_execution_time_)
@@ -89,12 +90,11 @@ namespace lwrcl
           return false;
         }
 
-        auto period_ns = std::chrono::nanoseconds(period_.nanoseconds());
-        if (period_ns.count() > 0)
+        if (period_.nanoseconds() > 0)
         {
           do
           {
-            next_execution_time_ += period_ns;
+            next_execution_time_ = next_execution_time_ + period_;
           } while (next_execution_time_ <= now);
         }
         else
@@ -113,13 +113,13 @@ namespace lwrcl
       {
         return std::chrono::nanoseconds::max();
       }
-      auto now = std::chrono::steady_clock::now();
+      auto now = clock_.now();
       std::lock_guard<std::mutex> lock(next_execution_mutex_);
       if (now >= next_execution_time_)
       {
         return std::chrono::nanoseconds::zero();
       }
-      return std::chrono::duration_cast<std::chrono::nanoseconds>(next_execution_time_ - now);
+      return std::chrono::nanoseconds((next_execution_time_ - now).nanoseconds());
     }
 
     // Cancel the timer (alias for stop)
@@ -141,7 +141,7 @@ namespace lwrcl
       is_canceled_.store(false);
       stop_flag_.store(false);
       std::lock_guard<std::mutex> lock(next_execution_mutex_);
-      next_execution_time_ = std::chrono::steady_clock::now() + std::chrono::nanoseconds(period_.nanoseconds());
+      next_execution_time_ = clock_.now() + period_;
     }
 
     // Get the timer period
@@ -175,8 +175,9 @@ namespace lwrcl
     Duration period_;
     std::function<void()> callback_function_;
     std::shared_ptr<std::mutex> node_mutex_;
+    mutable Clock clock_;
     mutable std::mutex next_execution_mutex_;
-    std::chrono::steady_clock::time_point next_execution_time_;
+    Time next_execution_time_;
     std::atomic<bool> stop_flag_;
     std::atomic<bool> is_canceled_;
   };

@@ -974,7 +974,7 @@ namespace lwrcl
       return INTERRUPTED;
     }
 
-    const auto deadline = std::chrono::steady_clock::now() + timeout_ms;
+    const auto deadline = std::chrono::steady_clock::now() + timeout_ns;
     while (true)
     {
       auto now = std::chrono::steady_clock::now();
@@ -1009,7 +1009,7 @@ namespace lwrcl
       return INTERRUPTED;
     }
 
-    const auto deadline = std::chrono::steady_clock::now() + timeout_ms;
+    const auto deadline = std::chrono::steady_clock::now() + timeout_ns;
     while (true)
     {
       auto now = std::chrono::steady_clock::now();
