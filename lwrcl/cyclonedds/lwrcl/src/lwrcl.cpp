@@ -1102,6 +1102,7 @@ namespace lwrcl
       std::lock_guard<std::mutex> lock(stop_guard_mutex_);
       stop_guard_ = nullptr;
     });
+    (void)stop_guard_cleanup;
 
     const bool has_subs = !subs.empty();
 

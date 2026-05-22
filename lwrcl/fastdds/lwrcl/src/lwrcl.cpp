@@ -1152,6 +1152,7 @@ namespace lwrcl
       std::lock_guard<std::mutex> lock(stop_guard_mutex_);
       stop_guard_ = nullptr;
     });
+    (void)stop_guard_cleanup;
     for (auto &sub : subs) sub->add_to_waitset(unified_ws);
     const bool has_subs = !subs.empty();
 
