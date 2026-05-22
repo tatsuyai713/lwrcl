@@ -56,20 +56,18 @@ namespace lwrcl
 
   namespace
   {
-    std::chrono::milliseconds timer_wait_timeout(const std::vector<std::shared_ptr<ITimerBase>> &timers)
+    std::chrono::nanoseconds timer_wait_timeout(const std::vector<std::shared_ptr<ITimerBase>> &timers)
     {
       const auto max_wait = std::chrono::milliseconds(100);
       if (timers.empty()) return max_wait;
 
-      auto timeout = max_wait;
+      auto timeout = std::chrono::duration_cast<std::chrono::nanoseconds>(max_wait);
       for (const auto &timer : timers)
       {
         const auto until_next = timer->time_until_next_call();
-        if (until_next <= std::chrono::nanoseconds::zero()) return std::chrono::milliseconds::zero();
+        if (until_next <= std::chrono::nanoseconds::zero()) return std::chrono::nanoseconds::zero();
         if (until_next == std::chrono::nanoseconds::max()) continue;
-        auto until_next_ms = std::chrono::duration_cast<std::chrono::milliseconds>(until_next);
-        if (until_next_ms < until_next) ++until_next_ms;
-        if (until_next_ms < timeout) timeout = until_next_ms;
+        if (until_next < timeout) timeout = until_next;
       }
       return timeout;
     }
