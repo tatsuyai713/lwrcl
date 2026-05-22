@@ -12,6 +12,7 @@
 #include <mutex>
 #include <queue>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -149,6 +150,7 @@ namespace lwrcl
   typedef std::unordered_map<std::string, Parameter> Parameters;
   typedef std::unordered_map<std::string, Parameters> NodeParameters;
   extern NodeParameters node_parameters;
+  extern std::mutex node_parameters_mutex;
 
   std::string get_params_file_path(int argc, char *argv[]);
   void load_parameters(const std::string &file_path);
@@ -287,7 +289,10 @@ namespace lwrcl
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::SYSTEM_TIME;
       auto duration = Duration(period);
       auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), callback_mutex_, clock_type);
-      timer_list_.push_front(timer);
+      {
+        std::lock_guard<std::mutex> lock(timer_list_mutex_);
+        timer_list_.push_front(timer);
+      }
       return timer;
     }
 
@@ -298,7 +303,10 @@ namespace lwrcl
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::STEADY_TIME;
       auto duration = Duration(period);
       auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), callback_mutex_, clock_type);
-      timer_list_.push_front(timer);
+      {
+        std::lock_guard<std::mutex> lock(timer_list_mutex_);
+        timer_list_.push_front(timer);
+      }
       return timer;
     }
 
@@ -357,12 +365,15 @@ namespace lwrcl
     void get_parameter(const std::string &name, std::string &string_data) const;
 
     bool has_parameter(const std::string &name) const {
+      std::lock_guard<std::mutex> lock(parameters_mutex_);
       return parameters_.find(name) != parameters_.end();
     }
     void undeclare_parameter(const std::string &name) {
+      std::lock_guard<std::mutex> lock(parameters_mutex_);
       parameters_.erase(name);
     }
     void set_parameter(const Parameter &param) {
+      std::lock_guard<std::mutex> lock(parameters_mutex_);
       parameters_[param.get_name()] = param;
     }
     std::vector<Parameter> get_parameters(const std::vector<std::string> &names) const {
@@ -376,6 +387,7 @@ namespace lwrcl
     std::vector<std::string> list_parameters(
         const std::vector<std::string> &prefixes, uint64_t /*depth*/) const {
       std::vector<std::string> result;
+      std::lock_guard<std::mutex> lock(parameters_mutex_);
       for (const auto &kv : parameters_) {
         if (prefixes.empty()) {
           result.push_back(kv.first);
@@ -438,8 +450,10 @@ namespace lwrcl
     std::forward_list<std::shared_ptr<IPublisher>> publisher_list_;
     std::forward_list<std::shared_ptr<ISubscription>> subscription_list_;
     std::forward_list<std::shared_ptr<ITimerBase>> timer_list_;
+    mutable std::mutex timer_list_mutex_;
     std::forward_list<std::shared_ptr<IService>> service_list_;
     std::forward_list<std::shared_ptr<IClient>> client_list_;
+    mutable std::mutex parameters_mutex_;
     Parameters parameters_;
 
     std::string get_topic_prefix() const
@@ -610,31 +624,23 @@ namespace lwrcl
           app_(app),
           service_name_(service_name),
           callback_function_(std::move(callback_function)),
-          request_callback_function_(),
-          publisher_(nullptr),
-          subscription_(nullptr),
-          request_topic_name_(service_name_ + "_Request"),
-          response_topic_name_(service_name_ + "_Response")
+          service_id_(someip_id::topic_to_service_id(std::string("srv/") + service_name_)),
+          instance_id_(someip_id::default_instance_id()),
+          method_id_(someip_id::default_request_method_id())
     {
-      RMWQoSProfile rmw_qos_profile_services = rmw_qos_profile_services_default;
-      QoS service_qos(KeepLast(10), rmw_qos_profile_services);
-
-      publisher_ = std::make_shared<Publisher<typename T::Response>>(
-          app_, std::string("rp/") + response_topic_name_, service_qos);
-
-      request_callback_function_ = [this](std::shared_ptr<typename T::Request> request)
-      {
-        std::shared_ptr<typename T::Response> response = std::make_shared<typename T::Response>();
-        callback_function_(request, response);
-        publisher_->publish(response);
-      };
-
-      subscription_ = std::make_shared<Subscription<typename T::Request>>(
-          app_, std::string("rp/") + request_topic_name_, service_qos,
-          request_callback_function_, std::make_shared<std::mutex>());
+      app_->register_message_handler(
+          service_id_, instance_id_, method_id_,
+          [this](const std::shared_ptr<vsomeip::message> &message)
+          {
+            handle_request(message);
+          });
+      app_->offer_service(service_id_, instance_id_);
     }
 
-    ~Service() = default;
+    ~Service()
+    {
+      stop();
+    }
 
     Service(const Service &) = delete;
     Service &operator=(const Service &) = delete;
@@ -643,22 +649,84 @@ namespace lwrcl
 
     void stop() override
     {
-      if (subscription_)
+      if (stopped_.exchange(true))
       {
-        subscription_->stop();
+        return;
+      }
+      if (app_)
+      {
+        app_->unregister_message_handler(service_id_, instance_id_, method_id_);
+        app_->stop_offer_service(service_id_, instance_id_);
       }
     }
 
   private:
+    void handle_request(const std::shared_ptr<vsomeip::message> &message)
+    {
+      if (stopped_.load())
+      {
+        return;
+      }
+      if (!message || !message->get_payload())
+      {
+        return;
+      }
+      auto app = app_;
+      if (!app)
+      {
+        return;
+      }
+
+      try
+      {
+        auto payload = message->get_payload();
+        SerializedMessage serialized_request;
+        serialized_request.set_buffer(
+            reinterpret_cast<char *>(const_cast<vsomeip::byte_t *>(payload->get_data())),
+            payload->get_length());
+
+        auto request = std::make_shared<typename T::Request>();
+        Serialization<typename T::Request>::deserialize_message(&serialized_request, request.get());
+
+        if (stopped_.load())
+        {
+          return;
+        }
+        auto response = std::make_shared<typename T::Response>();
+        callback_function_(request, response);
+
+        if (stopped_.load())
+        {
+          return;
+        }
+
+        SerializedMessage serialized_response;
+        Serialization<typename T::Response>::serialize_message(response.get(), &serialized_response);
+
+        auto response_payload = vsomeip::runtime::get()->create_payload();
+        auto &raw = serialized_response.get_rcl_serialized_message();
+        response_payload->set_data(
+            reinterpret_cast<const vsomeip::byte_t *>(raw.buffer),
+            static_cast<vsomeip::length_t>(raw.length));
+
+        auto response_message = vsomeip::runtime::get()->create_response(message);
+        response_message->set_payload(response_payload);
+        app->send(response_message);
+      }
+      catch (const std::exception &e)
+      {
+        std::cerr << "vsomeip service request handling error: " << e.what() << std::endl;
+      }
+    }
+
     std::shared_ptr<vsomeip::application> app_;
     std::string service_name_;
     std::function<void(std::shared_ptr<typename T::Request>, std::shared_ptr<typename T::Response>)>
         callback_function_;
-    std::function<void(std::shared_ptr<typename T::Request>)> request_callback_function_;
-    std::shared_ptr<Publisher<typename T::Response>> publisher_;
-    std::shared_ptr<Subscription<typename T::Request>> subscription_;
-    std::string request_topic_name_;
-    std::string response_topic_name_;
+    vsomeip::service_t service_id_;
+    vsomeip::instance_t instance_id_;
+    vsomeip::method_t method_id_;
+    std::atomic<bool> stopped_{false};
   };
 
   class IClient
@@ -743,39 +811,78 @@ namespace lwrcl
           app_(app),
           service_name_(service_name),
           response_(nullptr),
-          publisher_(nullptr),
-          subscription_(nullptr),
-          request_topic_name_(service_name_ + "_Request"),
-          response_topic_name_(service_name_ + "_Response"),
+          service_id_(someip_id::topic_to_service_id(std::string("srv/") + service_name_)),
+          instance_id_(someip_id::default_instance_id()),
+          method_id_(someip_id::default_request_method_id()),
+          service_available_(false),
           mutex_(),
           cv_(),
           response_received_(false)
     {
-      RMWQoSProfile rmw_qos_profile_services = rmw_qos_profile_services_default;
-      QoS client_qos(KeepLast(10), rmw_qos_profile_services);
-
-      publisher_ = std::make_shared<Publisher<typename T::Request>>(
-          app_, std::string("rp/") + request_topic_name_, client_qos);
-
-      subscription_ = std::make_shared<Subscription<typename T::Response>>(
-          app_, std::string("rp/") + response_topic_name_, client_qos,
-          std::function<void(std::shared_ptr<typename T::Response>)>(
-              [this](std::shared_ptr<typename T::Response> resp) { handle_response(std::move(resp)); }),
-          std::make_shared<std::mutex>());
+      app_->register_message_handler(
+          service_id_, instance_id_, method_id_,
+          [this](const std::shared_ptr<vsomeip::message> &message)
+          {
+            handle_response(message);
+          });
+      app_->register_availability_handler(
+          service_id_, instance_id_,
+          [this](vsomeip::service_t, vsomeip::instance_t, bool is_available)
+          {
+            service_available_.store(is_available);
+            cv_.notify_all();
+          });
+      app_->request_service(service_id_, instance_id_);
     }
 
-    ~Client() = default;
+    ~Client()
+    {
+      stop();
+    }
 
     Client(const Client &) = delete;
     Client &operator=(const Client &) = delete;
     Client(Client &&) = delete;
     Client &operator=(Client &&) = delete;
 
-    void handle_response(std::shared_ptr<typename T::Response> response)
+    void handle_response(const std::shared_ptr<vsomeip::message> &message)
     {
+      if (stopped_.load())
+      {
+        return;
+      }
+      if (!message || !message->get_payload())
+      {
+        set_promise_exception(pop_pending_request(), "vsomeip service response payload is missing");
+        return;
+      }
+
+      auto response = std::make_shared<typename T::Response>();
+      try
+      {
+        auto payload = message->get_payload();
+        SerializedMessage serialized;
+        serialized.set_buffer(
+            reinterpret_cast<char *>(const_cast<vsomeip::byte_t *>(payload->get_data())),
+            payload->get_length());
+        Serialization<typename T::Response>::deserialize_message(&serialized, response.get());
+      }
+      catch (const std::exception &e)
+      {
+        std::cerr << "vsomeip service response handling error: " << e.what() << std::endl;
+        set_promise_exception(
+            pop_pending_request(),
+            std::string("vsomeip service response deserialization failed: ") + e.what());
+        return;
+      }
+
       std::shared_ptr<std::promise<std::shared_ptr<typename T::Response>>> promise;
       {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (stopped_.load())
+        {
+          return;
+        }
         if (!response_promises_.empty())
         {
           promise = response_promises_.front();
@@ -794,10 +901,18 @@ namespace lwrcl
 
     void stop() override
     {
-      if (subscription_)
+      if (stopped_.exchange(true))
       {
-        subscription_->stop();
+        return;
       }
+      if (app_)
+      {
+        app_->unregister_message_handler(service_id_, instance_id_, method_id_);
+        app_->unregister_availability_handler(service_id_, instance_id_);
+        app_->release_service(service_id_, instance_id_);
+      }
+      fail_pending_requests("vsomeip client stopped before response was received");
+      cv_.notify_all();
     }
 
     SharedFuture async_send_request(SharedRequest request)
@@ -805,12 +920,58 @@ namespace lwrcl
       auto promise = std::make_shared<std::promise<SharedResponse>>();
       auto future = promise->get_future().share();
 
+      if (stopped_.load())
+      {
+        set_promise_exception(promise, "vsomeip client is stopped");
+        return future;
+      }
+      if (!app_)
+      {
+        set_promise_exception(promise, "vsomeip application is not available");
+        return future;
+      }
+      if (!service_is_ready())
+      {
+        set_promise_exception(promise, "vsomeip service is not available");
+        return future;
+      }
+
+      SerializedMessage serialized;
+      Serialization<typename T::Request>::serialize_message(request.get(), &serialized);
+
+      auto payload = vsomeip::runtime::get()->create_payload();
+      auto &raw = serialized.get_rcl_serialized_message();
+      payload->set_data(
+          reinterpret_cast<const vsomeip::byte_t *>(raw.buffer),
+          static_cast<vsomeip::length_t>(raw.length));
+
+      auto message = vsomeip::runtime::get()->create_request();
+      message->set_service(service_id_);
+      message->set_instance(instance_id_);
+      message->set_method(method_id_);
+      message->set_payload(payload);
+
       {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (stopped_.load())
+        {
+          set_promise_exception(promise, "vsomeip client is stopped");
+          return future;
+        }
         response_promises_.push(promise);
       }
 
-      publisher_->publish(request);
+      try
+      {
+        app_->send(message);
+      }
+      catch (...)
+      {
+        remove_pending_request(promise);
+        try { throw; }
+        catch (const std::exception &e) { set_promise_exception(promise, e.what()); }
+        catch (...) { set_promise_exception(promise, "vsomeip request send failed"); }
+      }
 
       return future;
     }
@@ -818,34 +979,85 @@ namespace lwrcl
     template <typename Duration>
     bool wait_for_service(const Duration &timeout)
     {
-      auto start_time = std::chrono::steady_clock::now();
-      auto end_time = start_time + timeout;
-
-      while (std::chrono::steady_clock::now() < end_time)
+      auto end_time = std::chrono::steady_clock::now() + timeout;
+      std::unique_lock<std::mutex> lock(mutex_);
+      return cv_.wait_until(lock, end_time, [this]
       {
-        if (publisher_->get_subscriber_count() > 0)
-        {
-          return true;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      }
-
-      return false;
+        return stopped_.load() || service_is_ready();
+      }) && service_is_ready();
     }
 
     bool service_is_ready() const {
-      return publisher_->get_subscriber_count() > 0;
+      return !stopped_.load() && app_ &&
+          (service_available_.load() || app_->is_available(service_id_, instance_id_));
     }
 
   private:
+    void fail_pending_requests(const std::string &message)
+    {
+      std::queue<std::shared_ptr<std::promise<SharedResponse>>> pending;
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        pending.swap(response_promises_);
+      }
+      while (!pending.empty())
+      {
+        set_promise_exception(pending.front(), message);
+        pending.pop();
+      }
+    }
+
+    void remove_pending_request(const std::shared_ptr<std::promise<SharedResponse>> &promise)
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      std::queue<std::shared_ptr<std::promise<SharedResponse>>> remaining;
+      while (!response_promises_.empty())
+      {
+        auto queued = response_promises_.front();
+        response_promises_.pop();
+        if (queued != promise)
+        {
+          remaining.push(queued);
+        }
+      }
+      response_promises_.swap(remaining);
+    }
+
+    std::shared_ptr<std::promise<SharedResponse>> pop_pending_request()
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (response_promises_.empty())
+      {
+        return nullptr;
+      }
+      auto promise = response_promises_.front();
+      response_promises_.pop();
+      return promise;
+    }
+
+    static void set_promise_exception(
+        const std::shared_ptr<std::promise<SharedResponse>> &promise,
+        const std::string &message)
+    {
+      if (!promise) return;
+      try
+      {
+        promise->set_exception(std::make_exception_ptr(std::runtime_error(message)));
+      }
+      catch (const std::future_error &)
+      {
+      }
+    }
+
     std::shared_ptr<vsomeip::application> app_;
     std::string service_name_;
     std::shared_ptr<typename T::Response> response_;
     std::queue<std::shared_ptr<std::promise<std::shared_ptr<typename T::Response>>>> response_promises_;
-    std::shared_ptr<Publisher<typename T::Request>> publisher_;
-    std::shared_ptr<Subscription<typename T::Response>> subscription_;
-    std::string request_topic_name_;
-    std::string response_topic_name_;
+    vsomeip::service_t service_id_;
+    vsomeip::instance_t instance_id_;
+    vsomeip::method_t method_id_;
+    std::atomic<bool> service_available_;
+    std::atomic<bool> stopped_{false};
     std::mutex mutex_;
     std::condition_variable cv_;
     std::atomic<bool> response_received_{false};
@@ -855,22 +1067,33 @@ namespace lwrcl
   FutureReturnCode spin_until_future_complete(
       std::shared_ptr<lwrcl::Node> node, std::shared_ptr<FutureBase> future, const Duration &timeout)
   {
-    std::thread spin_thread([node]()
-                            { lwrcl::spin(node); });
-
-    if (
-        future->wait_for(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)) ==
-        std::future_status::ready)
+    const auto timeout_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(timeout);
+    const auto poll_interval = std::chrono::milliseconds(1);
+    if (timeout_ns.count() < 0)
     {
-      node->stop_spin();
-      spin_thread.join();
-      return SUCCESS;
+      while (ok())
+      {
+        if (future->wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) return SUCCESS;
+        if (node && !node->closed_.load()) node->try_spin_some();
+        std::this_thread::sleep_for(poll_interval);
+      }
+      return INTERRUPTED;
     }
-    else
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout_ns;
+    while (true)
     {
-      node->stop_spin();
-      spin_thread.join();
-      return TIMEOUT;
+      auto now = std::chrono::steady_clock::now();
+      if (now >= deadline)
+      {
+        return future->wait_for(std::chrono::milliseconds(0)) == std::future_status::ready ? SUCCESS : TIMEOUT;
+      }
+      if (!ok()) return INTERRUPTED;
+      auto wait_time = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+      if (wait_time > poll_interval) wait_time = poll_interval;
+      if (future->wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) return SUCCESS;
+      if (node && !node->closed_.load()) node->try_spin_some();
+      std::this_thread::sleep_for(wait_time);
     }
   }
 
@@ -878,22 +1101,33 @@ namespace lwrcl
   FutureReturnCode spin_until_future_complete(
       std::shared_ptr<lwrcl::Node> node, std::shared_future<ResponseT> &future, const Duration &timeout)
   {
-    std::thread spin_thread([node]()
-                            { lwrcl::spin(node); });
-
-    if (
-        future.wait_for(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)) ==
-        std::future_status::ready)
+    const auto timeout_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(timeout);
+    const auto poll_interval = std::chrono::milliseconds(1);
+    if (timeout_ns.count() < 0)
     {
-      node->stop_spin();
-      spin_thread.join();
-      return SUCCESS;
+      while (ok())
+      {
+        if (future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) return SUCCESS;
+        if (node && !node->closed_.load()) node->try_spin_some();
+        std::this_thread::sleep_for(poll_interval);
+      }
+      return INTERRUPTED;
     }
-    else
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout_ns;
+    while (true)
     {
-      node->stop_spin();
-      spin_thread.join();
-      return TIMEOUT;
+      auto now = std::chrono::steady_clock::now();
+      if (now >= deadline)
+      {
+        return future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready ? SUCCESS : TIMEOUT;
+      }
+      if (!ok()) return INTERRUPTED;
+      auto wait_time = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+      if (wait_time > poll_interval) wait_time = poll_interval;
+      if (future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) return SUCCESS;
+      if (node && !node->closed_.load()) node->try_spin_some();
+      std::this_thread::sleep_for(wait_time);
     }
   }
 
@@ -917,8 +1151,7 @@ namespace lwrcl
       serialized_message->reserve(payload_size + 4);
       char *buf = serialized_message->get_rcl_serialized_message().buffer;
 
-      uint8_t header[4] = {0x00, 0x01, 0x00, 0x00};
-      memcpy(buf, header, 4);
+      write_cdr_header(buf);
 
       // Serialize into buffer after header
       basic_cdr_stream writer;
@@ -944,6 +1177,20 @@ namespace lwrcl
       basic_cdr_stream reader;
       reader.set_buffer(buf + 4, length - 4);
       read(reader, *message, false);
+    }
+
+  private:
+    static void write_cdr_header(char *buffer)
+    {
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+      buffer[0] = 0x00;
+      buffer[1] = 0x00;
+#else
+      buffer[0] = 0x00;
+      buffer[1] = 0x01;
+#endif
+      buffer[2] = 0x00;
+      buffer[3] = 0x00;
     }
   };
 } // namespace lwrcl

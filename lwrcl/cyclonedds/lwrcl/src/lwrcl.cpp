@@ -4,14 +4,20 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
+#include <cctype>
 #include <cassert>
+#include <climits>
 #include <condition_variable>
 #include <csignal>
 #include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <sstream> 
@@ -19,6 +25,8 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+
+#include <unistd.h>
 
 namespace lwrcl
 {
@@ -34,16 +42,104 @@ namespace lwrcl
   {
     if ((signal == SIGINT || signal == SIGTERM))
     {
-      printf("SIGINT/SIGTERM received, shutting down...\n");
+      static const char message[] = "SIGINT/SIGTERM received, shutting down...\n";
+      (void)::write(STDERR_FILENO, message, sizeof(message) - 1);
       global_stop_flag.store(true);
       s_signal_status = signal;
-      s_waiting_cv.notify_all();
     }
   }
 
   class Node;
 
   NodeParameters node_parameters;
+  std::mutex node_parameters_mutex;
+
+  namespace
+  {
+    std::chrono::nanoseconds timer_wait_timeout(const std::vector<std::shared_ptr<ITimerBase>> &timers)
+    {
+      const auto max_wait = std::chrono::milliseconds(100);
+      if (timers.empty()) return max_wait;
+
+      auto timeout = std::chrono::duration_cast<std::chrono::nanoseconds>(max_wait);
+      for (const auto &timer : timers)
+      {
+        const auto until_next = timer->time_until_next_call();
+        if (until_next <= std::chrono::nanoseconds::zero()) return std::chrono::nanoseconds::zero();
+        if (until_next == std::chrono::nanoseconds::max()) continue;
+        if (until_next < timeout) timeout = until_next;
+      }
+      return timeout;
+    }
+
+    dds::core::Duration to_cyclonedds_duration(std::chrono::nanoseconds timeout)
+    {
+      const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);
+      const auto nanoseconds = timeout - seconds;
+      return dds::core::Duration(
+          static_cast<int32_t>(seconds.count()),
+          static_cast<uint32_t>(nanoseconds.count()));
+    }
+
+    bool parse_parameter_int(const std::string &text, int &value)
+    {
+      if (text.empty()) return false;
+      char *end = nullptr;
+      errno = 0;
+      long parsed = std::strtol(text.c_str(), &end, 10);
+      if (end == text.c_str() || *end != '\0' || errno == ERANGE ||
+          parsed < INT_MIN || parsed > INT_MAX)
+      {
+        return false;
+      }
+      value = static_cast<int>(parsed);
+      return true;
+    }
+
+    bool parse_parameter_double(const std::string &text, double &value)
+    {
+      if (text.empty()) return false;
+      char *end = nullptr;
+      errno = 0;
+      double parsed = std::strtod(text.c_str(), &end);
+      if (end == text.c_str() || *end != '\0' || errno == ERANGE)
+      {
+        return false;
+      }
+      value = parsed;
+      return true;
+    }
+
+    bool parse_parameter_bool(const std::string &text, bool &value)
+    {
+      std::string lower = text;
+      std::transform(lower.begin(), lower.end(), lower.begin(),
+                     [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+      if (lower == "true" || lower == "yes" || lower == "on")
+      {
+        value = true;
+        return true;
+      }
+      if (lower == "false" || lower == "no" || lower == "off")
+      {
+        value = false;
+        return true;
+      }
+      return false;
+    }
+
+    Parameter make_parameter_from_yaml_scalar(const std::string &name, const YAML::Node &node)
+    {
+      const std::string text = node.as<std::string>();
+      int int_value{};
+      if (parse_parameter_int(text, int_value)) return Parameter(name, int_value);
+      double double_value{};
+      if (parse_parameter_double(text, double_value)) return Parameter(name, double_value);
+      bool bool_value{};
+      if (parse_parameter_bool(text, bool_value)) return Parameter(name, bool_value);
+      return Parameter(name, text);
+    }
+  }
 
   Parameter::Parameter(const std::string &name, bool value)
       : name_(name), string_value_(value ? "true" : "false"), type_(Type::BOOL)
@@ -194,7 +290,7 @@ namespace lwrcl
   std::string Parameter::double_to_string(double value)
   {
     std::ostringstream oss;
-    oss << value;
+    oss << std::setprecision(std::numeric_limits<double>::max_digits10) << value;
     return oss.str();
   }
 
@@ -268,8 +364,15 @@ namespace lwrcl
     char timestamp_buf[80];
     struct tm local_time_buf;
     auto local_time = localtime_r(&timestamp, &local_time_buf);
-    std::strftime(
-        timestamp_buf, sizeof(timestamp_buf), "%Y-%m-%d %H:%M:%S", local_time);
+    if (local_time != nullptr)
+    {
+      std::strftime(timestamp_buf, sizeof(timestamp_buf), "%Y-%m-%d %H:%M:%S", local_time);
+    }
+    else
+    {
+      std::snprintf(timestamp_buf, sizeof(timestamp_buf), "0000-00-00 00:00:00");
+      ms = std::chrono::milliseconds(0);
+    }
 
     switch (level)
     {
@@ -338,7 +441,7 @@ namespace lwrcl
       {
         if (node != nullptr)
         {
-          if (node->closed_ == false)
+          if (!node->closed_.load())
           {
             node->shutdown();
           }
@@ -357,7 +460,7 @@ namespace lwrcl
     void SingleThreadedExecutor::spin()
     {
       stop_flag_ = false;
-      while (global_stop_flag.load() == false && stop_flag_ == false)
+      while (!global_stop_flag.load() && !stop_flag_.load())
       {
         bool did_work = false;
         {
@@ -366,7 +469,7 @@ namespace lwrcl
           {
             if (node != nullptr)
             {
-              if (node->closed_ == false)
+              if (!node->closed_.load())
               {
                 if (node->try_spin_some()) did_work = true;
               }
@@ -380,7 +483,7 @@ namespace lwrcl
         }
       }
 
-      if (global_stop_flag.load() == true)
+      if (global_stop_flag.load())
       {
         clear();
       }
@@ -393,7 +496,7 @@ namespace lwrcl
       {
         if (node != nullptr)
         {
-          if (node->closed_ == false)
+          if (!node->closed_.load())
           {
             lwrcl::spin_some(node);
           }
@@ -434,7 +537,7 @@ namespace lwrcl
       {
         if (node != nullptr)
         {
-          if (node->closed_ == false)
+          if (!node->closed_.load())
           {
             node->stop_spin();
           }
@@ -450,7 +553,7 @@ namespace lwrcl
       {
         if (node != nullptr)
         {
-          if (node->closed_ == false)
+          if (!node->closed_.load())
           {
             node->shutdown();
           }
@@ -466,30 +569,43 @@ namespace lwrcl
 
     void MultiThreadedExecutor::spin()
     {
-      stop_flag_ = false;
-      for (auto node : nodes_)
       {
-        threads_.emplace_back([this, node]()
-                              {
-      if (node != nullptr) {
-        if (node->closed_ == false) {
-          lwrcl::spin(node);
+        std::lock_guard<std::mutex> lock(mutex_);
+        stop_flag_.store(false);
+        for (auto node : nodes_)
+        {
+          threads_.emplace_back([node]()
+                                {
+        if (node != nullptr) {
+          if (!node->closed_.load()) {
+            lwrcl::spin(node);
+          }
+        } else {
+          std::cerr << "[WARN] Node pointer is null in executor spin." << std::endl;
+        } });
         }
-      } else {
-        std::cerr << "[WARN] Node pointer is null in executor spin." << std::endl;
-      } });
       }
 
-      for (auto &thread : threads_)
+      while (true)
       {
+        std::thread thread;
+        {
+          std::lock_guard<std::mutex> lock(mutex_);
+          if (threads_.empty())
+          {
+            break;
+          }
+          thread = std::move(threads_.back());
+          threads_.pop_back();
+        }
+
         if (thread.joinable())
         {
           thread.join();
         }
       }
-      threads_.clear();
 
-      if (global_stop_flag.load() == true)
+      if (global_stop_flag.load())
       {
         clear();
       }
@@ -500,7 +616,7 @@ namespace lwrcl
       std::lock_guard<std::mutex> lock(mutex_);
       for (const auto& node : nodes_)
       {
-        if (node != nullptr && node->closed_ == false)
+        if (node != nullptr && !node->closed_.load())
         {
           lwrcl::spin_some(node);
         }
@@ -986,23 +1102,35 @@ namespace lwrcl
     // instead of waiting up to the full timeout.
     dds::core::cond::GuardCondition stop_guard;
     unified_ws += stop_guard;
-    stop_guard_ = &stop_guard;
+    {
+      std::lock_guard<std::mutex> lock(stop_guard_mutex_);
+      stop_guard_ = &stop_guard;
+    }
+    std::shared_ptr<void> stop_guard_cleanup(nullptr, [this](void *) {
+      std::lock_guard<std::mutex> lock(stop_guard_mutex_);
+      stop_guard_ = nullptr;
+    });
+    (void)stop_guard_cleanup;
 
     const bool has_subs = !subs.empty();
 
-    while (closed_ == false && global_stop_flag.load() == false && stop_flag_ == false)
+    while (!closed_.load() && !global_stop_flag.load() && !stop_flag_.load())
     {
+      bool did_work = false;
+      std::vector<std::shared_ptr<ITimerBase>> timers;
+      {
+        std::lock_guard<std::mutex> lock(timer_list_mutex_);
+        for (auto &timer : timer_list_) timers.push_back(timer);
+      }
       if (has_subs)
       {
-        // Block until data arrives on any subscription or stop is signaled.
-        // 100 ms safety timeout — stop_guard normally triggers immediately.
         try
         {
-          unified_ws.wait(dds::core::Duration::from_millisecs(100));
-          if (stop_flag_ || global_stop_flag.load()) break;
+          unified_ws.wait(to_cyclonedds_duration(timer_wait_timeout(timers)));
+          if (stop_flag_.load() || global_stop_flag.load()) break;
           for (auto &sub : subs)
           {
-            sub->invoke_if_data();
+            if (sub->invoke_if_data()) did_work = true;
           }
         }
         catch (const dds::core::TimeoutError &) {}
@@ -1010,17 +1138,37 @@ namespace lwrcl
         {
           std::cerr << "DDS Exception in Node::spin: " << e.what() << std::endl;
         }
+        catch (const std::exception &e)
+        {
+          std::cerr << "Exception in Node::spin: " << e.what() << std::endl;
+        }
+        catch (...)
+        {
+          std::cerr << "Unknown exception in Node::spin." << std::endl;
+        }
       }
-      else
+      for (auto &timer : timers)
       {
-        // No subscriptions — just yield briefly (timers run on their own threads).
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        try
+        {
+          if (timer->execute_if_ready()) did_work = true;
+        }
+        catch (const std::exception &e)
+        {
+          std::cerr << "Exception in timer execution: " << e.what() << std::endl;
+        }
+        catch (...)
+        {
+          std::cerr << "Unknown exception in timer execution." << std::endl;
+        }
+      }
+      if (!has_subs && !did_work)
+      {
+        std::this_thread::sleep_for(timer_wait_timeout(timers));
       }
     }
 
-    stop_guard_ = nullptr;
-
-    if (global_stop_flag.load() == true)
+    if (global_stop_flag.load())
     {
       shutdown();
     }
@@ -1030,6 +1178,7 @@ namespace lwrcl
   {
     stop_flag_ = true;
     // Trigger GuardCondition to break WaitSet::wait() immediately.
+    std::lock_guard<std::mutex> lock(stop_guard_mutex_);
     if (stop_guard_)
     {
       try { stop_guard_->trigger_value(true); }
@@ -1043,6 +1192,18 @@ namespace lwrcl
     for (auto &sub : subscription_list_)
     {
       if (sub->invoke_if_data())
+      {
+        did_work = true;
+      }
+    }
+    std::vector<std::shared_ptr<ITimerBase>> timers;
+    {
+      std::lock_guard<std::mutex> lock(timer_list_mutex_);
+      for (auto &timer : timer_list_) timers.push_back(timer);
+    }
+    for (auto &timer : timers)
+    {
+      if (timer->execute_if_ready())
       {
         did_work = true;
       }
@@ -1064,11 +1225,14 @@ namespace lwrcl
       subscriber->stop();
     }
     subscription_list_.clear();
-    for (auto &timer : timer_list_)
     {
-      std::static_pointer_cast<TimerBase>(timer)->stop();
+      std::lock_guard<std::mutex> lock(timer_list_mutex_);
+      for (auto &timer : timer_list_)
+      {
+        std::static_pointer_cast<TimerBase>(timer)->stop();
+      }
+      timer_list_.clear();
     }
-    timer_list_.clear();
 
     for (auto &service : service_list_)
     {
@@ -1080,7 +1244,7 @@ namespace lwrcl
       client->stop();
     }
     client_list_.clear();
-    closed_ = true;
+    closed_.store(true);
   }
 
   Clock::SharedPtr Node::get_clock() { return clock_; }
@@ -1090,7 +1254,18 @@ namespace lwrcl
     for (const auto &param : parameters)
     {
       std::string node_name = this->get_name();
-      std::string param_name = param->get_name();
+      std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+      std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
+      if (!param)
+      {
+        throw std::runtime_error("Parameter pointer is null");
+      }
+      auto parameter = std::dynamic_pointer_cast<Parameter>(param);
+      if (!parameter)
+      {
+        throw std::runtime_error("Parameter type is invalid");
+      }
+      std::string param_name = parameter->get_name();
 
       // Check if the node exists in node_parameters
       auto node_it = node_parameters.find(node_name);
@@ -1102,8 +1277,8 @@ namespace lwrcl
         if (params.find(param_name) != params.end())
         {
           // Update the existing parameter
-          params[param_name] = *std::dynamic_pointer_cast<Parameter>(param);
-          parameters_[param_name] = *std::dynamic_pointer_cast<Parameter>(param);
+          params[param_name] = *parameter;
+          parameters_[param_name] = *parameter;
 
           std::cout << "Parameter updated: " << param_name << std::endl;
         }
@@ -1133,6 +1308,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const bool &default_value)
   {
     std::string node_name = this->get_name();
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1155,6 +1332,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const int &default_value)
   {
     std::string node_name = this->get_name();
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1177,6 +1356,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const double &default_value)
   {
     std::string node_name = this->get_name();
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1199,6 +1380,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::string &default_value)
   {
     std::string node_name = this->get_name();
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1221,6 +1404,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const char *default_value)
   {
     std::string node_name = this->get_name();
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1243,6 +1428,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<bool> default_value)
   {
     std::string node_name = this->get_name();
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1265,6 +1452,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<int> default_value)
   {
     std::string node_name = this->get_name();
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1287,6 +1476,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<double> default_value)
   {
     std::string node_name = this->get_name();
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1309,6 +1500,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<std::string> default_value)
   {
     std::string node_name = this->get_name();
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1331,6 +1524,8 @@ namespace lwrcl
   void Node::declare_parameter(const std::string &name, const std::vector<uint8_t> default_value)
   {
     std::string node_name = this->get_name();
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
 
     auto node_it = node_parameters.find(node_name);
     if (node_it != node_parameters.end())
@@ -1352,6 +1547,7 @@ namespace lwrcl
 
   Parameter Node::get_parameter(const std::string &name) const
   {
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
     auto it = parameters_.find(name);
     if (it != parameters_.end())
     {
@@ -1365,6 +1561,7 @@ namespace lwrcl
 
   void Node::get_parameter(const std::string &name, bool &bool_data) const
   {
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
     auto it = parameters_.find(name);
     if (it != parameters_.end())
     {
@@ -1379,6 +1576,7 @@ namespace lwrcl
 
   void Node::get_parameter(const std::string &name, int &int_data) const
   {
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
     auto it = parameters_.find(name);
     if (it != parameters_.end())
     {
@@ -1393,6 +1591,7 @@ namespace lwrcl
 
   void Node::get_parameter(const std::string &name, double &double_data) const
   {
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
     auto it = parameters_.find(name);
     if (it != parameters_.end())
     {
@@ -1407,6 +1606,7 @@ namespace lwrcl
 
   void Node::get_parameter(const std::string &name, std::string &string_data) const
   {
+    std::lock_guard<std::mutex> parameters_lock(parameters_mutex_);
     auto it = parameters_.find(name);
     if (it != parameters_.end())
     {
@@ -1458,7 +1658,7 @@ namespace lwrcl
   {
     if (node != nullptr)
     {
-      if (node->closed_ == false)
+      if (!node->closed_.load())
       {
         node->spin();
       }
@@ -1475,7 +1675,7 @@ namespace lwrcl
   {
     if (node != nullptr)
     {
-      if (node->closed_ == false)
+      if (!node->closed_.load())
       {
         node->spin_some();
       }
@@ -1522,6 +1722,7 @@ namespace lwrcl
   void load_parameters(const std::string &file_path)
   {
     YAML::Node config = YAML::LoadFile(file_path);
+    std::lock_guard<std::mutex> node_parameters_lock(node_parameters_mutex);
 
     for (YAML::const_iterator it = config.begin(); it != config.end(); ++it)
     {
@@ -1533,36 +1734,7 @@ namespace lwrcl
            ++param_it)
       {
         std::string param_name = param_it->first.as<std::string>();
-        auto param_value = param_it->second;
-        try
-        {
-          param_value.as<int>();
-          int value = param_value.as<int>();
-          params[param_name] = Parameter(param_name, value);
-        }
-        catch (const YAML::BadConversion &)
-        {
-          try
-          {
-            param_value.as<double>();
-            double value = param_value.as<double>();
-            params[param_name] = Parameter(param_name, value);
-          }
-          catch (const YAML::BadConversion &)
-          {
-            try
-            {
-              param_value.as<bool>();
-              bool value = param_value.as<bool>();
-              params[param_name] = Parameter(param_name, value);
-            }
-            catch (const YAML::BadConversion &)
-            {
-              std::string value = param_value.as<std::string>();
-              params[param_name] = Parameter(param_name, value);
-            }
-          }
-        }
+        params[param_name] = make_parameter_from_yaml_scalar(param_name, param_it->second);
       }
       node_parameters[node_name] = params;
     }

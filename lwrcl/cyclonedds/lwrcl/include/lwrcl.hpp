@@ -165,6 +165,7 @@ namespace lwrcl
   typedef std::unordered_map<std::string, Parameters> NodeParameters;
   // Global variable for parameters
   extern NodeParameters node_parameters;
+  extern std::mutex node_parameters_mutex;
 
   // Load parameters from file
   std::string get_params_file_path(int argc, char *argv[]);
@@ -301,7 +302,10 @@ namespace lwrcl
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::SYSTEM_TIME;
       auto duration = Duration(period);
       auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), callback_mutex_, clock_type);
-      timer_list_.push_front(timer);
+      {
+        std::lock_guard<std::mutex> lock(timer_list_mutex_);
+        timer_list_.push_front(timer);
+      }
       return timer;
     }
 
@@ -313,7 +317,10 @@ namespace lwrcl
       lwrcl::Clock::ClockType clock_type = Clock::ClockType::STEADY_TIME;
       auto duration = Duration(period);
       auto timer = std::make_shared<TimerBase>(duration, std::move(callback_function), callback_mutex_, clock_type);
-      timer_list_.push_front(timer);
+      {
+        std::lock_guard<std::mutex> lock(timer_list_mutex_);
+        timer_list_.push_front(timer);
+      }
       return timer;
     }
 
@@ -377,12 +384,15 @@ namespace lwrcl
     void get_parameter(const std::string &name, std::string &string_data) const;
 
     bool has_parameter(const std::string &name) const {
+      std::lock_guard<std::mutex> lock(parameters_mutex_);
       return parameters_.find(name) != parameters_.end();
     }
     void undeclare_parameter(const std::string &name) {
+      std::lock_guard<std::mutex> lock(parameters_mutex_);
       parameters_.erase(name);
     }
     void set_parameter(const Parameter &param) {
+      std::lock_guard<std::mutex> lock(parameters_mutex_);
       parameters_[param.get_name()] = param;
     }
     std::vector<Parameter> get_parameters(const std::vector<std::string> &names) const {
@@ -396,6 +406,7 @@ namespace lwrcl
     std::vector<std::string> list_parameters(
         const std::vector<std::string> &prefixes, uint64_t /*depth*/) const {
       std::vector<std::string> result;
+      std::lock_guard<std::mutex> lock(parameters_mutex_);
       for (const auto &kv : parameters_) {
         if (prefixes.empty()) {
           result.push_back(kv.first);
@@ -453,14 +464,17 @@ namespace lwrcl
     std::string namespace_;
     NodeOptions node_options_;
     std::atomic<bool> stop_flag_{false};
+    std::mutex stop_guard_mutex_;
     dds::core::cond::GuardCondition *stop_guard_{nullptr}; // used by spin() for immediate wakeup
     bool participant_owned_;  // <-- declared AFTER public bool closed_ (above)
 
     std::forward_list<std::shared_ptr<IPublisher>> publisher_list_;
     std::forward_list<std::shared_ptr<ISubscription>> subscription_list_;
     std::forward_list<std::shared_ptr<ITimerBase>> timer_list_;
+    mutable std::mutex timer_list_mutex_;
     std::forward_list<std::shared_ptr<IService>> service_list_;
     std::forward_list<std::shared_ptr<IClient>> client_list_;
+    mutable std::mutex parameters_mutex_;
     Parameters parameters_;
 
     std::string get_topic_prefix() const
@@ -636,7 +650,8 @@ namespace lwrcl
           publisher_(nullptr),
           subscription_(nullptr),
           request_topic_name_(service_name_ + "_Request"),
-          response_topic_name_(service_name_ + "_Response")
+          response_topic_name_(service_name_ + "_Response"),
+          stopped_(false)
     {
       RMWQoSProfile rmw_qos_profile_services = rmw_qos_profile_services_default;
       QoS service_qos(KeepLast(10), rmw_qos_profile_services);
@@ -646,9 +661,16 @@ namespace lwrcl
 
       request_callback_function_ = [this](std::shared_ptr<typename T::Request> request)
       {
+        if (stopped_.load())
+        {
+          return;
+        }
         std::shared_ptr<typename T::Response> response = std::make_shared<typename T::Response>();
         callback_function_(request, response);
-        publisher_->publish(response);
+        if (!stopped_.load() && publisher_)
+        {
+          publisher_->publish(response);
+        }
       };
 
       subscription_ = std::make_shared<Subscription<typename T::Request>>(
@@ -656,7 +678,10 @@ namespace lwrcl
           request_callback_function_, std::make_shared<std::mutex>());
     }
 
-    ~Service() = default;
+    ~Service()
+    {
+      stop();
+    }
 
     Service(const Service &) = delete;
     Service &operator=(const Service &) = delete;
@@ -665,10 +690,16 @@ namespace lwrcl
 
     void stop() override
     {
+      if (stopped_.exchange(true))
+      {
+        return;
+      }
       if (subscription_)
       {
         subscription_->stop();
       }
+      subscription_.reset();
+      publisher_.reset();
     }
 
   private:
@@ -681,6 +712,7 @@ namespace lwrcl
     std::shared_ptr<Subscription<typename T::Request>> subscription_;
     std::string request_topic_name_;
     std::string response_topic_name_;
+    std::atomic<bool> stopped_;
   };
 
   class IClient
@@ -771,7 +803,8 @@ namespace lwrcl
           response_topic_name_(service_name_ + "_Response"),
           mutex_(),
           cv_(),
-          response_received_(false)
+          response_received_(false),
+          stopped_(false)
     {
       RMWQoSProfile rmw_qos_profile_services = rmw_qos_profile_services_default;
       QoS client_qos(KeepLast(10), rmw_qos_profile_services);
@@ -786,7 +819,10 @@ namespace lwrcl
           std::make_shared<std::mutex>());
     }
 
-    ~Client() = default;
+    ~Client()
+    {
+      stop();
+    }
 
     Client(const Client &) = delete;
     Client &operator=(const Client &) = delete;
@@ -795,6 +831,10 @@ namespace lwrcl
 
     void handle_response(std::shared_ptr<typename T::Response> response)
     {
+      if (stopped_.load())
+      {
+        return;
+      }
       std::shared_ptr<std::promise<std::shared_ptr<typename T::Response>>> promise;
       {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -816,16 +856,28 @@ namespace lwrcl
 
     void stop() override
     {
+      if (stopped_.exchange(true))
+      {
+        return;
+      }
       if (subscription_)
       {
         subscription_->stop();
       }
+      subscription_.reset();
+      publisher_.reset();
     }
 
     SharedFuture async_send_request(SharedRequest request)
     {
       auto promise = std::make_shared<std::promise<SharedResponse>>();
       auto future = promise->get_future().share();
+
+      if (stopped_.load() || !publisher_)
+      {
+        promise->set_exception(std::make_exception_ptr(std::runtime_error("Client is stopped")));
+        return future;
+      }
 
       {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -856,7 +908,7 @@ namespace lwrcl
     }
 
     bool service_is_ready() const {
-      return publisher_->get_subscriber_count() > 0;
+      return publisher_ && publisher_->get_subscriber_count() > 0;
     }
 
   private:
@@ -871,28 +923,40 @@ namespace lwrcl
     std::mutex mutex_;
     std::condition_variable cv_;
     std::atomic<bool> response_received_{false};
+    std::atomic<bool> stopped_;
   };
 
   template <typename Duration>
   FutureReturnCode spin_until_future_complete(
       std::shared_ptr<lwrcl::Node> node, std::shared_ptr<FutureBase> future, const Duration &timeout)
   {
-    std::thread spin_thread([node]()
-                            { lwrcl::spin(node); });
-
-    if (
-        future->wait_for(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)) ==
-        std::future_status::ready)
+    const auto timeout_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(timeout);
+    const auto poll_interval = std::chrono::milliseconds(1);
+    if (timeout_ns.count() < 0)
     {
-      node->stop_spin();
-      spin_thread.join();
-      return SUCCESS;
+      while (ok())
+      {
+        if (future->wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) return SUCCESS;
+        if (node && !node->closed_.load()) node->try_spin_some();
+        std::this_thread::sleep_for(poll_interval);
+      }
+      return INTERRUPTED;
     }
-    else
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout_ns;
+    while (true)
     {
-      node->stop_spin();
-      spin_thread.join();
-      return TIMEOUT;
+      auto now = std::chrono::steady_clock::now();
+      if (now >= deadline)
+      {
+        return future->wait_for(std::chrono::milliseconds(0)) == std::future_status::ready ? SUCCESS : TIMEOUT;
+      }
+      if (!ok()) return INTERRUPTED;
+      auto wait_time = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+      if (wait_time > poll_interval) wait_time = poll_interval;
+      if (future->wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) return SUCCESS;
+      if (node && !node->closed_.load()) node->try_spin_some();
+      std::this_thread::sleep_for(wait_time);
     }
   }
 
@@ -900,22 +964,33 @@ namespace lwrcl
   FutureReturnCode spin_until_future_complete(
       std::shared_ptr<lwrcl::Node> node, std::shared_future<ResponseT> &future, const Duration &timeout)
   {
-    std::thread spin_thread([node]()
-                            { lwrcl::spin(node); });
-
-    if (
-        future.wait_for(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)) ==
-        std::future_status::ready)
+    const auto timeout_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(timeout);
+    const auto poll_interval = std::chrono::milliseconds(1);
+    if (timeout_ns.count() < 0)
     {
-      node->stop_spin();
-      spin_thread.join();
-      return SUCCESS;
+      while (ok())
+      {
+        if (future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) return SUCCESS;
+        if (node && !node->closed_.load()) node->try_spin_some();
+        std::this_thread::sleep_for(poll_interval);
+      }
+      return INTERRUPTED;
     }
-    else
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout_ns;
+    while (true)
     {
-      node->stop_spin();
-      spin_thread.join();
-      return TIMEOUT;
+      auto now = std::chrono::steady_clock::now();
+      if (now >= deadline)
+      {
+        return future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready ? SUCCESS : TIMEOUT;
+      }
+      if (!ok()) return INTERRUPTED;
+      auto wait_time = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+      if (wait_time > poll_interval) wait_time = poll_interval;
+      if (future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) return SUCCESS;
+      if (node && !node->closed_.load()) node->try_spin_some();
+      std::this_thread::sleep_for(wait_time);
     }
   }
 
@@ -998,6 +1073,15 @@ namespace lwrcl
     {
       if (this != &other)
       {
+        if (other.data_.length == 0 || other.data_.buffer == nullptr)
+        {
+          if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
+          data_.buffer = nullptr;
+          data_.length = 0;
+          data_.capacity = 0;
+          is_own_buffer_ = true;
+          return *this;
+        }
         // Reuse existing buffer if capacity is sufficient
         if (is_own_buffer_ && data_.capacity >= other.data_.length && data_.buffer != nullptr)
         {
@@ -1019,6 +1103,15 @@ namespace lwrcl
 
     SerializedMessage &operator=(const lwrcl_serialized_message_t &other)
     {
+      if (other.length == 0 || other.buffer == nullptr)
+      {
+        if (data_.buffer != nullptr && is_own_buffer_) { delete[] data_.buffer; }
+        data_.buffer = nullptr;
+        data_.length = 0;
+        data_.capacity = 0;
+        is_own_buffer_ = true;
+        return *this;
+      }
       if (data_.buffer != other.buffer)
       {
         if (is_own_buffer_ && data_.capacity >= other.length && data_.buffer != nullptr)
@@ -1134,8 +1227,7 @@ namespace lwrcl
       serialized_message->reserve(payload_size + 4);
       char *buf = serialized_message->get_rcl_serialized_message().buffer;
 
-      uint8_t header[4] = {0x00, 0x01, 0x00, 0x00};
-      memcpy(buf, header, 4);
+      write_cdr_header(buf);
 
       // Serialize into buffer after header
       basic_cdr_stream writer;
@@ -1160,6 +1252,20 @@ namespace lwrcl
       basic_cdr_stream reader;
       reader.set_buffer(buf + 4, length - 4);
       read(reader, *message, false);
+    }
+
+  private:
+    static void write_cdr_header(char *buffer)
+    {
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+      buffer[0] = 0x00;
+      buffer[1] = 0x00;
+#else
+      buffer[0] = 0x00;
+      buffer[1] = 0x01;
+#endif
+      buffer[2] = 0x00;
+      buffer[3] = 0x00;
     }
   };
 } // namespace lwrcl

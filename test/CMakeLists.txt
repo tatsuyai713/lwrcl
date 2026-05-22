@@ -26,6 +26,7 @@ enable_testing()
 
 # --- DDS backend setup ------------------------------------------------------
 if(DDS_BACKEND STREQUAL "fastdds")
+    find_package(OpenSSL REQUIRED)
     find_package(fastcdr REQUIRED)
     find_package(foonathan_memory REQUIRED)
     find_package(fastrtps REQUIRED)
@@ -41,7 +42,7 @@ if(DDS_BACKEND STREQUAL "fastdds")
                         ${LWRCL_INSTALL_PREFIX}/include/optionparser)
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
 
-    set(DDS_LIBRARIES fastrtps)
+    set(DDS_LIBRARIES fastrtps OpenSSL::SSL OpenSSL::Crypto)
 
 elseif(DDS_BACKEND STREQUAL "cyclonedds")
     set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/cyclonedds-libs)

@@ -4,8 +4,10 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdio>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -21,6 +23,8 @@ namespace lwrcl
     virtual ~ITimerBase() = default;
     virtual void start() = 0;
     virtual void stop() = 0;
+    virtual bool execute_if_ready() = 0;
+    virtual std::chrono::nanoseconds time_until_next_call() const = 0;
 
     ITimerBase(const ITimerBase &) = delete;
     ITimerBase &operator=(const ITimerBase &) = delete;
@@ -41,15 +45,14 @@ namespace lwrcl
       std::shared_ptr<std::mutex> node_mutex, Clock::ClockType clock_type)
         : ITimerBase(),
           std::enable_shared_from_this<TimerBase>(),
-          clock_type_(clock_type),
           period_(period),
           callback_function_(std::move(callback_function)),
-          worker_(),
-          node_mutex_(node_mutex),
+          node_mutex_(std::move(node_mutex)),
+          clock_(clock_type),
+          next_execution_time_(clock_.now() + period_),
           stop_flag_(false),
           is_canceled_(false)
     {
-      start();
     }
 
     ~TimerBase() { stop(); }
@@ -61,27 +64,62 @@ namespace lwrcl
 
     void start() override
     {
-      // Join any previously running thread before starting a new one to avoid
-      // std::terminate() when the joinable thread object is overwritten.
-      if (worker_.joinable())
-      {
-        stop_flag_.store(true);
-        worker_.join();
-      }
       is_canceled_.store(false);
       stop_flag_.store(false);
-      worker_ = std::thread([this]()
-                            { run(); });
+      std::lock_guard<std::mutex> lock(next_execution_mutex_);
+      next_execution_time_ = clock_.now() + period_;
     }
 
     void stop() override
     {
       stop_flag_.store(true);
-      stop_cv_.notify_all();
-      if (worker_.joinable())
+    }
+
+    bool execute_if_ready() override
+    {
+      if (stop_flag_.load() || is_canceled_.load())
       {
-        worker_.join(); // Wait for the worker thread to finish
+        return false;
       }
+
+      auto now = clock_.now();
+      {
+        std::lock_guard<std::mutex> lock(next_execution_mutex_);
+        if (now < next_execution_time_)
+        {
+          return false;
+        }
+
+        if (period_.nanoseconds() > 0)
+        {
+          do
+          {
+            next_execution_time_ = next_execution_time_ + period_;
+          } while (next_execution_time_ <= now);
+        }
+        else
+        {
+          next_execution_time_ = now;
+        }
+      }
+
+      execute_callback();
+      return true;
+    }
+
+    std::chrono::nanoseconds time_until_next_call() const override
+    {
+      if (stop_flag_.load() || is_canceled_.load())
+      {
+        return std::chrono::nanoseconds::max();
+      }
+      auto now = clock_.now();
+      std::lock_guard<std::mutex> lock(next_execution_mutex_);
+      if (now >= next_execution_time_)
+      {
+        return std::chrono::nanoseconds::zero();
+      }
+      return std::chrono::nanoseconds((next_execution_time_ - now).nanoseconds());
     }
 
     // Cancel the timer (alias for stop)
@@ -100,10 +138,10 @@ namespace lwrcl
     // Reset the timer (restart)
     void reset()
     {
-      stop();
       is_canceled_.store(false);
       stop_flag_.store(false);
-      start();
+      std::lock_guard<std::mutex> lock(next_execution_mutex_);
+      next_execution_time_ = clock_.now() + period_;
     }
 
     // Get the timer period
@@ -119,71 +157,27 @@ namespace lwrcl
     }
 
   private:
-    void run_system_time()
+    void execute_callback()
     {
-      auto next_execution_time = std::chrono::steady_clock::now() + std::chrono::nanoseconds(period_.nanoseconds());
-      while (!stop_flag_.load())
+      std::unique_lock<std::mutex> callback_lock;
+      if (node_mutex_)
       {
-        {
-          std::unique_lock<std::mutex> lk(stop_mutex_);
-          stop_cv_.wait_until(lk, next_execution_time, [this] { return stop_flag_.load(); });
-        }
-        if (!stop_flag_.load())
-        {
-          std::lock_guard<std::mutex> lock(*node_mutex_);
-          try { callback_function_(); }
-          catch (const std::exception &e) {
-            std::cerr << "Exception in timer callback: " << e.what() << std::endl;
-          } catch (...) {
-            std::cerr << "Unknown exception in timer callback." << std::endl;
-          }
-          next_execution_time += std::chrono::nanoseconds(period_.nanoseconds());
-        }
+        callback_lock = std::unique_lock<std::mutex>(*node_mutex_);
+      }
+      try { callback_function_(); }
+      catch (const std::exception &e) {
+        std::fprintf(stderr, "Exception in timer callback: %s\n", e.what());
+      } catch (...) {
+        std::fprintf(stderr, "Unknown exception in timer callback.\n");
       }
     }
 
-    void run_steady_time()
-    {
-      auto next_execution_time = std::chrono::steady_clock::now() + std::chrono::nanoseconds(period_.nanoseconds());
-      while (!stop_flag_.load())
-      {
-        {
-          std::unique_lock<std::mutex> lk(stop_mutex_);
-          stop_cv_.wait_until(lk, next_execution_time, [this] { return stop_flag_.load(); });
-        }
-        if (!stop_flag_.load())
-        {
-          std::lock_guard<std::mutex> lock(*node_mutex_);
-          try { callback_function_(); }
-          catch (const std::exception &e) {
-            std::cerr << "Exception in timer callback: " << e.what() << std::endl;
-          } catch (...) {
-            std::cerr << "Unknown exception in timer callback." << std::endl;
-          }
-          next_execution_time += std::chrono::nanoseconds(period_.nanoseconds());
-        }
-      }
-    }
-
-    void run()
-    {
-      if (clock_type_ == Clock::ClockType::SYSTEM_TIME)
-      {
-        run_system_time();
-      }
-      else
-      {
-        run_steady_time();
-      }
-    }
-
-    Clock::ClockType clock_type_;
     Duration period_;
     std::function<void()> callback_function_;
-    std::thread worker_;
     std::shared_ptr<std::mutex> node_mutex_;
-    std::mutex stop_mutex_;
-    std::condition_variable stop_cv_;
+    mutable Clock clock_;
+    mutable std::mutex next_execution_mutex_;
+    Time next_execution_time_;
     std::atomic<bool> stop_flag_;
     std::atomic<bool> is_canceled_;
   };

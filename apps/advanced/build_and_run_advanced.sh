@@ -17,7 +17,7 @@ JOBS=$(nproc 2>/dev/null || echo 4)
 # ---------------------------------------------------------------------------
 show_usage() {
     cat <<EOF
-Usage: $0 <fastdds|cyclonedds|adaptive-autosar> [action] [target]
+Usage: $0 <fastdds|cyclonedds|vsomeip|adaptive-autosar> [action] [target]
 
 Actions:
   build              – Configure & build advanced examples
@@ -49,9 +49,16 @@ fi
 if [ "$BACKEND" = "fastdds" ]; then
     DDS_PREFIX="/opt/fast-dds"
     LWRCL_PREFIX="/opt/fast-dds-libs"
+    FASTDDSGEN_PREFIX="/opt/fast-dds-gen"
 elif [ "$BACKEND" = "cyclonedds" ]; then
     DDS_PREFIX="/opt/cyclonedds"
     LWRCL_PREFIX="/opt/cyclonedds-libs"
+    ICEORYX_PREFIX="/opt/iceoryx"
+elif [ "$BACKEND" = "vsomeip" ]; then
+    DDS_PREFIX="/opt/cyclonedds"
+    VSOMEIP_PREFIX="/opt/vsomeip"
+    LWRCL_PREFIX="/opt/vsomeip-libs"
+    ICEORYX_PREFIX="/opt/iceoryx"
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
     AUTOSAR_AP_PREFIX="/opt/autosar-ap"
     DDS_PREFIX="/opt/cyclonedds"
@@ -59,7 +66,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     ICEORYX_PREFIX="/opt/iceoryx"
     LWRCL_PREFIX="/opt/autosar-ap-libs"
 else
-    echo "ERROR: Unknown backend '$BACKEND'. Use 'fastdds', 'cyclonedds' or 'adaptive-autosar'."
+    echo "ERROR: Unknown backend '$BACKEND'. Use 'fastdds', 'cyclonedds', 'vsomeip' or 'adaptive-autosar'."
     show_usage
     exit 1
 fi
@@ -69,6 +76,10 @@ BUILD_DIR="${APPS_DIR}/build-advanced-${BACKEND}"
 export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 export PATH="${DDS_PREFIX}/bin:${PATH}"
 
+if [ "$BACKEND" = "fastdds" ] && [ -d "${FASTDDSGEN_PREFIX}/bin" ]; then
+    export PATH="${FASTDDSGEN_PREFIX}/bin:${PATH}"
+fi
+
 if [ "$BACKEND" = "adaptive-autosar" ]; then
     export LD_LIBRARY_PATH="${AUTOSAR_AP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
     if [ -d "${VSOMEIP_PREFIX}/lib" ]; then
@@ -77,6 +88,10 @@ if [ "$BACKEND" = "adaptive-autosar" ]; then
     if [ -d "${AUTOSAR_AP_PREFIX}/bin" ]; then
         export PATH="${AUTOSAR_AP_PREFIX}/bin:${PATH}"
     fi
+fi
+
+if [ "$BACKEND" = "vsomeip" ]; then
+    export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
 fi
 
 # Ensure iceoryx libraries are available for build-time tools (idlc)
@@ -107,6 +122,12 @@ do_build() {
         )
     elif [ "$BACKEND" = "cyclonedds" ]; then
         CMAKE_ARGS+=(
+            -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
+            -Dyaml-cpp_DIR="${LWRCL_PREFIX}/lib/cmake/yaml-cpp/"
+        )
+    elif [ "$BACKEND" = "vsomeip" ]; then
+        CMAKE_ARGS+=(
+            -DVSOMEIP_PREFIX="${VSOMEIP_PREFIX}"
             -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
             -Dyaml-cpp_DIR="${LWRCL_PREFIX}/lib/cmake/yaml-cpp/"
         )

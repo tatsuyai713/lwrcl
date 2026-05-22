@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstring>
+#include <memory>
 
 namespace lwrcl
 {
@@ -17,25 +18,27 @@ namespace lwrcl
   class SerializedMessage
   {
   public:
-    SerializedMessage() : data_(), is_own_buffer_(true)
+    SerializedMessage() : data_(), owned_buffer_()
     {
       data_.buffer = nullptr;
       data_.length = 0;
       data_.capacity = 0;
     }
 
-    explicit SerializedMessage(size_t initial_capacity) : data_(), is_own_buffer_(true)
+    explicit SerializedMessage(size_t initial_capacity) : data_(), owned_buffer_()
     {
-      data_.buffer = new char[initial_capacity];
+      owned_buffer_.reset(new char[initial_capacity]);
+      data_.buffer = owned_buffer_.get();
       data_.length = 0;
       data_.capacity = initial_capacity;
     }
 
-    SerializedMessage(const SerializedMessage &other) : data_(), is_own_buffer_(true)
+    SerializedMessage(const SerializedMessage &other) : data_(), owned_buffer_()
     {
       if (other.data_.length > 0 && other.data_.buffer)
       {
-        data_.buffer = new char[other.data_.length];
+        owned_buffer_.reset(new char[other.data_.length]);
+        data_.buffer = owned_buffer_.get();
         std::memcpy(data_.buffer, other.data_.buffer, other.data_.length);
         data_.length = other.data_.length;
         data_.capacity = other.data_.length;
@@ -48,11 +51,12 @@ namespace lwrcl
       }
     }
 
-    SerializedMessage(const lwrcl_serialized_message_t &other) : data_(), is_own_buffer_(true)
+    SerializedMessage(const lwrcl_serialized_message_t &other) : data_(), owned_buffer_()
     {
       if (other.length > 0 && other.buffer)
       {
-        data_.buffer = new char[other.length];
+        owned_buffer_.reset(new char[other.length]);
+        data_.buffer = owned_buffer_.get();
         std::memcpy(data_.buffer, other.buffer, other.length);
         data_.length = other.length;
         data_.capacity = other.length;
@@ -66,48 +70,65 @@ namespace lwrcl
     }
 
     SerializedMessage(SerializedMessage &&other) noexcept
-        : data_(other.data_), is_own_buffer_(other.is_own_buffer_)
+        : data_(other.data_), owned_buffer_(std::move(other.owned_buffer_))
     {
+      if (owned_buffer_)
+      {
+        data_.buffer = owned_buffer_.get();
+      }
       other.data_.buffer = nullptr;
       other.data_.length = 0;
       other.data_.capacity = 0;
     }
 
-    SerializedMessage(lwrcl_serialized_message_t &&other) noexcept : data_(other), is_own_buffer_(true)
+    SerializedMessage(lwrcl_serialized_message_t &&other) noexcept : data_(), owned_buffer_()
     {
+      if (other.buffer == nullptr || other.capacity == 0)
+      {
+        delete[] other.buffer;
+        data_.buffer = nullptr;
+        data_.length = 0;
+        data_.capacity = 0;
+        other.buffer = nullptr;
+        other.length = 0;
+        other.capacity = 0;
+        return;
+      }
+      owned_buffer_.reset(other.buffer);
+      data_.buffer = owned_buffer_.get();
+      data_.length = other.length;
+      data_.capacity = other.capacity;
       other.buffer = nullptr;
       other.length = 0;
       other.capacity = 0;
     }
 
-    ~SerializedMessage()
-    {
-      if (data_.buffer != nullptr && is_own_buffer_)
-      {
-        delete[] data_.buffer;
-      }
-    }
+    ~SerializedMessage() = default;
 
     SerializedMessage &operator=(const SerializedMessage &other)
     {
       if (this != &other)
       {
-        if (is_own_buffer_ && data_.capacity >= other.data_.length && data_.buffer != nullptr)
+        if (other.data_.length == 0 || other.data_.buffer == nullptr)
+        {
+          owned_buffer_.reset();
+          data_.buffer = nullptr;
+          data_.length = 0;
+          data_.capacity = 0;
+          return *this;
+        }
+        if (owned_buffer_ && data_.capacity >= other.data_.length)
         {
           std::memcpy(data_.buffer, other.data_.buffer, other.data_.length);
           data_.length = other.data_.length;
         }
         else
         {
-          if (data_.buffer != nullptr && is_own_buffer_)
-          {
-            delete[] data_.buffer;
-          }
-          data_.buffer = new char[other.data_.length];
+          owned_buffer_.reset(other.data_.length > 0 ? new char[other.data_.length] : nullptr);
+          data_.buffer = owned_buffer_.get();
           std::memcpy(data_.buffer, other.data_.buffer, other.data_.length);
           data_.length = other.data_.length;
           data_.capacity = other.data_.length;
-          is_own_buffer_ = true;
         }
       }
       return *this;
@@ -115,24 +136,28 @@ namespace lwrcl
 
     SerializedMessage &operator=(const lwrcl_serialized_message_t &other)
     {
+      if (other.length == 0 || other.buffer == nullptr)
+      {
+        owned_buffer_.reset();
+        data_.buffer = nullptr;
+        data_.length = 0;
+        data_.capacity = 0;
+        return *this;
+      }
       if (data_.buffer != other.buffer)
       {
-        if (is_own_buffer_ && data_.capacity >= other.length && data_.buffer != nullptr)
+        if (owned_buffer_ && data_.capacity >= other.length)
         {
           std::memcpy(data_.buffer, other.buffer, other.length);
           data_.length = other.length;
         }
         else
         {
-          if (data_.buffer != nullptr && is_own_buffer_)
-          {
-            delete[] data_.buffer;
-          }
-          data_.buffer = new char[other.length];
+          owned_buffer_.reset(other.length > 0 ? new char[other.length] : nullptr);
+          data_.buffer = owned_buffer_.get();
           std::memcpy(data_.buffer, other.buffer, other.length);
           data_.length = other.length;
           data_.capacity = other.length;
-          is_own_buffer_ = true;
         }
       }
       return *this;
@@ -142,12 +167,12 @@ namespace lwrcl
     {
       if (this != &other)
       {
-        if (data_.buffer != nullptr && is_own_buffer_)
-        {
-          delete[] data_.buffer;
-        }
         data_ = other.data_;
-        is_own_buffer_ = other.is_own_buffer_;
+        owned_buffer_ = std::move(other.owned_buffer_);
+        if (owned_buffer_)
+        {
+          data_.buffer = owned_buffer_.get();
+        }
         other.data_.buffer = nullptr;
         other.data_.length = 0;
         other.data_.capacity = 0;
@@ -157,18 +182,39 @@ namespace lwrcl
 
     SerializedMessage &operator=(lwrcl_serialized_message_t &&other) noexcept
     {
-      if (data_.buffer != other.buffer)
+      if (&other == &data_)
       {
-        if (data_.buffer != nullptr && is_own_buffer_)
+        return *this;
+      }
+      if (other.buffer == nullptr || other.capacity == 0)
+      {
+        if (owned_buffer_.get() == other.buffer)
         {
-          delete[] data_.buffer;
+          owned_buffer_.reset();
         }
-        data_ = other;
+        else
+        {
+          owned_buffer_.reset();
+          delete[] other.buffer;
+        }
+        data_.buffer = nullptr;
+        data_.length = 0;
+        data_.capacity = 0;
         other.buffer = nullptr;
         other.length = 0;
         other.capacity = 0;
-        is_own_buffer_ = true;
+        return *this;
       }
+      if (owned_buffer_.get() != other.buffer)
+      {
+        owned_buffer_.reset(other.buffer);
+      }
+      data_.buffer = owned_buffer_.get();
+      data_.length = other.length;
+      data_.capacity = other.capacity;
+      other.buffer = nullptr;
+      other.length = 0;
+      other.capacity = 0;
       return *this;
     }
 
@@ -177,14 +223,10 @@ namespace lwrcl
 
     void set_buffer(char *buffer, size_t length)
     {
-      if (data_.buffer != nullptr && is_own_buffer_)
-      {
-        delete[] data_.buffer;
-      }
+      owned_buffer_.reset();
       data_.buffer = buffer;
       data_.length = length;
       data_.capacity = length;
-      is_own_buffer_ = false;
     }
 
     size_t size() const { return data_.length; }
@@ -194,34 +236,33 @@ namespace lwrcl
     {
       if (new_capacity > data_.capacity)
       {
-        char *new_buffer = new char[new_capacity];
+        std::unique_ptr<char[]> new_buffer(new char[new_capacity]);
         if (data_.buffer != nullptr && data_.length > 0)
         {
-          std::memcpy(new_buffer, data_.buffer, data_.length);
+          std::memcpy(new_buffer.get(), data_.buffer, data_.length);
         }
-        if (data_.buffer != nullptr && is_own_buffer_)
-        {
-          delete[] data_.buffer;
-        }
-        data_.buffer = new_buffer;
+        owned_buffer_ = std::move(new_buffer);
+        data_.buffer = owned_buffer_.get();
         data_.capacity = new_capacity;
-        is_own_buffer_ = true;
       }
     }
 
     lwrcl_serialized_message_t release_lwrcl_serialized_message()
     {
       lwrcl_serialized_message_t out = data_;
+      if (owned_buffer_)
+      {
+        out.buffer = owned_buffer_.release();
+      }
       data_.buffer = nullptr;
       data_.length = 0;
       data_.capacity = 0;
-      is_own_buffer_ = false;
       return out;
     }
 
   private:
     lwrcl_serialized_message_t data_;
-    bool is_own_buffer_;
+    std::unique_ptr<char[]> owned_buffer_;
   };
 
 } // namespace lwrcl
