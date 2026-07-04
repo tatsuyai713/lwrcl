@@ -405,14 +405,18 @@ namespace lwrcl
       while (!global_stop_flag.load() && !stop_flag_.load())
       {
         bool did_work = false;
+        // Snapshot the node list so callbacks run without holding mutex_;
+        // otherwise cancel()/add_node() from a callback would deadlock.
+        std::vector<Node::SharedPtr> nodes_snapshot;
         {
           std::lock_guard<std::mutex> lock(mutex_);
-          for (const auto& node : nodes_)
+          nodes_snapshot = nodes_;
+        }
+        for (const auto &node : nodes_snapshot)
+        {
+          if (node != nullptr && !node->closed_.load())
           {
-            if (node != nullptr && !node->closed_.load())
-            {
-              if (node->try_spin_some()) did_work = true;
-            }
+            if (node->try_spin_some()) did_work = true;
           }
         }
         // Adaptive sleep: re-poll immediately if work was done, otherwise yield briefly.
@@ -1098,8 +1102,9 @@ namespace lwrcl
   // ======================================================================
   void Node::shutdown()
   {
-    if (closed_.load())
+    if (closed_.exchange(true))
       return;
+    stop_spin();
 
     publisher_list_.clear();
     for (auto &subscriber : subscription_list_)
@@ -1125,8 +1130,6 @@ namespace lwrcl
       if (vsomeip_thread_.joinable())
         vsomeip_thread_.join();
     }
-
-    closed_.store(true);
   }
 
   Clock::SharedPtr Node::get_clock() { return clock_; }
@@ -1507,7 +1510,9 @@ namespace lwrcl
     {
       if (std::string(argv[i]) == "--ros-args")
         found_ros_args = true;
-      else if (found_ros_args && std::string(argv[i]) == "--param-file")
+      else if (
+          found_ros_args &&
+          (std::string(argv[i]) == "--params-file" || std::string(argv[i]) == "--param-file"))
       {
         if (i + 1 < argc)
           return std::string(argv[i + 1]);

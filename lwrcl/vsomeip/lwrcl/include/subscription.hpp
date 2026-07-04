@@ -2,8 +2,10 @@
 #define LWRCL_SUBSCRIBER_HPP_
 
 #include <atomic>
+#include <chrono>
 #include <deque>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -54,6 +56,17 @@ namespace lwrcl
     std::function<bool(void *, MessageInfo &)> take;
   };
 
+  // Compute the pollable-buffer bound from the QoS so buffered history follows
+  // the requested depth instead of an arbitrary fixed size.
+  inline size_t pollable_buffer_bound(const QoS &qos)
+  {
+    if (qos.get_history() == QoS::HistoryPolicy::KEEP_ALL || qos.get_depth() == 0)
+    {
+      return MAX_POLLABLE_BUFFER_SIZE;
+    }
+    return qos.get_depth();
+  }
+
   // vsomeip SubscriberWaitSet - purely callback-driven (no polling thread needed)
   template <typename T>
   class SubscriberWaitSet
@@ -61,7 +74,8 @@ namespace lwrcl
   public:
     SubscriberWaitSet(
         std::function<void(std::shared_ptr<T>)> callback_function,
-        std::shared_ptr<std::mutex> node_mutex)
+        std::shared_ptr<std::mutex> node_mutex,
+        size_t buffer_bound = MAX_POLLABLE_BUFFER_SIZE)
         : callback_function_(callback_function),
           node_mutex_(node_mutex),
           node_cv_(),
@@ -70,6 +84,7 @@ namespace lwrcl
           stop_flag_(false),
           lwrcl_subscriber_mutex_(std::make_shared<std::mutex>()),
           pollable_buffer_(),
+          buffer_bound_(buffer_bound > 0 ? buffer_bound : 1),
           count_(0)
     {
     }
@@ -94,7 +109,7 @@ namespace lwrcl
       {
         std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
         pollable_buffer_.emplace_back(message, new_info);
-        if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
+        if (pollable_buffer_.size() > buffer_bound_)
         {
           pollable_buffer_.pop_front();
         }
@@ -186,6 +201,12 @@ namespace lwrcl
       return !pollable_buffer_.empty();
     }
 
+    size_t buffered_count() const
+    {
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+      return pollable_buffer_.size();
+    }
+
   private:
     std::function<void(std::shared_ptr<T>)> callback_function_;
     std::shared_ptr<std::mutex> node_mutex_;
@@ -196,6 +217,7 @@ namespace lwrcl
 
     std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
     std::deque<std::pair<std::shared_ptr<T>, lwrcl::MessageInfo>> pollable_buffer_;
+    size_t buffer_bound_;
     std::atomic<int32_t> count_{0};
   };
 
@@ -225,14 +247,14 @@ namespace lwrcl
         const QoS &qos, std::function<void(std::shared_ptr<T>)> callback_function,
         std::shared_ptr<std::mutex> node_mutex)
         : app_(app),
-          waitset_(callback_function, node_mutex),
+          waitset_(callback_function, node_mutex, pollable_buffer_bound(qos)),
           topic_name_(topic_name),
           service_id_(someip_id::topic_to_service_id(topic_name)),
           instance_id_(someip_id::default_instance_id()),
           event_id_(someip_id::default_event_id()),
-          eventgroup_id_(someip_id::default_eventgroup_id())
+          eventgroup_id_(someip_id::default_eventgroup_id()),
+          stopped_(false)
     {
-      (void)qos; // QoS is not used in vsomeip transport layer
       try
       {
         waitset_.ready(app_);
@@ -255,6 +277,10 @@ namespace lwrcl
             service_id_, instance_id_, event_id_,
             [this](const std::shared_ptr<vsomeip::message> &msg)
             {
+              if (stopped_.load())
+              {
+                return;
+              }
               handle_message(msg);
             });
 
@@ -263,6 +289,10 @@ namespace lwrcl
             service_id_, instance_id_,
             [this](vsomeip::service_t, vsomeip::instance_t, bool _is_available)
             {
+              if (stopped_.load())
+              {
+                return;
+              }
               waitset_.set_publisher_count(_is_available ? 1 : 0);
             });
 
@@ -292,7 +322,7 @@ namespace lwrcl
 
     void stop() override
     {
-      waitset_.stop();
+      cleanup();
     }
 
     void add_to_waitset(
@@ -319,7 +349,7 @@ namespace lwrcl
 
     size_t get_message_count() const
     {
-      return 0;
+      return waitset_.buffered_count();
     }
 
     std::string get_topic_name() const
@@ -330,6 +360,8 @@ namespace lwrcl
   private:
     void handle_message(const std::shared_ptr<vsomeip::message> &msg)
     {
+      if (stopped_.load())
+        return;
       if (!msg || !msg->get_payload())
         return;
 
@@ -348,6 +380,8 @@ namespace lwrcl
         auto message = std::make_shared<T>();
         Serialization<T>::deserialize_message(&serialized, message.get());
 
+        if (stopped_.load())
+          return;
         // Push to waitset (which pushes to channel)
         waitset_.on_message_received(message);
       }
@@ -359,6 +393,10 @@ namespace lwrcl
 
     void cleanup()
     {
+      if (stopped_.exchange(true))
+      {
+        return;
+      }
       waitset_.stop();
       if (app_)
       {
@@ -377,6 +415,7 @@ namespace lwrcl
     vsomeip::instance_t instance_id_;
     vsomeip::event_t event_id_;
     vsomeip::eventgroup_t eventgroup_id_;
+    std::atomic<bool> stopped_;
   };
 
   class WaitSet
@@ -442,7 +481,7 @@ namespace lwrcl
           }
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }
       return WaitResult(WaitResultKind::Error);
     }

@@ -52,7 +52,8 @@ namespace lwrcl
           participant_(participant),
           topic_(nullptr),
           publisher_(nullptr),
-          writer_(nullptr)
+          writer_(nullptr),
+          topic_owned_(false)
     {
       lwrcl::dds::TopicQos topic_qos = lwrcl::dds::TOPIC_QOS_DEFAULT();
 
@@ -88,7 +89,9 @@ namespace lwrcl
         topic_owned_ = false;
       }
 
-      dds::DataWriterQos writer_qos = dds::DATAWRITER_QOS_DEFAULT();
+      // Start from the publisher's default QoS so that settings coming from
+      // XML profiles (e.g. fastdds.xml datawriter default profile) are honored.
+      dds::DataWriterQos writer_qos = publisher_->get_default_datawriter_qos();
       writer_qos.endpoint().history_memory_policy = rtps::PREALLOCATED_WITH_REALLOC_MEMORY_MODE;
 
       writer_qos.history().depth = qos.get_depth();
@@ -152,12 +155,14 @@ namespace lwrcl
       }
 
       writer_qos.data_sharing().automatic();
-      writer_qos.properties().properties().emplace_back("fastdds.intraprocess_delivery", "true");
       writer_ = publisher_->create_datawriter(topic_, writer_qos, &listener_, eprosima::fastdds::dds::StatusMask::all());
       if (!writer_)
       {
         participant_->delete_publisher(publisher_); // Cleanup on failure
-        participant_->delete_topic(topic_);         // Cleanup on failure
+        if (topic_owned_)
+        {
+          participant_->delete_topic(topic_); // Only delete a topic we created
+        }
         throw std::runtime_error("Failed to create datawriter");
       }
     }
@@ -266,6 +271,7 @@ namespace lwrcl
       {
         message_ = static_cast<T *>(sample);
         is_valid_ = true;
+        loaned_ = true;
       }
       else
       {
@@ -396,17 +402,21 @@ namespace lwrcl
       throw std::runtime_error("Cannot publish invalid loaned message");
     }
 
+    if (writer_ == nullptr)
+    {
+      throw std::runtime_error("Failed to publish loaned message: DataWriter is null");
+    }
+
     if (loaned_message.is_loaned())
     {
-      // True zero-copy publish
-      if (writer_ == nullptr)
-      {
-        throw std::runtime_error("Failed to publish loaned message: DataWriter is null");
-      }
+      // True zero-copy publish. On success the middleware takes ownership of
+      // the loaned sample; on failure the loan must be discarded to avoid
+      // leaking the shared-memory buffer.
       T *msg = loaned_message.release_ownership();
+      bool write_ok = false;
       try
       {
-        writer_->write(msg);
+        write_ok = writer_->write(msg);
       }
       catch (...)
       {
@@ -414,18 +424,21 @@ namespace lwrcl
         writer_->discard_loan(sample);
         throw;
       }
+      if (!write_ok)
+      {
+        void *sample = msg;
+        writer_->discard_loan(sample);
+        throw std::runtime_error("Failed to publish loaned message");
+      }
     }
     else
     {
-      // Fallback publish (was heap allocated)
+      // Fallback publish (was heap allocated); write() copies the data.
       T *msg = loaned_message.release_ownership();
+      bool write_ok = false;
       try
       {
-        if (writer_ == nullptr)
-        {
-          throw std::runtime_error("Failed to publish loaned message: DataWriter is null");
-        }
-        writer_->write(msg);
+        write_ok = writer_->write(msg);
       }
       catch (...)
       {
@@ -433,6 +446,10 @@ namespace lwrcl
         throw;
       }
       delete msg;
+      if (!write_ok)
+      {
+        throw std::runtime_error("Failed to publish loaned message");
+      }
     }
   }
 } // namespace lwrcl

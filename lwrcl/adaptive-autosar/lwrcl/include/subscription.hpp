@@ -172,13 +172,25 @@ namespace lwrcl
     std::function<bool(void *, MessageInfo &)> take;
   };
 
+  // Compute the pollable-buffer bound from the QoS so buffered history follows
+  // the requested depth instead of an arbitrary fixed size.
+  inline size_t pollable_buffer_bound(const QoS &qos)
+  {
+    if (qos.get_history() == QoS::HistoryPolicy::KEEP_ALL || qos.get_depth() == 0)
+    {
+      return MAX_POLLABLE_BUFFER_SIZE;
+    }
+    return qos.get_depth();
+  }
+
   template <typename T>
   class SubscriberWaitSet
   {
   public:
     SubscriberWaitSet(
         std::function<void(std::shared_ptr<T>)> callback_function,
-        std::shared_ptr<std::mutex> node_mutex)
+        std::shared_ptr<std::mutex> node_mutex,
+        size_t buffer_bound = MAX_POLLABLE_BUFFER_SIZE)
         : callback_function_(callback_function),
           node_mutex_(node_mutex),
           node_cv_(),
@@ -194,6 +206,7 @@ namespace lwrcl
           lwrcl_subscriber_mutex_(std::make_shared<std::mutex>()),
           pollable_buffer_(),
           loaned_buffer_(),
+          buffer_bound_(buffer_bound > 0 ? buffer_bound : 1),
           count_(0)
     {
     }
@@ -263,7 +276,7 @@ namespace lwrcl
       {
         proxy_->Event.UnsetReceiveHandler();
         // Re-subscribe and register receive handler to signal the shared node cv.
-        proxy_->Event.Subscribe(MAX_POLLABLE_BUFFER_SIZE);
+        proxy_->Event.Subscribe(buffer_bound_);
         proxy_->Event.SetReceiveHandler([this]() {
           if (node_data_pending_) node_data_pending_->store(true);
           if (node_cv_) node_cv_->notify_all();
@@ -322,6 +335,12 @@ namespace lwrcl
       return !pollable_buffer_.empty();
     }
 
+    size_t buffered_count() const
+    {
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+      return pollable_buffer_.size();
+    }
+
     bool take_loaned(LoanedSubscriptionMessage<T> &out_loaned)
     {
       {
@@ -371,7 +390,7 @@ namespace lwrcl
         pollable_buffer_.emplace_back(message, new_info);
         if (loaned_sample)
           loaned_buffer_.emplace_back(std::move(loaned_sample));
-        if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
+        if (pollable_buffer_.size() > buffer_bound_)
         {
           pollable_buffer_.pop_front();
           if (!loaned_buffer_.empty()) loaned_buffer_.pop_front();
@@ -467,6 +486,7 @@ namespace lwrcl
     std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
     std::deque<std::pair<std::shared_ptr<T>, lwrcl::MessageInfo>> pollable_buffer_;
     std::deque<ara::com::SamplePtr<T>> loaned_buffer_;
+    size_t buffer_bound_;
     std::atomic<int32_t> count_{0};
   };
 
@@ -495,11 +515,11 @@ namespace lwrcl
         AutosarDomainParticipant *participant, const std::string &topic_name,
         const QoS &qos, std::function<void(std::shared_ptr<T>)> callback_function,
         std::shared_ptr<std::mutex> node_mutex)
-        : waitset_(callback_function, node_mutex),
+        : waitset_(callback_function, node_mutex, pollable_buffer_bound(qos)),
+          sample_count_(pollable_buffer_bound(qos)),
           topic_name_(topic_name)
     {
       (void)participant;
-      (void)qos; // QoS is fixed in Adaptive AUTOSAR DDS layer
 
       try
       {
@@ -570,10 +590,10 @@ namespace lwrcl
       return true;
     }
 
-    // Get the number of messages waiting (approximation)
+    // Get the number of messages waiting in the pollable buffer
     size_t get_message_count() const
     {
-      return 0;
+      return waitset_.buffered_count();
     }
 
     std::string get_topic_name() const
@@ -585,11 +605,12 @@ namespace lwrcl
     void initialize_adapter()
     {
       auto proxy = std::make_unique<autosar_generated::TopicEventProxy<T>>(topic_name_);
-      proxy->Event.Subscribe(MAX_POLLABLE_BUFFER_SIZE);
+      proxy->Event.Subscribe(sample_count_);
       waitset_.ready(std::move(proxy));
     }
 
     SubscriberWaitSet<T> waitset_;
+    size_t sample_count_;
     std::string topic_name_;
   };
 
@@ -656,7 +677,7 @@ namespace lwrcl
           }
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }
       return WaitResult(WaitResultKind::Error);
     }

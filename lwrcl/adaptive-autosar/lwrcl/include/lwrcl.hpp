@@ -879,18 +879,27 @@ namespace lwrcl
 
       while (std::chrono::steady_clock::now() < end_time)
       {
-        if (publisher_->get_subscriber_count() > 0)
+        if (stopped_.load())
+        {
+          return false;
+        }
+        if (service_is_ready())
         {
           return true;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
       }
 
-      return false;
+      return service_is_ready();
     }
 
+    // In the Adaptive AUTOSAR backend the publisher-side subscriber count is
+    // not observable through ara::com, so readiness is detected through the
+    // response-topic subscription state (kSubscribed means the service's
+    // response event is offered and we are connected to it).
     bool service_is_ready() const {
-      return publisher_ && publisher_->get_subscriber_count() > 0;
+      return !stopped_.load() && subscription_ &&
+             subscription_->get_publisher_count() > 0;
     }
 
   private:

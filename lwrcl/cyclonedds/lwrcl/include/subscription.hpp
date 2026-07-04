@@ -2,6 +2,8 @@
 #define LWRCL_SUBSCRIBER_HPP_
 
 #include <atomic>
+#include <chrono>
+#include <iostream>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -175,13 +177,26 @@ namespace lwrcl
     std::function<bool(void *, MessageInfo &)> take;
   };
 
+  // Compute the pollable-buffer bound from the QoS so buffered history follows
+  // the requested depth instead of an arbitrary fixed size. This also bounds
+  // how many DDS loans (iceoryx SHM chunks) may be held by the buffer.
+  inline size_t pollable_buffer_bound(const QoS &qos)
+  {
+    if (qos.get_history() == QoS::HistoryPolicy::KEEP_ALL || qos.get_depth() == 0)
+    {
+      return MAX_POLLABLE_BUFFER_SIZE;
+    }
+    return qos.get_depth();
+  }
+
   template <typename T>
   class SubscriberWaitSet
   {
   public:
     SubscriberWaitSet(
         std::function<void(std::shared_ptr<T>)> callback_function,
-        std::shared_ptr<std::mutex> node_mutex)
+        std::shared_ptr<std::mutex> node_mutex,
+        size_t buffer_bound = MAX_POLLABLE_BUFFER_SIZE)
         : callback_function_(callback_function),
           node_mutex_(node_mutex),
           reader_(nullptr),
@@ -189,6 +204,7 @@ namespace lwrcl
           waitset_thread_(),
           lwrcl_subscriber_mutex_(std::make_shared<std::mutex>()),
           pollable_buffer_(),
+          buffer_bound_(buffer_bound > 0 ? buffer_bound : 1),
           count_(0)
     {
     }
@@ -280,6 +296,12 @@ namespace lwrcl
       return !pollable_buffer_.empty();
     }
 
+    size_t buffered_count() const
+    {
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+      return pollable_buffer_.size();
+    }
+
     /**
      * @brief Take a loaned message directly from the reader (zero-copy).
      *
@@ -328,8 +350,11 @@ namespace lwrcl
     dds::sub::DataReader<T> *get_reader() { return reader_.get(); }
 
   private:
+    // Serialized by take_mutex_: reachable concurrently from the
+    // per-subscription WaitSet thread and from spin()/try_spin_some().
     void take_available()
     {
+      std::lock_guard<std::mutex> take_lock(take_mutex_);
       try {
         dds::sub::LoanedSamples<T> samples = reader_->take();
         if (samples.length() > 0) {
@@ -338,12 +363,17 @@ namespace lwrcl
             if (sample.info().valid()) {
               auto message_view = std::shared_ptr<T>(loan_guard, const_cast<T *>(&sample.data()));
               lwrcl::MessageInfo new_info;
-              new_info.source_timestamp = std::chrono::system_clock::now();
+              // Publisher-side timestamp from the DDS SampleInfo
+              // (rclcpp MessageInfo semantics) instead of reception time.
+              const auto &ts = sample.info().timestamp();
+              new_info.source_timestamp = std::chrono::system_clock::time_point(
+                  std::chrono::duration_cast<std::chrono::system_clock::duration>(
+                      std::chrono::seconds(ts.sec()) + std::chrono::nanoseconds(ts.nanosec())));
               new_info.from_intra_process = false;
               {
                 std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
                 pollable_buffer_.emplace_back(message_view, new_info);
-                if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE) {
+                if (pollable_buffer_.size() > buffer_bound_) {
                   pollable_buffer_.pop_front();
                 }
               }
@@ -423,7 +453,9 @@ namespace lwrcl
     std::shared_ptr<dds::sub::cond::ReadCondition> read_cond_;
 
     std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
+    std::mutex take_mutex_;
     std::deque<std::pair<std::shared_ptr<T>, lwrcl::MessageInfo>> pollable_buffer_;
+    size_t buffer_bound_;
     std::atomic<int32_t> count_{0};
   };
 
@@ -450,7 +482,7 @@ namespace lwrcl
         const QoS &qos, std::function<void(std::shared_ptr<T>)> callback_function,
         std::shared_ptr<std::mutex> node_mutex)
         : participant_(participant),
-          waitset_(callback_function, node_mutex),
+          waitset_(callback_function, node_mutex, pollable_buffer_bound(qos)),
           topic_(nullptr),
           subscriber_(nullptr),
           reader_(nullptr),
@@ -534,14 +566,32 @@ namespace lwrcl
       return waitset_.invoke_if_data();
     }
 
-    bool take(T &out_msg, lwrcl::MessageInfo &info) 
-    { 
-      return waitset_.take(out_msg, info); 
+    bool take(std::shared_ptr<T> &out_msg, lwrcl::MessageInfo &info)
+    {
+      return waitset_.take(out_msg, info);
     }
 
-    bool has_message() 
-    { 
-      return waitset_.has_message(); 
+    bool take(T &out_msg, lwrcl::MessageInfo &info)
+    {
+      return waitset_.take(out_msg, info);
+    }
+
+    // Take without MessageInfo (convenience overloads, FastDDS-backend parity)
+    bool take(std::shared_ptr<T> &out_msg)
+    {
+      lwrcl::MessageInfo info;
+      return waitset_.take(out_msg, info);
+    }
+
+    bool take(T &out_msg)
+    {
+      lwrcl::MessageInfo info;
+      return waitset_.take(out_msg, info);
+    }
+
+    bool has_message()
+    {
+      return waitset_.has_message();
     }
 
     // Alias for rclcpp compatibility
@@ -567,10 +617,10 @@ namespace lwrcl
       return true;
     }
 
-    // Get the number of messages waiting (approximation)
+    // Get the number of messages waiting in the pollable buffer
     size_t get_message_count() const
     {
-      return 0; // CycloneDDS waitset polling - exact count not easily available as const
+      return waitset_.buffered_count();
     }
 
     // Get the topic name
@@ -672,7 +722,7 @@ namespace lwrcl
           }
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }
       return WaitResult(WaitResultKind::Error);
     }

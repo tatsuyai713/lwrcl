@@ -2,6 +2,7 @@
 #define LWRCL_PUBLISHER_HPP_
 
 #include <atomic>
+#include <chrono>
 #include <memory>
 #include <set>
 #include <stdexcept>
@@ -50,6 +51,7 @@ namespace lwrcl
           instance_id_(someip_id::default_instance_id()),
           event_id_(someip_id::default_event_id()),
           eventgroup_id_(someip_id::default_eventgroup_id()),
+          stopped_(false),
           subscriber_count_(0)
     {
       (void)qos; // QoS is not used in vsomeip transport layer
@@ -62,6 +64,10 @@ namespace lwrcl
             [this](vsomeip::client_t, const vsomeip_sec_client_t*,
                    const std::string&, bool _subscribed) -> bool
             {
+              if (stopped_.load())
+              {
+                return false;
+              }
               if (_subscribed)
               {
                 subscriber_count_.fetch_add(1);
@@ -112,18 +118,22 @@ namespace lwrcl
 
     void publish(const std::shared_ptr<T> &message) const
     {
-      if (!app_ || !message)
+      if (stopped_.load() || !app_ || !message)
         return;
       publish_impl(*message);
     }
 
     void publish(T &message) const
     {
+      if (stopped_.load())
+        return;
       publish_impl(message);
     }
 
     void publish(const T &message) const
     {
+      if (stopped_.load())
+        return;
       publish_impl(message);
     }
 
@@ -152,7 +162,7 @@ namespace lwrcl
   private:
     void publish_impl(const T &message) const
     {
-      if (!app_)
+      if (stopped_.load() || !app_)
         return;
 
       // Serialize the message using CycloneDDS CDR
@@ -172,8 +182,15 @@ namespace lwrcl
 
     void cleanup()
     {
+      if (stopped_.exchange(true))
+      {
+        return;
+      }
       if (app_)
       {
+        // Unregister the subscription handler first: it captures `this`, so
+        // leaving it registered would let vsomeip call into a destroyed object.
+        app_->unregister_subscription_handler(service_id_, instance_id_, eventgroup_id_);
         app_->stop_offer_event(service_id_, instance_id_, event_id_);
         app_->stop_offer_service(service_id_, instance_id_);
       }
@@ -185,6 +202,7 @@ namespace lwrcl
     vsomeip::instance_t instance_id_;
     vsomeip::event_t event_id_;
     vsomeip::eventgroup_t eventgroup_id_;
+    std::atomic<bool> stopped_;
     std::atomic<int32_t> subscriber_count_;
   };
 

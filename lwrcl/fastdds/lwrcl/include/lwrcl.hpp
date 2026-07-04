@@ -927,6 +927,10 @@ namespace lwrcl
 
       while (std::chrono::steady_clock::now() < end_time)
       {
+        if (stopped_.load() || !publisher_)
+        {
+          return false;
+        }
         if (publisher_->get_subscriber_count() > 0)
         {
           return true;
@@ -934,11 +938,11 @@ namespace lwrcl
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
       }
 
-      return false;
+      return service_is_ready();
     }
 
     bool service_is_ready() const {
-      return publisher_ && publisher_->get_subscriber_count() > 0;
+      return !stopped_.load() && publisher_ && publisher_->get_subscriber_count() > 0;
     }
 
   private:

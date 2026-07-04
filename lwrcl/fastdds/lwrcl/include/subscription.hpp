@@ -2,6 +2,8 @@
 #define LWRCL_SUBSCRIBER_HPP_
 
 #include <atomic>
+#include <chrono>
+#include <iostream>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -24,38 +26,22 @@ namespace lwrcl
 
   /**
    * @brief Loaned message for zero-copy subscription (rclcpp compatible)
-   * 
+   *
    * This class wraps a message that was loaned from the middleware
    * using the data sharing feature. The message is automatically
    * returned to the middleware when this object is destroyed.
-   * 
-   * Note: FastDDS zero-copy subscription requires keeping the LoanableSequence
-   * alive until the loan is returned. This implementation stores the sequences
-   * internally to ensure proper lifecycle management.
+   *
+   * Note: FastDDS's LoanableSequence has no move semantics (std::move would
+   * deep-copy and orphan the loan), so this class owns the sequences and
+   * performs the take() itself via take_from(). It is therefore neither
+   * copyable nor movable; default-construct it and pass it by reference to
+   * Subscription::take_loaned_message().
    */
   template <typename T>
   class LoanedSubscriptionMessage
   {
   public:
     LoanedSubscriptionMessage() = default;
-
-    /**
-     * @brief Construct from loaned sequences (takes ownership)
-     * 
-     * This constructor takes ownership of the loaned sequences.
-     * The loan will be returned when this object is destroyed.
-     */
-    LoanedSubscriptionMessage(
-        eprosima::fastdds::dds::DataReader *reader,
-        eprosima::fastdds::dds::LoanableSequence<T> &&data_seq,
-        eprosima::fastdds::dds::SampleInfoSeq &&info_seq)
-        : reader_(reader),
-          data_seq_(std::move(data_seq)),
-          info_seq_(std::move(info_seq)),
-          shared_message_(nullptr),
-          is_valid_(data_seq_.length() > 0 && info_seq_.length() > 0 && info_seq_[0].valid_data)
-    {
-    }
 
     LoanedSubscriptionMessage(
         std::shared_ptr<T> shared_message,
@@ -72,37 +58,49 @@ namespace lwrcl
       release();
     }
 
-    // Move only
+    // Neither copyable nor movable: the loaned sequences must stay in place
+    // until the loan is returned to the DataReader.
     LoanedSubscriptionMessage(const LoanedSubscriptionMessage &) = delete;
     LoanedSubscriptionMessage &operator=(const LoanedSubscriptionMessage &) = delete;
+    LoanedSubscriptionMessage(LoanedSubscriptionMessage &&) = delete;
+    LoanedSubscriptionMessage &operator=(LoanedSubscriptionMessage &&) = delete;
 
-    LoanedSubscriptionMessage(LoanedSubscriptionMessage &&other) noexcept
-        : reader_(other.reader_),
-          data_seq_(std::move(other.data_seq_)),
-          info_seq_(std::move(other.info_seq_)),
-          shared_message_(std::move(other.shared_message_)),
-          shared_info_(std::move(other.shared_info_)),
-          is_valid_(other.is_valid_)
+    /**
+     * @brief Take one sample from the reader directly into this object (zero-copy).
+     *
+     * Any previously held loan is returned first. Returns true if a valid
+     * sample was taken; the loan is held until release()/destruction.
+     */
+    bool take_from(eprosima::fastdds::dds::DataReader *reader)
     {
-      other.reader_ = nullptr;
-      other.is_valid_ = false;
-    }
-
-    LoanedSubscriptionMessage &operator=(LoanedSubscriptionMessage &&other) noexcept
-    {
-      if (this != &other)
+      release();
+      if (reader == nullptr)
       {
-        release();
-        reader_ = other.reader_;
-        data_seq_ = std::move(other.data_seq_);
-        info_seq_ = std::move(other.info_seq_);
-        shared_message_ = std::move(other.shared_message_);
-        shared_info_ = std::move(other.shared_info_);
-        is_valid_ = other.is_valid_;
-        other.reader_ = nullptr;
-        other.is_valid_ = false;
+        return false;
       }
-      return *this;
+
+      ReturnCode_t ret = reader->take(
+          data_seq_,
+          info_seq_,
+          1,
+          eprosima::fastdds::dds::ANY_SAMPLE_STATE,
+          eprosima::fastdds::dds::ANY_VIEW_STATE,
+          eprosima::fastdds::dds::ANY_INSTANCE_STATE);
+      if (ret != ReturnCode_t::RETCODE_OK)
+      {
+        return false;
+      }
+
+      if (data_seq_.length() > 0 && info_seq_.length() > 0 && info_seq_[0].valid_data)
+      {
+        reader_ = reader;
+        is_valid_ = true;
+        return true;
+      }
+
+      // No valid data: return the loan immediately.
+      reader->return_loan(data_seq_, info_seq_);
+      return false;
     }
 
     /**
@@ -220,6 +218,16 @@ namespace lwrcl
     std::function<bool(void *, MessageInfo &)> take;
   };
 
+  // Compute the pollable-buffer bound from the QoS so buffered history follows
+  // the requested depth instead of an arbitrary fixed size.
+  inline size_t pollable_buffer_bound(const QoS &qos)
+  {
+    if (qos.get_history() == QoS::HistoryPolicy::KEEP_ALL || qos.get_depth() == 0)
+    {
+      return MAX_POLLABLE_BUFFER_SIZE;
+    }
+    return qos.get_depth();
+  }
 
   template <typename T>
   class SubscriberWaitSet
@@ -227,7 +235,8 @@ namespace lwrcl
   public:
     SubscriberWaitSet(
         std::function<void(std::shared_ptr<T>)> callback_function,
-        std::shared_ptr<std::mutex> node_mutex)
+        std::shared_ptr<std::mutex> node_mutex,
+        size_t buffer_bound = MAX_POLLABLE_BUFFER_SIZE)
         : callback_function_(callback_function),
           node_mutex_(node_mutex),
           reader_(nullptr),
@@ -239,6 +248,7 @@ namespace lwrcl
           message_ptr_(std::make_shared<T>()),
           lwrcl_subscriber_mutex_(std::make_shared<std::mutex>()),
           pollable_buffer_(),
+          buffer_bound_(buffer_bound > 0 ? buffer_bound : 1),
           count_(0)
     {
     }
@@ -359,6 +369,12 @@ namespace lwrcl
       pollable_buffer_.clear();
     }
 
+    size_t buffered_count() const
+    {
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+      return pollable_buffer_.size();
+    }
+
     /**
      * @brief Take a loaned message directly from the reader (zero-copy)
      * 
@@ -371,32 +387,7 @@ namespace lwrcl
      */
     bool take_loaned(LoanedSubscriptionMessage<T> &out_loaned)
     {
-      if (!reader_)
-      {
-        return false;
-      }
-
-      eprosima::fastdds::dds::LoanableSequence<T> data_seq;
-      eprosima::fastdds::dds::SampleInfoSeq info_seq;
-      ReturnCode_t ret = reader_->take(
-          data_seq,
-          info_seq,
-          1,
-          eprosima::fastdds::dds::ANY_SAMPLE_STATE,
-          eprosima::fastdds::dds::ANY_VIEW_STATE,
-          eprosima::fastdds::dds::ANY_INSTANCE_STATE);
-
-      if (ret == ReturnCode_t::RETCODE_OK && data_seq.length() > 0)
-      {
-        if (info_seq[0].valid_data)
-        {
-          out_loaned = LoanedSubscriptionMessage<T>(
-              reader_, std::move(data_seq), std::move(info_seq));
-          return true;
-        }
-        reader_->return_loan(data_seq, info_seq);
-      }
-      return false;
+      return out_loaned.take_from(reader_);
     }
 
     /**
@@ -412,8 +403,12 @@ namespace lwrcl
     };
 
     // Take all available samples and invoke the callback directly.
+    // Serialized by take_mutex_: it can be reached concurrently from the
+    // per-subscription WaitSet thread and from spin()/try_spin_some(),
+    // and message_ptr_/info_ are shared state.
     void take_available()
     {
+      std::lock_guard<std::mutex> take_lock(take_mutex_);
       while (true)
       {
         if (reader_->take_next_sample(message_ptr_.get(), &info_) != ReturnCode_t::RETCODE_OK)
@@ -430,7 +425,11 @@ namespace lwrcl
         message_ptr_ = std::make_shared<T>();
 
         lwrcl::MessageInfo new_info;
-        new_info.source_timestamp = std::chrono::system_clock::now();
+        // Use the publisher-side timestamp carried in the SampleInfo
+        // (rclcpp MessageInfo semantics) instead of the reception time.
+        new_info.source_timestamp = std::chrono::system_clock::time_point(
+            std::chrono::duration_cast<std::chrono::system_clock::duration>(
+                std::chrono::nanoseconds(info_.source_timestamp.to_ns())));
         new_info.from_intra_process = false;
         {
           std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
@@ -438,7 +437,7 @@ namespace lwrcl
               BufferedMessage{
                   message_ready,
                 new_info});
-          if (pollable_buffer_.size() > MAX_POLLABLE_BUFFER_SIZE)
+          if (pollable_buffer_.size() > buffer_bound_)
             pollable_buffer_.pop_front();
         }
         {
@@ -486,8 +485,10 @@ namespace lwrcl
     eprosima::fastdds::dds::StatusCondition *status_cond_;
     std::shared_ptr<T> message_ptr_;
     std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
+    std::mutex take_mutex_;
     eprosima::fastdds::dds::SampleInfo info_;
     std::deque<BufferedMessage> pollable_buffer_;
+    size_t buffer_bound_;
     std::atomic<int32_t> count_{0};
   };
 
@@ -514,11 +515,11 @@ namespace lwrcl
         const QoS &qos, std::function<void(std::shared_ptr<T>)> callback_function,
         std::shared_ptr<std::mutex> node_mutex)
         : participant_(participant),
-          waitset_(callback_function, node_mutex),
+          waitset_(callback_function, node_mutex, pollable_buffer_bound(qos)),
           topic_(nullptr),
           subscriber_(nullptr),
-              reader_(nullptr),
-              topic_owned_(false)
+          reader_(nullptr),
+          topic_owned_(false)
     {
       using ParentType = typename ParentTypeTraits<T>::Type;
       message_type_ = lwrcl::MessageType(new ParentType());
@@ -555,8 +556,10 @@ namespace lwrcl
         topic_owned_ = false;
       }
 
+      // Start from the subscriber's default QoS so that settings coming from
+      // XML profiles (e.g. fastdds.xml datareader default profile) are honored.
       eprosima::fastdds::dds::DataReaderQos reader_qos =
-          eprosima::fastdds::dds::DATAREADER_QOS_DEFAULT;
+          subscriber_->get_default_datareader_qos();
       reader_qos.endpoint().history_memory_policy =
           eprosima::fastrtps::rtps::PREALLOCATED_WITH_REALLOC_MEMORY_MODE;
       reader_qos.history().depth = qos.get_depth();
@@ -612,18 +615,6 @@ namespace lwrcl
       }
 
       reader_qos.data_sharing().automatic();
-      reader_qos.properties().properties().emplace_back("fastdds.intraprocess_delivery", "true");
-
-      if (!subscriber_)
-      {
-        throw std::runtime_error("Failed to create subscriber");
-      }
-      if (!topic_)
-      {
-        participant_->delete_subscriber(subscriber_);
-        subscriber_ = nullptr;
-        throw std::runtime_error("Failed to create topic");
-      }
 
       reader_ = subscriber_->create_datareader(topic_, reader_qos, nullptr, eprosima::fastdds::dds::StatusMask::all());
       if (!reader_)
@@ -731,11 +722,10 @@ namespace lwrcl
      */
     eprosima::fastdds::dds::DataReader *get_reader() { return reader_; }
 
-    // Get the number of messages waiting
+    // Get the number of messages waiting in the pollable buffer
     size_t get_message_count() const
     {
-      // This is an approximation; the actual implementation returns buffer size
-      return waitset_.has_message() ? 1 : 0;
+      return waitset_.buffered_count();
     }
 
     // Get the topic name
@@ -832,7 +822,7 @@ namespace lwrcl
           }
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }
       return WaitResult(WaitResultKind::Error);
     }

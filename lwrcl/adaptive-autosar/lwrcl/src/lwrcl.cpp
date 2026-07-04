@@ -454,17 +454,18 @@ namespace lwrcl
       while (!global_stop_flag.load() && !stop_flag_.load())
       {
         bool did_work = false;
+        // Snapshot the node list so callbacks run without holding mutex_;
+        // otherwise cancel()/add_node() from a callback would deadlock.
+        std::vector<Node::SharedPtr> nodes_snapshot;
         {
           std::lock_guard<std::mutex> lock(mutex_);
-          for (const auto& node : nodes_)
+          nodes_snapshot = nodes_;
+        }
+        for (const auto &node : nodes_snapshot)
+        {
+          if (node != nullptr && !node->closed_.load())
           {
-            if (node != nullptr)
-            {
-              if (!node->closed_.load())
-              {
-                if (node->try_spin_some()) did_work = true;
-              }
-            }
+            if (node->try_spin_some()) did_work = true;
           }
         }
         // Adaptive sleep: re-poll immediately if work was done, otherwise yield briefly.
@@ -1132,7 +1133,8 @@ namespace lwrcl
 
   void Node::shutdown()
   {
-    if (closed_.load()) return;
+    if (closed_.exchange(true)) return;
+    stop_spin();
     publisher_list_.clear();
     for (auto &subscriber : subscription_list_)
     {
@@ -1158,7 +1160,6 @@ namespace lwrcl
       client->stop();
     }
     client_list_.clear();
-    closed_.store(true);
   }
 
   Clock::SharedPtr Node::get_clock() { return clock_; }
@@ -1530,14 +1531,40 @@ namespace lwrcl
     }
   }
 
+  namespace
+  {
+    std::atomic<bool> ara_runtime_initialized{false};
+
+    // ara::core::Deinitialize() must run only after every ara::com object
+    // (proxies/skeletons held by nodes, publishers, subscriptions) has been
+    // destroyed. lwrcl::shutdown() is called while nodes are still alive
+    // (rclcpp idiom: shutdown() stops spinning, objects are destroyed later),
+    // so deinitialization is deferred to process exit and runs exactly once.
+    void deinitialize_ara_runtime()
+    {
+      if (ara_runtime_initialized.exchange(false))
+      {
+        ara::core::Deinitialize();
+      }
+    }
+  }
+
   void init(int argc, char *argv[])
   {
     global_stop_flag.store(false);
 
-    // Initialize Adaptive AUTOSAR runtime
-    auto ara_result = ara::core::Initialize();
-    if (!ara_result.HasValue()) {
-      std::cerr << "[WARN] ara::core::Initialize() failed, continuing without AUTOSAR runtime." << std::endl;
+    // Initialize Adaptive AUTOSAR runtime (once per process)
+    if (!ara_runtime_initialized.load())
+    {
+      auto ara_result = ara::core::Initialize();
+      if (!ara_result.HasValue()) {
+        std::cerr << "[WARN] ara::core::Initialize() failed, continuing without AUTOSAR runtime." << std::endl;
+      }
+      else
+      {
+        ara_runtime_initialized.store(true);
+        std::atexit(deinitialize_ara_runtime);
+      }
     }
 
     if (std::signal(SIGINT, lwrcl_signal_handler) == SIG_ERR)
@@ -1606,8 +1633,10 @@ namespace lwrcl
   void shutdown()
   {
     global_stop_flag.store(true);
-    // Deinitialize Adaptive AUTOSAR runtime
-    ara::core::Deinitialize();
+    // Note: ara::core::Deinitialize() is intentionally NOT called here.
+    // Nodes (and their ara::com proxies/skeletons) are typically still alive
+    // when shutdown() is invoked; deinitialization happens at process exit
+    // (registered via std::atexit in init()).
   }
 
   std::string get_params_file_path(int argc, char *argv[])
@@ -1625,7 +1654,9 @@ namespace lwrcl
       {
         found_ros_args = true;
       }
-      else if (found_ros_args && std::string(argv[i]) == "--param-file")
+      else if (
+          found_ros_args &&
+          (std::string(argv[i]) == "--params-file" || std::string(argv[i]) == "--param-file"))
       {
         if (i + 1 < argc)
         {
