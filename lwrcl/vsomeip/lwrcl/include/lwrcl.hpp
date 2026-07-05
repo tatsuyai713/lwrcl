@@ -125,7 +125,8 @@ namespace lwrcl
         {
           oss << ",";
         }
-        oss << vec[i];
+        const typename std::vector<T>::value_type value = vec[i];
+        oss << value;
       }
       return oss.str();
     }
