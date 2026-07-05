@@ -59,10 +59,10 @@ TEST_F(ServiceTest, ServiceRequestResponse) {
 
   client_node->stop_spin();
   server_node->stop_spin();
-  rclcpp::shutdown();
   if (server_thread.joinable()) {
     server_thread.join();
   }
+  rclcpp::shutdown();
 
   EXPECT_TRUE(request_received);
 }

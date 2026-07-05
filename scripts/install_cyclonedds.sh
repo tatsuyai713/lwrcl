@@ -92,7 +92,11 @@ if [[ "${FORCE_REINSTALL}" != "ON" ]] \
 fi
 
 SUDO=""
+PKG_SUDO=""
 if [[ "${EUID}" -ne 0 ]]; then
+  if command -v sudo >/dev/null 2>&1; then
+    PKG_SUDO="sudo"
+  fi
   INSTALL_PARENT="$(dirname "${INSTALL_PREFIX}")"
   if { [[ -d "${INSTALL_PREFIX}" && -w "${INSTALL_PREFIX}" ]] || [[ -d "${INSTALL_PARENT}" && -w "${INSTALL_PARENT}" ]]; }; then
     SUDO=""
@@ -106,8 +110,8 @@ fi
 
 if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]]; then
   if command -v apt-get >/dev/null 2>&1; then
-    ${SUDO} apt-get update -qq
-    ${SUDO} apt-get install -y --no-install-recommends libssl-dev bison flex libacl1-dev
+    ${PKG_SUDO} apt-get update -qq
+    ${PKG_SUDO} apt-get install -y --no-install-recommends libssl-dev bison flex libacl1-dev
   elif command -v brew >/dev/null 2>&1; then
     brew update
     brew install git bison flex openssl@3 || true

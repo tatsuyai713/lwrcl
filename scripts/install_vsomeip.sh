@@ -97,7 +97,11 @@ if [[ "${FORCE_REINSTALL}" != "ON" ]] && { [[ -f "${INSTALL_PREFIX}/lib/libvsome
 fi
 
 SUDO=""
+PKG_SUDO=""
 if [[ "${EUID}" -ne 0 ]]; then
+  if command -v sudo >/dev/null 2>&1; then
+    PKG_SUDO="sudo"
+  fi
   INSTALL_PARENT="$(dirname "${INSTALL_PREFIX}")"
   if { [[ -d "${INSTALL_PREFIX}" && -w "${INSTALL_PREFIX}" ]] || [[ -d "${INSTALL_PARENT}" && -w "${INSTALL_PARENT}" ]]; }; then
     SUDO=""
@@ -117,16 +121,16 @@ echo "=== Installing vsomeip ${VSOMEIP_TAG} + CDR library to ${INSTALL_PREFIX} =
 if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]]; then
   if command -v apt-get &>/dev/null; then
     echo "--- Installing system dependencies (apt) ---"
-    ${SUDO} apt-get update -qq
+    ${PKG_SUDO} apt-get update -qq
     # Boost/build tools – always needed
-    ${SUDO} apt-get install -y --no-install-recommends \
+    ${PKG_SUDO} apt-get install -y --no-install-recommends \
         build-essential git \
         libboost-system-dev libboost-thread-dev libboost-log-dev \
         libboost-filesystem-dev
     # cmake: skip if already present (e.g. Kitware PPA version) to avoid
     # dependency conflicts with distro-provided cmake-data.
     if ! command -v cmake &>/dev/null; then
-      ${SUDO} apt-get install -y --no-install-recommends cmake
+      ${PKG_SUDO} apt-get install -y --no-install-recommends cmake
     else
       echo "  cmake $(cmake --version | head -1 | awk '{print $3}') already installed – skipping."
     fi

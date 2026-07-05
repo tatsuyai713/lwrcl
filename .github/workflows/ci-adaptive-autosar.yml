@@ -52,7 +52,7 @@ jobs:
       - name: Build & install middleware stack (Adaptive-AUTOSAR script)
         run: |
           set -euo pipefail
-          if [ "${{ steps.cache-middleware-stack.outputs.cache-hit }}" != "true" ] || [ ! -x "$ICEORYX_PREFIX/bin/iox-roudi" ] || [ ! -x "$VSOMEIP_PREFIX/bin/routingmanagerd" ]; then
+          if [ "${{ steps.cache-middleware-stack.outputs.cache-hit }}" != "true" ] || [ ! -x "$ICEORYX_PREFIX/bin/iox-roudi" ] || [ ! -f "$VSOMEIP_PREFIX/lib/libvsomeip3.so" ] || [ ! -f "$VSOMEIP_PREFIX/lib/liblwrcl_cdr.a" ]; then
             WORK="$RUNNER_TEMP/adaptive_autosar_build"
             mkdir -p "$WORK" && cd "$WORK"
             if [ ! -d Adaptive-AUTOSAR ]; then
@@ -67,7 +67,8 @@ jobs:
           fi
           test -x "$DDS_PREFIX/bin/idlc"
           test -x "$ICEORYX_PREFIX/bin/iox-roudi"
-          test -x "$VSOMEIP_PREFIX/bin/routingmanagerd"
+          test -f "$VSOMEIP_PREFIX/lib/libvsomeip3.so"
+          test -f "$VSOMEIP_PREFIX/lib/liblwrcl_cdr.a"
 
       - name: Cache Adaptive AUTOSAR runtime
         id: cache-adaptive-autosar

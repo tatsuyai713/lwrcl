@@ -110,7 +110,7 @@ do_run() {
     if [ -x "${ICEORYX_PREFIX}/bin/iox-roudi" ]; then
         start_roudi || RESULT=$?
     fi
-    env -u CYCLONEDDS_URI ctest --output-on-failure -j "${JOBS}" -E '^test_shm_zero_copy$' || RESULT=$?
+    env -u CYCLONEDDS_URI ctest --output-on-failure -j 1 -E '^test_shm_zero_copy$' || RESULT=$?
 
     if ctest -N -R '^test_shm_zero_copy$' | grep -q 'test_shm_zero_copy'; then
         DEFAULT_CYCLONEDDS_URI=""
