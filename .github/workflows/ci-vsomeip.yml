@@ -87,15 +87,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /opt/vsomeip
-          key: vsomeip-${{ env.VSOMEIP_VERSION }}-ubuntu2404-v3
+          key: vsomeip-${{ env.VSOMEIP_VERSION }}-ubuntu2404-v4
 
       - name: Build & install vsomeip + CDR
-        if: steps.cache-vsomeip.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           sudo mkdir -p $VSOMEIP_PREFIX
           sudo chmod 777 -R $VSOMEIP_PREFIX
-          INSTALL_PREFIX=$VSOMEIP_PREFIX ./scripts/install_vsomeip.sh
+          if [ "${{ steps.cache-vsomeip.outputs.cache-hit }}" != "true" ] || [ ! -x "$VSOMEIP_PREFIX/bin/routingmanagerd" ]; then
+            INSTALL_PREFIX=$VSOMEIP_PREFIX ./scripts/install_vsomeip.sh --force
+          fi
+          test -x "$VSOMEIP_PREFIX/bin/routingmanagerd"
 
       # ── Set PATH / LD_LIBRARY_PATH ───────────────────────────────────
       - name: Configure environment

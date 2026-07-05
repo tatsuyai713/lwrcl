@@ -44,15 +44,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /opt/iceoryx
-          key: iceoryx-${{ env.ICEORYX_VERSION }}-ubuntu2404-v1
+          key: iceoryx-${{ env.ICEORYX_VERSION }}-ubuntu2404-v2
 
       - name: Build & install iceoryx
-        if: steps.cache-iceoryx.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           sudo mkdir -p $ICEORYX_PREFIX
           sudo chmod 777 -R $ICEORYX_PREFIX
-          INSTALL_PREFIX=$ICEORYX_PREFIX ./scripts/install_iceoryx.sh --skip-system-deps
+          if [ "${{ steps.cache-iceoryx.outputs.cache-hit }}" != "true" ] || [ ! -x "$ICEORYX_PREFIX/bin/iox-roudi" ]; then
+            INSTALL_PREFIX=$ICEORYX_PREFIX ./scripts/install_iceoryx.sh --skip-system-deps --force
+          fi
+          test -x "$ICEORYX_PREFIX/bin/iox-roudi"
 
       # ── Cache Cyclone DDS install (SHM enabled) ──────────────────────
       - name: Cache Cyclone DDS

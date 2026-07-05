@@ -91,7 +91,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "${FORCE_REINSTALL}" != "ON" ]] && { [[ -f "${INSTALL_PREFIX}/lib/libvsomeip3.so" ]] || [[ -f "${INSTALL_PREFIX}/lib/libvsomeip3.dylib" ]]; } && [[ -f "${INSTALL_PREFIX}/lib/liblwrcl_cdr.a" ]]; then
+if [[ "${FORCE_REINSTALL}" != "ON" ]] && { [[ -f "${INSTALL_PREFIX}/lib/libvsomeip3.so" ]] || [[ -f "${INSTALL_PREFIX}/lib/libvsomeip3.dylib" ]]; } && [[ -f "${INSTALL_PREFIX}/lib/liblwrcl_cdr.a" ]] && [[ -x "${INSTALL_PREFIX}/bin/routingmanagerd" ]]; then
   echo "[INFO] vsomeip + CDR already installed at ${INSTALL_PREFIX}. Skipping (use --force to reinstall)."
   exit 0
 fi

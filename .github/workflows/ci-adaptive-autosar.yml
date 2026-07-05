@@ -47,47 +47,54 @@ jobs:
             /opt/cyclonedds
             /opt/iceoryx
             /opt/vsomeip
-          key: adaptive-autosar-middleware-${{ env.ADAPTIVE_AUTOSAR_REF }}-ubuntu2404-v1
+          key: adaptive-autosar-middleware-${{ env.ADAPTIVE_AUTOSAR_REF }}-ubuntu2404-v2
 
       - name: Build & install middleware stack (Adaptive-AUTOSAR script)
-        if: steps.cache-middleware-stack.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          WORK="$RUNNER_TEMP/adaptive_autosar_build"
-          mkdir -p "$WORK" && cd "$WORK"
-          if [ ! -d Adaptive-AUTOSAR ]; then
-            git clone --depth 1 --branch ${ADAPTIVE_AUTOSAR_REF} https://github.com/tatsuyai713/Adaptive-AUTOSAR.git
+          if [ "${{ steps.cache-middleware-stack.outputs.cache-hit }}" != "true" ] || [ ! -x "$ICEORYX_PREFIX/bin/iox-roudi" ] || [ ! -x "$VSOMEIP_PREFIX/bin/routingmanagerd" ]; then
+            WORK="$RUNNER_TEMP/adaptive_autosar_build"
+            mkdir -p "$WORK" && cd "$WORK"
+            if [ ! -d Adaptive-AUTOSAR ]; then
+              git clone --depth 1 --branch ${ADAPTIVE_AUTOSAR_REF} https://github.com/tatsuyai713/Adaptive-AUTOSAR.git
+            fi
+            cd Adaptive-AUTOSAR
+            ./scripts/install_middleware_stack.sh \
+              --install-base-deps \
+              --cyclonedds-prefix ${DDS_PREFIX} \
+              --iceoryx-prefix ${ICEORYX_PREFIX} \
+              --vsomeip-prefix ${VSOMEIP_PREFIX}
           fi
-          cd Adaptive-AUTOSAR
-          ./scripts/install_middleware_stack.sh \
-            --install-base-deps \
-            --cyclonedds-prefix ${DDS_PREFIX} \
-            --iceoryx-prefix ${ICEORYX_PREFIX} \
-            --vsomeip-prefix ${VSOMEIP_PREFIX}
+          test -x "$DDS_PREFIX/bin/idlc"
+          test -x "$ICEORYX_PREFIX/bin/iox-roudi"
+          test -x "$VSOMEIP_PREFIX/bin/routingmanagerd"
 
       - name: Cache Adaptive AUTOSAR runtime
         id: cache-adaptive-autosar
         uses: actions/cache@v4
         with:
           path: /opt/autosar-ap
-          key: adaptive-autosar-runtime-${{ env.ADAPTIVE_AUTOSAR_REF }}-ubuntu2404-v4
+          key: adaptive-autosar-runtime-${{ env.ADAPTIVE_AUTOSAR_REF }}-ubuntu2404-v5
 
       - name: Build & install Adaptive AUTOSAR runtime
-        if: steps.cache-adaptive-autosar.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          WORK="$RUNNER_TEMP/adaptive_autosar_build"
-          mkdir -p "$WORK" && cd "$WORK"
-          if [ ! -d Adaptive-AUTOSAR ]; then
-            git clone --depth 1 --branch ${ADAPTIVE_AUTOSAR_REF} https://github.com/tatsuyai713/Adaptive-AUTOSAR.git
+          if [ "${{ steps.cache-adaptive-autosar.outputs.cache-hit }}" != "true" ] || [ ! -x "$AUTOSAR_AP_PREFIX/bin/autosar-generate-comm-manifest" ] || [ ! -x "$AUTOSAR_AP_PREFIX/bin/autosar-generate-proxy-skeleton" ]; then
+            WORK="$RUNNER_TEMP/adaptive_autosar_build"
+            mkdir -p "$WORK" && cd "$WORK"
+            if [ ! -d Adaptive-AUTOSAR ]; then
+              git clone --depth 1 --branch ${ADAPTIVE_AUTOSAR_REF} https://github.com/tatsuyai713/Adaptive-AUTOSAR.git
+            fi
+            cd Adaptive-AUTOSAR
+            ./scripts/build_and_install_autosar_ap.sh \
+              --prefix ${AUTOSAR_AP_PREFIX} \
+              --build-dir build-ci \
+              --vsomeip-prefix ${VSOMEIP_PREFIX} \
+              --iceoryx-prefix ${ICEORYX_PREFIX} \
+              --cyclonedds-prefix ${DDS_PREFIX}
           fi
-          cd Adaptive-AUTOSAR
-          ./scripts/build_and_install_autosar_ap.sh \
-            --prefix ${AUTOSAR_AP_PREFIX} \
-            --build-dir build-ci \
-            --vsomeip-prefix ${VSOMEIP_PREFIX} \
-            --iceoryx-prefix ${ICEORYX_PREFIX} \
-            --cyclonedds-prefix ${DDS_PREFIX}
+          test -x "$AUTOSAR_AP_PREFIX/bin/autosar-generate-comm-manifest"
+          test -x "$AUTOSAR_AP_PREFIX/bin/autosar-generate-proxy-skeleton"
 
       - name: Configure environment
         run: |
@@ -122,3 +129,16 @@ jobs:
           test -f /opt/autosar-ap-libs/share/lwrcl/autosar/lwrcl_autosar_topic_mapping.yaml
           test -x apps/install-adaptive-autosar/bin/example_spin
           test -x apps/install-adaptive-autosar/bin/example_service_server
+
+      - name: Verify tests use normal publish API
+        run: |
+          set -euo pipefail
+          ! grep -R "borrow_loaned_message\|LoanedMessage\|LoanedSubscriptionMessage\|can_loan_messages\|is_loaned\|take_loaned" test/src test/CMakeLists.txt README.md README_JA.md
+
+      - name: Run tests (Adaptive AUTOSAR)
+        run: |
+          ./test/run_tests_adaptive_autosar.sh all
+
+      - name: Run Adaptive AUTOSAR smoke
+        run: |
+          ./run_smoke_local.sh --backend adaptive-autosar --no-build

@@ -19,6 +19,7 @@
 #include <cstring>  // for memcpy/memset used by SerializedMessage/Serialization
 
 #include <ara/core/initialization.h>
+#include "org/eclipse/cyclonedds/core/cdr/basic_cdr_ser.hpp"
 #include "qos.hpp"
 #include "clock_time_duration.hpp"
 #include "publisher.hpp"
@@ -1198,6 +1199,61 @@ namespace lwrcl
   private:
     lwrcl_serialized_message_t data_;
     bool is_own_buffer_;
+  };
+
+  template <typename T>
+  class Serialization
+  {
+  public:
+    static void serialize_message(const T *message, SerializedMessage *serialized_message)
+    {
+      using namespace org::eclipse::cyclonedds::core::cdr;
+
+      basic_cdr_stream sizer;
+      move(sizer, *message, false);
+      size_t payload_size = sizer.position();
+
+      serialized_message->reserve(payload_size + 4);
+      char *buf = serialized_message->get_rcl_serialized_message().buffer;
+
+      write_cdr_header(buf);
+
+      basic_cdr_stream writer;
+      writer.set_buffer(buf + 4, payload_size);
+      write(writer, *message, false);
+
+      serialized_message->get_rcl_serialized_message().length = payload_size + 4;
+    }
+
+    static void deserialize_message(SerializedMessage *serialized_message, T *message)
+    {
+      using namespace org::eclipse::cyclonedds::core::cdr;
+
+      char *buf = serialized_message->get_rcl_serialized_message().buffer;
+      size_t length = serialized_message->get_rcl_serialized_message().length;
+
+      if (length <= 4) {
+        return;
+      }
+
+      basic_cdr_stream reader;
+      reader.set_buffer(buf + 4, length - 4);
+      read(reader, *message, false);
+    }
+
+  private:
+    static void write_cdr_header(char *buffer)
+    {
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+      buffer[0] = 0x00;
+      buffer[1] = 0x00;
+#else
+      buffer[0] = 0x00;
+      buffer[1] = 0x01;
+#endif
+      buffer[2] = 0x00;
+      buffer[3] = 0x00;
+    }
   };
 
 } // namespace lwrcl

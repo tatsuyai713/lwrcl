@@ -83,7 +83,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "${FORCE_REINSTALL}" != "ON" ]] && [[ -x "${INSTALL_PREFIX}/bin/idlc" ]] && [[ -f "${INSTALL_PREFIX}/include/ddscxx/dds/dds.hpp" ]]; then
+if [[ "${FORCE_REINSTALL}" != "ON" ]] \
+  && [[ -x "${INSTALL_PREFIX}/bin/idlc" ]] \
+  && [[ -f "${INSTALL_PREFIX}/include/ddscxx/dds/dds.hpp" ]] \
+  && { [[ "${ENABLE_SHM}" == "OFF" ]] || [[ -x "${ICEORYX_PREFIX}/bin/iox-roudi" ]]; }; then
   echo "[INFO] cyclonedds(+cxx) already installed at ${INSTALL_PREFIX}. Skipping (use --force to reinstall)."
   exit 0
 fi

@@ -55,11 +55,12 @@ namespace lwrcl
           throw std::runtime_error("Failed to offer AUTOSAR event service.");
         }
         auto offer_event_result = skeleton_->Event.Offer();
-        if (!offer_event_result.HasValue())
-        {
-          throw std::runtime_error("Failed to offer AUTOSAR event.");
-        }
+      if (!offer_event_result.HasValue())
+      {
+        throw std::runtime_error("Failed to offer AUTOSAR event.");
       }
+      subscriber_count_.store(1);
+    }
       catch (const std::exception &e)
       {
         throw std::runtime_error("Failed to create publisher: " + std::string(e.what()));

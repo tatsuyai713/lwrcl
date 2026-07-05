@@ -126,7 +126,23 @@ CMAKE_ARGS=(
     -DLWRCL_INSTALL_PREFIX="$LWRCL_PREFIX"
 )
 
+EXTRA_CMAKE_PREFIX_PATH=""
+append_extra_cmake_prefix() {
+    local prefix="$1"
+    if [ -n "${prefix}" ] && [ -d "${prefix}" ]; then
+        if [ -n "${EXTRA_CMAKE_PREFIX_PATH}" ]; then
+            EXTRA_CMAKE_PREFIX_PATH="${EXTRA_CMAKE_PREFIX_PATH};${prefix}"
+        else
+            EXTRA_CMAKE_PREFIX_PATH="${prefix}"
+        fi
+    fi
+}
+
 if [ "$(uname -s)" = "Darwin" ]; then
+    if command -v brew >/dev/null 2>&1; then
+        append_extra_cmake_prefix "$(brew --prefix 2>/dev/null || true)"
+        append_extra_cmake_prefix "$(brew --prefix opencv 2>/dev/null || true)"
+    fi
     CMAKE_ARGS+=(
         -DCMAKE_MACOSX_RPATH=ON
         -DCMAKE_INSTALL_RPATH="${INSTALL_DIR}/lib;${LWRCL_PREFIX}/lib;${DDS_PREFIX:-}/lib;${VSOMEIP_PREFIX:-}/lib;${AUTOSAR_AP_PREFIX:-}/lib"
@@ -144,7 +160,7 @@ if [ "$BACKEND" = "fastdds" ]; then
     echo "Using fastddsgen: ${FASTDDSGEN_EXECUTABLE}"
     CMAKE_ARGS+=(
         -DCMAKE_SYSTEM_PREFIX_PATH="$LWRCL_PREFIX"
-        -DCMAKE_PREFIX_PATH="$LWRCL_PREFIX"
+        -DCMAKE_PREFIX_PATH="$LWRCL_PREFIX${EXTRA_CMAKE_PREFIX_PATH:+;${EXTRA_CMAKE_PREFIX_PATH}}"
         -DDDS_PREFIX="$DDS_PREFIX"
         -Dfastcdr_DIR="${DDS_PREFIX}/lib/cmake/fastcdr/"
         -Dfastrtps_DIR="${DDS_PREFIX}/share/fastrtps/cmake/"
@@ -157,7 +173,7 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
     CMAKE_ARGS+=(
         -DDDS_PREFIX="$DDS_PREFIX"
         -DICEORYX_PREFIX="$ICEORYX_PREFIX"
-        -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
+        -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake${EXTRA_CMAKE_PREFIX_PATH:+;${EXTRA_CMAKE_PREFIX_PATH}}"
     )
 elif [ "$BACKEND" = "vsomeip" ]; then
     export PATH="${DDS_PREFIX}/bin:${PATH}"
@@ -165,7 +181,7 @@ elif [ "$BACKEND" = "vsomeip" ]; then
     export DYLD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
     CMAKE_ARGS+=(
         -DDDS_PREFIX="$DDS_PREFIX"
-        -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
+        -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake${EXTRA_CMAKE_PREFIX_PATH:+;${EXTRA_CMAKE_PREFIX_PATH}}"
         -DVSOMEIP_PREFIX="${VSOMEIP_PREFIX}"
     )
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
@@ -263,7 +279,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
         -DDDS_PREFIX="${DDS_PREFIX}"
         -DVSOMEIP_PREFIX="${VSOMEIP_PREFIX}"
         -DAUTOSAR_GENERATED_PROXY_SKELETON_DIR="${AUTOSAR_GEN_PROXY_SKELETON_DIR}"
-        -DCMAKE_PREFIX_PATH="${AUTOSAR_AP_PREFIX}/lib/cmake/AdaptiveAutosarAP;${DDS_PREFIX}/lib/cmake"
+        -DCMAKE_PREFIX_PATH="${AUTOSAR_AP_PREFIX}/lib/cmake/AdaptiveAutosarAP;${DDS_PREFIX}/lib/cmake${EXTRA_CMAKE_PREFIX_PATH:+;${EXTRA_CMAKE_PREFIX_PATH}}"
     )
 fi
 

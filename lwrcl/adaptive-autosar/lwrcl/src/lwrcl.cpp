@@ -1544,7 +1544,18 @@ namespace lwrcl
     {
       if (ara_runtime_initialized.exchange(false))
       {
-        ara::core::Deinitialize();
+        try
+        {
+          ara::core::Deinitialize();
+        }
+        catch (const std::exception &e)
+        {
+          std::cerr << "[WARN] ara::core::Deinitialize() failed: " << e.what() << std::endl;
+        }
+        catch (...)
+        {
+          std::cerr << "[WARN] ara::core::Deinitialize() failed with unknown exception." << std::endl;
+        }
       }
     }
   }
@@ -1553,8 +1564,14 @@ namespace lwrcl
   {
     global_stop_flag.store(false);
 
-    // Initialize Adaptive AUTOSAR runtime (once per process)
-    if (!ara_runtime_initialized.load())
+    const char *skip_ara_core_init = std::getenv("LWRCL_SKIP_ARA_CORE_INIT");
+    const bool should_skip_ara_core_init =
+        skip_ara_core_init != nullptr && std::string(skip_ara_core_init) == "1";
+
+    // Initialize Adaptive AUTOSAR runtime (once per process). Unit tests can
+    // skip ara::core lifecycle setup to avoid platform-runtime shutdown hooks
+    // while still exercising the lwrcl/ara::com communication path.
+    if (!should_skip_ara_core_init && !ara_runtime_initialized.load())
     {
       auto ara_result = ara::core::Initialize();
       if (!ara_result.HasValue()) {

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16.3)
 project(lwrcl_tests)
 
 set(DDS_BACKEND "fastdds" CACHE STRING "DDS backend to use")
-set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "vsomeip")
+set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "vsomeip" "adaptive-autosar")
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -145,8 +145,66 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
     endif()
 
     set(DDS_LIBRARIES vsomeip3 lwrcl_cdr)
+elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
+    set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/autosar-ap-libs)
+    set(AUTOSAR_AP_PREFIX_DEFAULT /opt/autosar-ap)
+    set(DDS_PREFIX_DEFAULT /opt/cyclonedds)
+    set(ICEORYX_PREFIX_DEFAULT /opt/iceoryx)
+    set(VSOMEIP_PREFIX_DEFAULT /opt/vsomeip)
+    set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix")
+    set(AUTOSAR_AP_PREFIX "${AUTOSAR_AP_PREFIX_DEFAULT}" CACHE PATH "Adaptive AUTOSAR install prefix")
+    set(AUTOSAR_GENERATED_PROXY_SKELETON_DIR
+        "${LWRCL_INSTALL_PREFIX}/share/lwrcl/autosar/generated"
+        CACHE PATH "Adaptive AUTOSAR generated proxy/skeleton include directory")
+    set(DDS_PREFIX "${DDS_PREFIX_DEFAULT}" CACHE PATH "CycloneDDS install prefix")
+    set(ICEORYX_PREFIX "${ICEORYX_PREFIX_DEFAULT}" CACHE PATH "iceoryx install prefix")
+    set(VSOMEIP_PREFIX "${VSOMEIP_PREFIX_DEFAULT}" CACHE PATH "vsomeip install prefix")
+
+    list(APPEND CMAKE_PREFIX_PATH
+      "${AUTOSAR_AP_PREFIX}/lib/cmake/AdaptiveAutosarAP"
+      "${DDS_PREFIX}/lib/cmake"
+      "${ICEORYX_PREFIX}/lib/cmake"
+      "${VSOMEIP_PREFIX}/lib/cmake")
+    find_package(AdaptiveAutosarAP REQUIRED)
+
+    include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/../lwrcl/adaptive-autosar/lwrcl/include)
+    include_directories(BEFORE ${AUTOSAR_GENERATED_PROXY_SKELETON_DIR})
+    include_directories(${LWRCL_INSTALL_PREFIX}/include)
+    include_directories(${AUTOSAR_AP_PREFIX}/include)
+    include_directories(${DDS_PREFIX}/include)
+    include_directories(${DDS_PREFIX}/include/ddscxx)
+    include_directories(${VSOMEIP_PREFIX}/include)
+    include_directories(${ICEORYX_PREFIX}/include)
+    file(GLOB ICEORYX_INCLUDE_DIRS "${ICEORYX_PREFIX}/include/iceoryx/v*")
+    foreach(dir ${ICEORYX_INCLUDE_DIRS})
+      include_directories(${dir})
+    endforeach()
+
+    link_directories(${LWRCL_INSTALL_PREFIX}/lib)
+    link_directories(${AUTOSAR_AP_PREFIX}/lib)
+    link_directories(${DDS_PREFIX}/lib)
+    link_directories(${VSOMEIP_PREFIX}/lib)
+    link_directories(${ICEORYX_PREFIX}/lib)
+
+    if(APPLE)
+        list(APPEND CMAKE_INSTALL_RPATH
+          "${LWRCL_INSTALL_PREFIX}/lib"
+          "${AUTOSAR_AP_PREFIX}/lib"
+          "${DDS_PREFIX}/lib"
+          "${VSOMEIP_PREFIX}/lib"
+          "${ICEORYX_PREFIX}/lib")
+    endif()
+
+    add_compile_definitions(
+      ARA_COM_USE_CYCLONEDDS=1
+      ARA_COM_USE_VSOMEIP=1
+      ARA_COM_USE_ICEORYX=1)
+
+    set(DDS_LIBRARIES
+      AdaptiveAutosarAP::ara_core
+      AdaptiveAutosarAP::ara_com)
 else()
-    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', or 'vsomeip'.")
+    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', 'vsomeip', or 'adaptive-autosar'.")
 endif()
 
 # --- Common link libraries ---------------------------------------------------
@@ -169,6 +227,8 @@ macro(add_lwrcl_test TEST_NAME TEST_SOURCE)
       target_compile_definitions(${TEST_NAME} PRIVATE LWRCL_BACKEND_CYCLONEDDS=1)
     elseif(DDS_BACKEND STREQUAL "vsomeip")
       target_compile_definitions(${TEST_NAME} PRIVATE LWRCL_BACKEND_VSOMEIP=1)
+    elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
+      target_compile_definitions(${TEST_NAME} PRIVATE LWRCL_BACKEND_ADAPTIVE_AUTOSAR=1)
     endif()
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
     # Give each test a generous timeout (30 seconds)

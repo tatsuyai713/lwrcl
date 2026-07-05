@@ -107,6 +107,9 @@ do_run() {
     cd "${BUILD_DIR}"
 
     RESULT=0
+    if [ -x "${ICEORYX_PREFIX}/bin/iox-roudi" ]; then
+        start_roudi || RESULT=$?
+    fi
     env -u CYCLONEDDS_URI ctest --output-on-failure -j "${JOBS}" -E '^test_shm_zero_copy$' || RESULT=$?
 
     if ctest -N -R '^test_shm_zero_copy$' | grep -q 'test_shm_zero_copy'; then
@@ -126,7 +129,7 @@ do_run() {
             echo "        Reinstall lwrcl or CycloneDDS with SHM support." >&2
             RESULT=1
         else
-            start_roudi
+            start_roudi || RESULT=$?
             CYCLONEDDS_URI="${DEFAULT_CYCLONEDDS_URI}" \
             ctest --output-on-failure -R '^test_shm_zero_copy$' || RESULT=$?
         fi

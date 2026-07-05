@@ -6,7 +6,7 @@ if command -v apt-get >/dev/null 2>&1; then
   sudo apt-get install -y cmake build-essential libboost-dev libopencv-dev
 elif command -v brew >/dev/null 2>&1; then
   brew update
-  brew install git openssl@3 automake autoconf libtool bison flex
+  brew install git openssl@3 automake autoconf libtool bison flex opencv
   "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install_boost_macos.sh"
   "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install_cmake_macos.sh"
 else

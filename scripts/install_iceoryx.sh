@@ -61,7 +61,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "${FORCE_REINSTALL}" != "ON" ]] && [[ -f "${INSTALL_PREFIX}/lib/cmake/iceoryx_posh/iceoryx_poshConfig.cmake" ]]; then
+if [[ "${FORCE_REINSTALL}" != "ON" ]] && [[ -f "${INSTALL_PREFIX}/lib/cmake/iceoryx_posh/iceoryx_poshConfig.cmake" ]] && [[ -x "${INSTALL_PREFIX}/bin/iox-roudi" ]]; then
   echo "[INFO] iceoryx already installed at ${INSTALL_PREFIX}. Skipping (use --force to reinstall)."
   exit 0
 fi
