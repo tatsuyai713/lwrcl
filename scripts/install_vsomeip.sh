@@ -100,18 +100,21 @@ SUDO=""
 PKG_SUDO=""
 if [[ "${EUID}" -ne 0 ]]; then
   if command -v sudo >/dev/null 2>&1; then
-    PKG_SUDO="sudo"
-  fi
-  INSTALL_PARENT="$(dirname "${INSTALL_PREFIX}")"
-  if { [[ -d "${INSTALL_PREFIX}" && -w "${INSTALL_PREFIX}" ]] || [[ -d "${INSTALL_PARENT}" && -w "${INSTALL_PARENT}" ]]; }; then
-    SUDO=""
-  elif command -v sudo >/dev/null 2>&1; then
     SUDO="sudo"
+    PKG_SUDO="sudo"
   else
     echo "[ERROR] Please run as root or install sudo." >&2
     exit 1
   fi
 fi
+
+chmod_install_prefix() {
+  if [[ -n "${SUDO}" ]]; then
+    ${SUDO} chmod -R 777 "${INSTALL_PREFIX}"
+  else
+    chmod -R 777 "${INSTALL_PREFIX}" 2>/dev/null || true
+  fi
+}
 
 echo "=== Installing vsomeip ${VSOMEIP_TAG} + CDR library to ${INSTALL_PREFIX} ==="
 
@@ -152,7 +155,7 @@ fi
 # 2. Create install directory
 # ---------------------------------------------------------------------------
 ${SUDO} mkdir -p "${INSTALL_PREFIX}"
-${SUDO} chmod -R 777 "${INSTALL_PREFIX}"
+chmod_install_prefix
 
 # ---------------------------------------------------------------------------
 # 3. Clone and build vsomeip
@@ -250,7 +253,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 
 # Re-apply permissions after ${SUDO} make install (which creates root-owned dirs)
-${SUDO} chmod -R 777 "${INSTALL_PREFIX}"
+chmod_install_prefix
 
 # ---------------------------------------------------------------------------
 # 4. Create default vsomeip configuration

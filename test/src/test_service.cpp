@@ -42,8 +42,6 @@ TEST_F(ServiceTest, ServiceRequestResponse) {
         response->status_message = "OK";
       });
 
-  std::thread server_thread([&server_node]() { rclcpp::spin(server_node); });
-
   // Client node
   auto client_node = rclcpp::Node::make_shared("test_client_" + unique_suffix);
   auto client = client_node->create_client<sensor_msgs::srv::SetCameraInfo>("test_camera_service");
@@ -59,9 +57,8 @@ TEST_F(ServiceTest, ServiceRequestResponse) {
 
   client_node->stop_spin();
   server_node->stop_spin();
-  if (server_thread.joinable()) {
-    server_thread.join();
-  }
+  client.reset();
+  server.reset();
   rclcpp::shutdown();
 
   EXPECT_TRUE(request_received);

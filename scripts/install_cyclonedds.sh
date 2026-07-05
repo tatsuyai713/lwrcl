@@ -95,13 +95,8 @@ SUDO=""
 PKG_SUDO=""
 if [[ "${EUID}" -ne 0 ]]; then
   if command -v sudo >/dev/null 2>&1; then
-    PKG_SUDO="sudo"
-  fi
-  INSTALL_PARENT="$(dirname "${INSTALL_PREFIX}")"
-  if { [[ -d "${INSTALL_PREFIX}" && -w "${INSTALL_PREFIX}" ]] || [[ -d "${INSTALL_PARENT}" && -w "${INSTALL_PARENT}" ]]; }; then
-    SUDO=""
-  elif command -v sudo >/dev/null 2>&1; then
     SUDO="sudo"
+    PKG_SUDO="sudo"
   else
     echo "[ERROR] Please run as root or install sudo." >&2
     exit 1
