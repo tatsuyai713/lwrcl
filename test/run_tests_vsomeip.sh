@@ -120,18 +120,19 @@ start_routing_manager() {
     "${VSOMEIP_PREFIX}/bin/routingmanagerd" > /tmp/lwrcl_test_vsomeip_routingmanagerd.log 2>&1 &
     ROUTING_MANAGER_PID=$!
 
-    for _ in {1..100}; do
+    for _ in {1..200}; do
         if ! kill -0 "${ROUTING_MANAGER_PID}" 2>/dev/null; then
             echo "[ERROR] routingmanagerd failed to start. See /tmp/lwrcl_test_vsomeip_routingmanagerd.log" >&2
             return 1
         fi
-        if grep -q "SOME/IP routing ready" /tmp/lwrcl_test_vsomeip_routingmanagerd.log 2>/dev/null; then
+        if grep -Eq "SOME/IP routing ready|Application\\(routingmanagerd, 0001\\) is initialized|Starting vsomeip application \"routingmanagerd\"" /tmp/lwrcl_test_vsomeip_routingmanagerd.log 2>/dev/null; then
             return 0
         fi
         sleep 0.1
     done
 
     echo "[ERROR] routingmanagerd did not become ready. See /tmp/lwrcl_test_vsomeip_routingmanagerd.log" >&2
+    sed -n '1,160p' /tmp/lwrcl_test_vsomeip_routingmanagerd.log >&2 2>/dev/null || true
     return 1
 }
 
@@ -204,7 +205,7 @@ do_run() {
                 else
                     echo "[FAIL] ${filter}"
                     echo "       log: ${log}"
-                    sed -n '1,220p' "$log"
+                    sed -n '1,220p' "$log" 2>/dev/null || true
                     RESULT=1
                     failed=$((failed + 1))
                 fi

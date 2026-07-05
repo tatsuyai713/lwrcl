@@ -29,12 +29,13 @@ protected:
 TEST_F(ServiceTest, ServiceRequestResponse) {
   const auto unique_suffix = std::to_string(
       std::chrono::steady_clock::now().time_since_epoch().count());
+  const auto service_name = "test_camera_service_" + unique_suffix;
 
   // Server node
   auto server_node = rclcpp::Node::make_shared("test_server_" + unique_suffix);
   bool request_received = false;
   auto server = server_node->create_service<sensor_msgs::srv::SetCameraInfo>(
-      "test_camera_service",
+      service_name,
       [&](const std::shared_ptr<sensor_msgs::srv::SetCameraInfo::Request>,
           std::shared_ptr<sensor_msgs::srv::SetCameraInfo::Response> response) {
         request_received = true;
@@ -44,7 +45,7 @@ TEST_F(ServiceTest, ServiceRequestResponse) {
 
   // Client node
   auto client_node = rclcpp::Node::make_shared("test_client_" + unique_suffix);
-  auto client = client_node->create_client<sensor_msgs::srv::SetCameraInfo>("test_camera_service");
+  auto client = client_node->create_client<sensor_msgs::srv::SetCameraInfo>(service_name);
 
   bool service_found = client->wait_for_service(15s);
   ASSERT_TRUE(service_found) << "Service server not discovered within timeout";
