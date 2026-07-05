@@ -80,6 +80,48 @@ namespace lwrcl
           static_cast<uint32_t>(nanoseconds.count())};
     }
 
+    bool file_exists(const char *path)
+    {
+      return path != nullptr && ::access(path, R_OK) == 0;
+    }
+
+    void load_fastdds_profiles(eprosima::fastdds::dds::DomainParticipantFactory *factory)
+    {
+      if (factory == nullptr)
+      {
+        return;
+      }
+
+      const char *default_profiles = std::getenv("FASTDDS_DEFAULT_PROFILES_FILE");
+      const char *legacy_profiles = std::getenv("FASTRTPS_DEFAULT_PROFILES_FILE");
+      if (file_exists(default_profiles) || file_exists(legacy_profiles))
+      {
+        factory->load_profiles();
+        return;
+      }
+
+      static const char *profile_candidates[] = {
+          "/opt/qnx/fast-dds-libs/etc/fastdds.xml",
+          "/opt/fast-dds-libs/etc/fastdds.xml",
+          "/opt/qnx/fast-dds/fastdds.xml",
+          "/opt/fast-dds/fastdds.xml",
+          "./fastdds.xml",
+          "../lwrcl/fastdds/lwrcl/fastdds.xml",
+          "../../lwrcl/fastdds/lwrcl/fastdds.xml",
+      };
+
+      for (const char *candidate : profile_candidates)
+      {
+        if (file_exists(candidate))
+        {
+          factory->load_XML_profiles_file(candidate);
+          return;
+        }
+      }
+
+      factory->load_profiles();
+    }
+
     bool parse_parameter_int(const std::string &text, int &value)
     {
       if (text.empty()) return false;
@@ -770,13 +812,12 @@ namespace lwrcl
     factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
 
     // Load profiles from the environment (FASTRTPS_DEFAULT_PROFILES_FILE) and
-    // from ./fastdds.xml if present. The participant must then be created with
+    // from the installed or local fastdds.xml if present. The participant must then be created with
     // the factory's default QoS: FastDDS substitutes XML-profile defaults only
     // when the exact PARTICIPANT_QOS_DEFAULT object is passed (address
     // comparison), so a copied default would silently drop the XML transport
     // settings (SHM/UDP).
-    factory_->load_profiles();
-    factory_->load_XML_profiles_file("./fastdds.xml");
+    load_fastdds_profiles(factory_);
     dds::DomainParticipantQos participant_qos = factory_->get_default_participant_qos();
 
     participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(
@@ -806,13 +847,12 @@ namespace lwrcl
     factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
 
     // Load profiles from the environment (FASTRTPS_DEFAULT_PROFILES_FILE) and
-    // from ./fastdds.xml if present. The participant must then be created with
+    // from the installed or local fastdds.xml if present. The participant must then be created with
     // the factory's default QoS: FastDDS substitutes XML-profile defaults only
     // when the exact PARTICIPANT_QOS_DEFAULT object is passed (address
     // comparison), so a copied default would silently drop the XML transport
     // settings (SHM/UDP).
-    factory_->load_profiles();
-    factory_->load_XML_profiles_file("./fastdds.xml");
+    load_fastdds_profiles(factory_);
     dds::DomainParticipantQos participant_qos = factory_->get_default_participant_qos();
 
     participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(
@@ -842,13 +882,12 @@ namespace lwrcl
     factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
 
     // Load profiles from the environment (FASTRTPS_DEFAULT_PROFILES_FILE) and
-    // from ./fastdds.xml if present. The participant must then be created with
+    // from the installed or local fastdds.xml if present. The participant must then be created with
     // the factory's default QoS: FastDDS substitutes XML-profile defaults only
     // when the exact PARTICIPANT_QOS_DEFAULT object is passed (address
     // comparison), so a copied default would silently drop the XML transport
     // settings (SHM/UDP).
-    factory_->load_profiles();
-    factory_->load_XML_profiles_file("./fastdds.xml");
+    load_fastdds_profiles(factory_);
     dds::DomainParticipantQos participant_qos = factory_->get_default_participant_qos();
 
     participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(
@@ -878,13 +917,12 @@ namespace lwrcl
     factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
 
     // Load profiles from the environment (FASTRTPS_DEFAULT_PROFILES_FILE) and
-    // from ./fastdds.xml if present. The participant must then be created with
+    // from the installed or local fastdds.xml if present. The participant must then be created with
     // the factory's default QoS: FastDDS substitutes XML-profile defaults only
     // when the exact PARTICIPANT_QOS_DEFAULT object is passed (address
     // comparison), so a copied default would silently drop the XML transport
     // settings (SHM/UDP).
-    factory_->load_profiles();
-    factory_->load_XML_profiles_file("./fastdds.xml");
+    load_fastdds_profiles(factory_);
     dds::DomainParticipantQos participant_qos = factory_->get_default_participant_qos();
 
     participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(
@@ -915,13 +953,12 @@ namespace lwrcl
     factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
 
     // Load profiles from the environment (FASTRTPS_DEFAULT_PROFILES_FILE) and
-    // from ./fastdds.xml if present. The participant must then be created with
+    // from the installed or local fastdds.xml if present. The participant must then be created with
     // the factory's default QoS: FastDDS substitutes XML-profile defaults only
     // when the exact PARTICIPANT_QOS_DEFAULT object is passed (address
     // comparison), so a copied default would silently drop the XML transport
     // settings (SHM/UDP).
-    factory_->load_profiles();
-    factory_->load_XML_profiles_file("./fastdds.xml");
+    load_fastdds_profiles(factory_);
     dds::DomainParticipantQos participant_qos = factory_->get_default_participant_qos();
 
     participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(
@@ -952,13 +989,12 @@ namespace lwrcl
     factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
 
     // Load profiles from the environment (FASTRTPS_DEFAULT_PROFILES_FILE) and
-    // from ./fastdds.xml if present. The participant must then be created with
+    // from the installed or local fastdds.xml if present. The participant must then be created with
     // the factory's default QoS: FastDDS substitutes XML-profile defaults only
     // when the exact PARTICIPANT_QOS_DEFAULT object is passed (address
     // comparison), so a copied default would silently drop the XML transport
     // settings (SHM/UDP).
-    factory_->load_profiles();
-    factory_->load_XML_profiles_file("./fastdds.xml");
+    load_fastdds_profiles(factory_);
     dds::DomainParticipantQos participant_qos = factory_->get_default_participant_qos();
 
     participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(
@@ -989,13 +1025,12 @@ namespace lwrcl
     factory_ = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
 
     // Load profiles from the environment (FASTRTPS_DEFAULT_PROFILES_FILE) and
-    // from ./fastdds.xml if present. The participant must then be created with
+    // from the installed or local fastdds.xml if present. The participant must then be created with
     // the factory's default QoS: FastDDS substitutes XML-profile defaults only
     // when the exact PARTICIPANT_QOS_DEFAULT object is passed (address
     // comparison), so a copied default would silently drop the XML transport
     // settings (SHM/UDP).
-    factory_->load_profiles();
-    factory_->load_XML_profiles_file("./fastdds.xml");
+    load_fastdds_profiles(factory_);
     dds::DomainParticipantQos participant_qos = factory_->get_default_participant_qos();
 
     participant_ = std::shared_ptr<eprosima::fastdds::dds::DomainParticipant>(

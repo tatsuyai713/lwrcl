@@ -10,10 +10,34 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DDS_PREFIX="/opt/fast-dds"
 LWRCL_PREFIX="/opt/fast-dds-libs"
 BUILD_DIR="${SCRIPT_DIR}/build-fastdds"
-JOBS=$(nproc 2>/dev/null || echo 4)
+SOURCE_LWRCL_LIB_DIR="${ROOT_DIR}/lwrcl/build-fastdds/fastdds/lwrcl"
+if command -v nproc >/dev/null 2>&1; then
+    JOBS=$(nproc)
+elif [ "$(uname -s)" = "Darwin" ]; then
+    JOBS=$(sysctl -n hw.ncpu)
+else
+    JOBS=4
+fi
 ACTION="${1:-all}"
 
-export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+if [ -d "${SOURCE_LWRCL_LIB_DIR}" ]; then
+    export LD_LIBRARY_PATH="${SOURCE_LWRCL_LIB_DIR}:${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="${SOURCE_LWRCL_LIB_DIR}:${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
+else
+    export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
+fi
+
+if [ -f "${ROOT_DIR}/lwrcl/fastdds/lwrcl/fastdds.xml" ]; then
+    export FASTDDS_DEFAULT_PROFILES_FILE="${FASTDDS_DEFAULT_PROFILES_FILE:-${ROOT_DIR}/lwrcl/fastdds/lwrcl/fastdds.xml}"
+    export FASTRTPS_DEFAULT_PROFILES_FILE="${FASTRTPS_DEFAULT_PROFILES_FILE:-${ROOT_DIR}/lwrcl/fastdds/lwrcl/fastdds.xml}"
+elif [ -f "${LWRCL_PREFIX}/etc/fastdds.xml" ]; then
+    export FASTDDS_DEFAULT_PROFILES_FILE="${FASTDDS_DEFAULT_PROFILES_FILE:-${LWRCL_PREFIX}/etc/fastdds.xml}"
+    export FASTRTPS_DEFAULT_PROFILES_FILE="${FASTRTPS_DEFAULT_PROFILES_FILE:-${LWRCL_PREFIX}/etc/fastdds.xml}"
+elif [ -f "${DDS_PREFIX}/fastdds.xml" ]; then
+    export FASTDDS_DEFAULT_PROFILES_FILE="${FASTDDS_DEFAULT_PROFILES_FILE:-${DDS_PREFIX}/fastdds.xml}"
+    export FASTRTPS_DEFAULT_PROFILES_FILE="${FASTRTPS_DEFAULT_PROFILES_FILE:-${DDS_PREFIX}/fastdds.xml}"
+fi
 
 # ---------------------------------------------------------------------------
 show_usage() {

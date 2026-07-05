@@ -15,11 +15,21 @@ VSOMEIP_TAG="3.4.10"
 CYCLONEDDS_CXX_TAG="0.10.5"
 INSTALL_PREFIX="/opt/vsomeip"
 BUILD_DIR="${HOME}/build-vsomeip"
-_nproc="$(nproc 2>/dev/null || echo 4)"
-_mem_kb="$(grep -i MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0)"
-_mem_jobs=$(( _mem_kb / 1572864 ))
-[[ "${_mem_jobs}" -lt 1 ]] && _mem_jobs=1
-JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
+if command -v nproc >/dev/null 2>&1; then
+  _nproc="$(nproc)"
+elif [[ "$(uname -s)" == "Darwin" ]]; then
+  _nproc="$(sysctl -n hw.ncpu)"
+else
+  _nproc=4
+fi
+if [[ -r /proc/meminfo ]]; then
+  _mem_kb="$(grep -i MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0)"
+  _mem_jobs=$(( _mem_kb / 1572864 ))
+  [[ "${_mem_jobs}" -lt 1 ]] && _mem_jobs=1
+  JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
+else
+  JOBS="${_nproc}"
+fi
 [[ "${JOBS}" -lt 1 ]] && JOBS=1
 SKIP_SYSTEM_DEPS="OFF"
 FORCE_REINSTALL="OFF"
@@ -81,14 +91,17 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "${FORCE_REINSTALL}" != "ON" ]] && [[ -f "${INSTALL_PREFIX}/lib/libvsomeip3.so" ]] && [[ -f "${INSTALL_PREFIX}/lib/liblwrcl_cdr.a" ]]; then
+if [[ "${FORCE_REINSTALL}" != "ON" ]] && { [[ -f "${INSTALL_PREFIX}/lib/libvsomeip3.so" ]] || [[ -f "${INSTALL_PREFIX}/lib/libvsomeip3.dylib" ]]; } && [[ -f "${INSTALL_PREFIX}/lib/liblwrcl_cdr.a" ]]; then
   echo "[INFO] vsomeip + CDR already installed at ${INSTALL_PREFIX}. Skipping (use --force to reinstall)."
   exit 0
 fi
 
 SUDO=""
 if [[ "${EUID}" -ne 0 ]]; then
-  if command -v sudo >/dev/null 2>&1; then
+  INSTALL_PARENT="$(dirname "${INSTALL_PREFIX}")"
+  if { [[ -d "${INSTALL_PREFIX}" && -w "${INSTALL_PREFIX}" ]] || [[ -d "${INSTALL_PARENT}" && -w "${INSTALL_PARENT}" ]]; }; then
+    SUDO=""
+  elif command -v sudo >/dev/null 2>&1; then
     SUDO="sudo"
   else
     echo "[ERROR] Please run as root or install sudo." >&2
@@ -120,6 +133,12 @@ if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]]; then
   elif command -v pacman &>/dev/null; then
     echo "--- Installing system dependencies (pacman) ---"
     ${SUDO} pacman -Sy --noconfirm base-devel cmake git boost
+  elif command -v brew &>/dev/null; then
+    echo "--- Installing system dependencies (brew) ---"
+    brew update
+    brew install git || true
+    "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install_boost_macos.sh"
+    "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install_cmake_macos.sh"
   else
     echo "[WARN] Unknown package manager. Ensure cmake, git, and boost are installed."
   fi
@@ -129,7 +148,7 @@ fi
 # 2. Create install directory
 # ---------------------------------------------------------------------------
 ${SUDO} mkdir -p "${INSTALL_PREFIX}"
-${SUDO} chmod 777 -R "${INSTALL_PREFIX}"
+${SUDO} chmod -R 777 "${INSTALL_PREFIX}"
 
 # ---------------------------------------------------------------------------
 # 3. Clone and build vsomeip
@@ -138,13 +157,68 @@ rm -rf "${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
-if [ ! -d vsomeip ]; then
-    git clone https://github.com/COVESA/vsomeip.git
-fi
+git clone --depth 1 --branch "${VSOMEIP_TAG}" https://github.com/COVESA/vsomeip.git vsomeip
 cd vsomeip
-git checkout "${VSOMEIP_TAG}"
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    find implementation -type f -name '*.cpp' -exec perl -0pi -e '
+        s/pthread_setname_np\(pthread_self\(\),\s*/pthread_setname_np(/g;
+    ' {} +
+    perl -0pi -e '
+        s/#ifndef __QNX__\n#include "\.\.\/include\/credentials\.hpp"/#if !defined(__QNX__) && !defined(__APPLE__)\n#include "..\/include\/credentials.hpp"/;
+        s/#ifndef __QNX__(\n\s+if \(chmod\(_local\.path\(\)\.c_str\(\),)/#if !defined(__QNX__) && !defined(__APPLE__)$1/g;
+        s/#ifndef __QNX__(\n\s+auto its_host = endpoint_host_\.lock\(\);)/#if !defined(__QNX__) && !defined(__APPLE__)$1/;
+        s/#if VSOMEIP_BOOST_VERSION >= 106600\n\s+auto its_storage/#if VSOMEIP_BOOST_VERSION >= 106600 \&\& (defined(__linux__) || defined(ANDROID) || defined(__QNX__))\n        auto its_storage/;
+        s/std::placeholders::_1,\n\s+std::placeholders::_2,\n\s+std::placeholders::_3,\n\s+std::placeholders::_4/std::placeholders::_1,\n                std::placeholders::_2\n#if defined(__linux__) || defined(ANDROID) || defined(__QNX__)\n                ,\n                std::placeholders::_3,\n                std::placeholders::_4\n#endif/g;
+        s/void local_uds_server_endpoint_impl::connection::receive_cbk\(\n\s+boost::system::error_code const &_error, std::size_t _bytes,\n\s+std::uint32_t const &_uid, std::uint32_t const &_gid\)/void local_uds_server_endpoint_impl::connection::receive_cbk(\n        boost::system::error_code const &_error, std::size_t _bytes\n#if defined(__linux__) || defined(ANDROID) || defined(__QNX__)\n        ,\n        std::uint32_t const &_uid, std::uint32_t const &_gid\n#endif\n)/;
+        s/its_sec_client\.user = _uid;\n\s+its_sec_client\.group = _gid;/#if defined(__linux__) || defined(ANDROID) || defined(__QNX__)\n                    its_sec_client.user = _uid;\n                    its_sec_client.group = _gid;\n#else\n                    its_sec_client.user = ANY_UID;\n                    its_sec_client.group = ANY_GID;\n#endif/;
+        s/\nvoid local_uds_server_endpoint_impl::connection::set_bound_sec_client\(/ \n#if defined(__linux__) || defined(ANDROID) || defined(__QNX__)\nvoid local_uds_server_endpoint_impl::connection::set_bound_sec_client(/;
+        s/(void local_uds_server_endpoint_impl::connection::set_bound_sec_client\([\s\S]*?sec_client_ = _sec_client;\n}\n)/$1#endif\n/;
+    ' implementation/endpoints/src/local_uds_server_endpoint_impl.cpp
+    perl -0pi -e 's/defined\(__linux__\) \|\| defined\(ANDROID\) \|\| defined\(__QNX__\)/defined(__linux__) || defined(ANDROID) || defined(__QNX__) || defined(__APPLE__)/g' \
+        implementation/endpoints/src/tp*.cpp
+    perl -0pi -e '
+        s/#ifndef __QNX__\n#include "\.\.\/include\/credentials\.hpp"/#if !defined(__QNX__) && !defined(__APPLE__)\n#include "..\/include\/credentials.hpp"/;
+        s/#ifndef __QNX__/#if !defined(__QNX__) && !defined(__APPLE__)/g;
+    ' implementation/endpoints/src/local_uds_client_endpoint_impl.cpp
+    perl -0pi -e 's/#if defined\(__linux__\) \|\| defined\(__QNX__\)/#if defined(__linux__) || defined(__QNX__) || defined(__APPLE__)/g' \
+        implementation/endpoints/src/endpoint_impl.cpp
+    perl -0pi -e 's/defined\(__linux__\) \|\| defined\(ANDROID\) \|\| defined\(__QNX__\)/defined(__linux__) || defined(ANDROID) || defined(__QNX__) || defined(__APPLE__)/g' \
+        implementation/endpoints/src/client_endpoint_impl.cpp
+    perl -0pi -e 's/#ifdef __linux__/#if defined(__linux__) || defined(__APPLE__)/g' \
+        implementation/endpoints/src/server_endpoint_impl.cpp
+    perl -0pi -e 's/elseif\(\$\{CMAKE_SYSTEM_NAME\} MATCHES "QNX"\)\n    set\(USE_RT ""\)\nelse\(\)/elseif(\${CMAKE_SYSTEM_NAME} MATCHES "QNX")\n    set(USE_RT "")\nelseif(APPLE)\n    set (CMAKE_CXX_FLAGS "\${CMAKE_CXX_FLAGS} \${OS_CXX_FLAGS} -g \${OPTIMIZE} -std=c++14 \${NO_DEPRECATED}")\n    set(USE_RT "")\nelse()/;
+                  s/else \(\)\n    set_target_properties\(\$\{VSOMEIP_NAME\} PROPERTIES LINK_FLAGS "-Wl,-wrap,socket -Wl,-wrap,accept -Wl,-wrap,open"\)\nendif \(\)/elseif (NOT APPLE)\n    set_target_properties(\${VSOMEIP_NAME} PROPERTIES LINK_FLAGS "-Wl,-wrap,socket -Wl,-wrap,accept -Wl,-wrap,open")\nendif ()/;
+                  s/if\(NOT WIN32\)\n    target_link_options\(\$\{VSOMEIP_NAME\} PRIVATE "LINKER:-as-needed"\)\nendif\(\)/if(NOT WIN32 AND NOT APPLE)\n    target_link_options(\${VSOMEIP_NAME} PRIVATE "LINKER:-as-needed")\nendif()/;' \
+        CMakeLists.txt
+fi
 
 mkdir -p build && cd build
+
+CMAKE_EXTRA_ARGS=()
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    CMAKE_CXX_FLAGS_EXTRA="-DVSOMEIP_INTERNAL_BASE_PORT=51234 -DIPV6_PKTINFO=0 -DIPV6_RECVPKTINFO=0"
+else
+    CMAKE_CXX_FLAGS_EXTRA="-Wno-stringop-overflow"
+fi
+if [[ "$(uname -s)" == "Darwin" ]] && command -v brew >/dev/null 2>&1; then
+    BOOST_PREFIX="$(brew --prefix boost@1.85 2>/dev/null || true)"
+    if [[ -n "${BOOST_PREFIX}" && -d "${BOOST_PREFIX}/include/boost" ]]; then
+        CMAKE_EXTRA_ARGS+=(
+            -DCMAKE_POLICY_DEFAULT_CMP0167=OLD
+            -DBoost_NO_BOOST_CMAKE=ON
+            -DBoost_ROOT="${BOOST_PREFIX}"
+            -DBOOST_ROOT="${BOOST_PREFIX}"
+            -DBoost_INCLUDE_DIR="${BOOST_PREFIX}/include"
+            -DBOOST_INCLUDEDIR="${BOOST_PREFIX}/include"
+            -DBOOST_LIBRARYDIR="${BOOST_PREFIX}/lib"
+        )
+        CMAKE_CXX_FLAGS_EXTRA="${CMAKE_CXX_FLAGS_EXTRA} -I${BOOST_PREFIX}/include"
+    else
+        echo "[ERROR] boost@1.85 not found. Run scripts/install_boost_macos.sh or omit --skip-system-deps." >&2
+        exit 1
+    fi
+fi
 
 cmake .. \
     -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
@@ -152,13 +226,27 @@ cmake .. \
     -DENABLE_SIGNAL_HANDLING=1 \
     -DBUILD_SHARED_LIBS=ON \
     -DENABLE_MULTIPLE_ROUTING_MANAGERS=1 \
-    -DCMAKE_CXX_FLAGS="-Wno-stringop-overflow"
+    -DVSOMEIP_INSTALL_ROUTINGMANAGERD=ON \
+    -DCMAKE_INSTALL_RPATH="${INSTALL_PREFIX}/lib" \
+    -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS_EXTRA}" \
+    "${CMAKE_EXTRA_ARGS[@]}"
 
-make -j"${JOBS}"
+make -j"${JOBS}" || make -j1
 ${SUDO} make install
 
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    for lib in libvsomeip3 libvsomeip3-sd libvsomeip3-e2e; do
+        if [[ -f "${INSTALL_PREFIX}/lib/${lib}.3.dylib" ]]; then
+            ${SUDO} ln -sf "${lib}.3.dylib" "${INSTALL_PREFIX}/lib/${lib}.so.3"
+        fi
+        if [[ -f "${INSTALL_PREFIX}/lib/${lib}.dylib" ]]; then
+            ${SUDO} ln -sf "${lib}.dylib" "${INSTALL_PREFIX}/lib/${lib}.so"
+        fi
+    done
+fi
+
 # Re-apply permissions after ${SUDO} make install (which creates root-owned dirs)
-${SUDO} chmod 777 -R "${INSTALL_PREFIX}"
+${SUDO} chmod -R 777 "${INSTALL_PREFIX}"
 
 # ---------------------------------------------------------------------------
 # 4. Create default vsomeip configuration
@@ -173,9 +261,22 @@ cat <<'VSOMEIP_CFG' | ${SUDO} tee "${INSTALL_PREFIX}/etc/vsomeip-lwrcl.json" > /
         "file": { "enable": "false" },
         "dlt": "false"
     },
-    "applications": [],
+    "applications": [
+        { "name": "routingmanagerd", "id": "0x0001" },
+        { "name": "my_subscriber", "id": "0x0002" },
+        { "name": "my_publisher", "id": "0x0003" }
+    ],
     "services": [],
-    "routing": "lwrcl_routing",
+    "routing": {
+        "host": {
+            "name": "routingmanagerd",
+            "unicast": "127.0.0.1",
+            "port": "31490"
+        },
+        "guests": {
+            "unicast": "127.0.0.1"
+        }
+    },
     "service-discovery": {
         "enable": "true",
         "multicast": "224.244.224.245",
@@ -199,11 +300,8 @@ echo ""
 echo "=== Building CDR serialization library ==="
 
 cd "${BUILD_DIR}"
-if [ ! -d cyclonedds-cxx ]; then
-    git clone https://github.com/eclipse-cyclonedds/cyclonedds-cxx.git
-fi
+git clone --depth 1 --branch "${CYCLONEDDS_CXX_TAG}" https://github.com/eclipse-cyclonedds/cyclonedds-cxx.git cyclonedds-cxx
 cd cyclonedds-cxx
-git checkout "${CYCLONEDDS_CXX_TAG}"
 
 CDR_SRC_BASE="src/ddscxx"
 CDR_INC="${CDR_SRC_BASE}/include"
@@ -228,7 +326,12 @@ done
 # Patch cdr_stream.hpp: add missing #include <cstring> for memcpy
 CDR_STREAM_HDR="${INSTALL_PREFIX}/include/org/eclipse/cyclonedds/core/cdr/cdr_stream.hpp"
 if ! grep -q '<cstring>' "${CDR_STREAM_HDR}" 2>/dev/null; then
-    sed -i 's|#include <cassert>|#include <cassert>\n#include <cstring>|' "${CDR_STREAM_HDR}"
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        sed -i '' 's|#include <cassert>|#include <cassert>\
+#include <cstring>|' "${CDR_STREAM_HDR}"
+    else
+        sed -i 's|#include <cassert>|#include <cassert>\n#include <cstring>|' "${CDR_STREAM_HDR}"
+    fi
     echo "  Patched cdr_stream.hpp: added #include <cstring>"
 fi
 
@@ -512,7 +615,11 @@ echo "  CMake configs:  ${INSTALL_PREFIX}/lib/cmake/"
 echo "  Config:         ${INSTALL_PREFIX}/etc/vsomeip-lwrcl.json"
 echo ""
 echo "Set the following environment variables before using:"
-echo "  export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:\${LD_LIBRARY_PATH:-}"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  echo "  export DYLD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:\${DYLD_LIBRARY_PATH:-}"
+else
+  echo "  export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:\${LD_LIBRARY_PATH:-}"
+fi
 echo "  export VSOMEIP_CONFIGURATION=${INSTALL_PREFIX}/etc/vsomeip-lwrcl.json"
 echo ""
 echo "NOTE: CycloneDDS is NO LONGER needed at runtime."

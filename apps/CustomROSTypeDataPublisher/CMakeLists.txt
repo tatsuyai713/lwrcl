@@ -53,7 +53,7 @@ file(GLOB ROS_TYPE_DATA_PUBLISHER_SOURCES_CPP "src/*.cpp")
 add_custom_command(
     OUTPUT update_headers_done
     COMMAND ${CMAKE_COMMAND} -E echo "Running update_headers.sh"
-    COMMAND ${CMAKE_COMMAND} -E env bash ${ROS_DATA_TYPES_INCLUDE_PATH}/../bin/update_headers.sh
+    COMMAND ${CMAKE_COMMAND} -E env bash "${FASTDDS_UPDATE_HEADERS_SCRIPT}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Updating header files"
     VERBATIM

@@ -8,6 +8,18 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(APPLE)
+    set(CMAKE_MACOSX_RPATH ON)
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+    list(APPEND CMAKE_INSTALL_RPATH
+        /opt/fast-dds/lib
+        /opt/fast-dds-libs/lib
+        /opt/cyclonedds/lib
+        /opt/cyclonedds-libs/lib
+        /opt/vsomeip/lib
+        /opt/vsomeip-libs/lib)
+endif()
+
 if(NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 endif()
@@ -35,9 +47,18 @@ if(DDS_BACKEND STREQUAL "fastdds")
     set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix")
 
     set(ROS_DATA_TYPES_INCLUDE_PATH ${LWRCL_INSTALL_PREFIX}/include)
+    set(FASTDDS_UPDATE_HEADERS_SCRIPT
+        "${CMAKE_SOURCE_DIR}/../data_types/src/ros-data-types-for-fastdds/scripts/update_headers.sh")
+    if(NOT EXISTS "${FASTDDS_UPDATE_HEADERS_SCRIPT}")
+        set(FASTDDS_UPDATE_HEADERS_SCRIPT "${ROS_DATA_TYPES_INCLUDE_PATH}/../bin/update_headers.sh")
+    endif()
     include_directories(${LWRCL_INSTALL_PREFIX}/include
                         ${LWRCL_INSTALL_PREFIX}/include/optionparser)
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
+
+    if(APPLE)
+        list(APPEND CMAKE_INSTALL_RPATH "${LWRCL_INSTALL_PREFIX}/lib")
+    endif()
 
     set(DDS_LIBRARIES fastrtps CACHE INTERNAL "DDS link libraries")
 

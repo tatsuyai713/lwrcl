@@ -15,6 +15,7 @@
 #   <NAME>_IDL_FILES
 
 function(idlc_generate)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
   cmake_parse_arguments(IDLCG "" "NAME;ALIAS;IDL_ROOT;IDLC;UPDATE_HEADERS_SCRIPT;IDL_INCLUDE_PREFIX" "" ${ARGN})
 
   foreach(req NAME IDL_ROOT IDLC UPDATE_HEADERS_SCRIPT)
@@ -68,8 +69,7 @@ function(idlc_generate)
               -I "${IDLCG_IDL_INCLUDE_PREFIX}"
               "${IDL_FILE}"
       # 生成ヘッダの最小パッチ（return "pkg::msg::Type"; → return "pkg::msg::dds_::Type_";）
-      COMMAND ${CMAKE_COMMAND} -E env bash -c
-              "sed -E -i 's/(return[[:space:]]*\")([[:alnum:]_]+::msg::)([[:alnum:]_]+)(\";)/\\1\\2dds_::\\3_\\4/' \"${GEN_HPP}\""
+      COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/cmake/patch_type_name.py" "${GEN_HPP}"
       DEPENDS ${IDLCG_NAME}_gen_msg_dir "${IDL_FILE}"
       BYPRODUCTS "${GEN_HPP}"
       COMMENT "[${IDLCG_NAME}] idlc: ${IDL_BASENAME} -> ${GEN_MSG_DIR}"

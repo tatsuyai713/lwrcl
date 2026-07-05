@@ -83,7 +83,7 @@ if(DDS_BACKEND STREQUAL "fastdds")
   add_custom_command(
     OUTPUT advanced_update_headers_done
     COMMAND ${CMAKE_COMMAND} -E echo "Running update_headers.sh for advanced_msgs"
-    COMMAND ${CMAKE_COMMAND} -E env bash ${ROS_DATA_TYPES_INCLUDE_PATH}/../bin/update_headers.sh
+    COMMAND ${CMAKE_COMMAND} -E env bash "${FASTDDS_UPDATE_HEADERS_SCRIPT}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Updating header files for advanced_msgs"
     VERBATIM

@@ -16,11 +16,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 # Link core libraries
 target_link_libraries(${PROJECT_NAME} PUBLIC
-  ddscxx
-  builtin_interfaces
-  std_msgs
-  geometry_msgs
-  tf2_msgs
   lwrcl
   tf2
 )
@@ -45,13 +40,6 @@ target_include_directories(static_transform_broadcaster_node PUBLIC
 )
 
 target_link_libraries(static_transform_broadcaster_node PUBLIC
-  ddscxx
-  builtin_interfaces
-  std_msgs
-  geometry_msgs
-  tf2_msgs
-  lwrcl
-  tf2
   ${PROJECT_NAME}
 )
 
@@ -61,15 +49,7 @@ add_executable(static_transform_publisher
 )
 
 target_link_libraries(static_transform_publisher
-  ddscxx
-  builtin_interfaces
-  std_msgs
-  geometry_msgs
-  tf2_msgs
-  lwrcl
-  tf2
   static_transform_broadcaster_node
-  ${PROJECT_NAME}
 )
 
 # tf2_echo executable
@@ -78,13 +58,6 @@ add_executable(tf2_echo
 )
 
 target_link_libraries(tf2_echo
-  ddscxx
-  builtin_interfaces
-  std_msgs
-  geometry_msgs
-  tf2_msgs
-  lwrcl
-  tf2
   ${PROJECT_NAME}
 )
 
@@ -94,13 +67,6 @@ add_executable(tf2_monitor
 )
 
 target_link_libraries(tf2_monitor
-  ddscxx
-  builtin_interfaces
-  std_msgs
-  geometry_msgs
-  tf2_msgs
-  lwrcl
-  tf2
   ${PROJECT_NAME}
 )
 
@@ -124,5 +90,4 @@ install(TARGETS static_transform_publisher tf2_echo tf2_monitor
 )
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_PREFIX}/include/${PROJECT_NAME})
-
 

@@ -651,15 +651,6 @@ namespace lwrcl
   // ======================================================================
   void Node::init_vsomeip_app(const std::string &app_name)
   {
-    // If VSOMEIP_ROUTING is not explicitly set, make this application its
-    // own routing manager.  This avoids the need for an external vsomeipd
-    // daemon in single-process / test scenarios.  Users who set VSOMEIP_ROUTING
-    // in the environment or in a vsomeip JSON config keep full control.
-    if (!std::getenv("VSOMEIP_ROUTING"))
-    {
-      setenv("VSOMEIP_ROUTING", app_name.c_str(), 0);
-    }
-
     app_ = vsomeip::runtime::get()->create_application(app_name);
     if (!app_)
     {

@@ -7,11 +7,21 @@ GOOGLETEST_TAG="1.13.0"
 FAST_DDS_GEN_TAG="3.3.1"
 INSTALL_PREFIX="/opt/fast-dds"
 BUILD_DIR="${HOME}/build-fast-dds"
-_nproc="$(nproc 2>/dev/null || echo 4)"
-_mem_kb="$(grep -i MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0)"
-_mem_jobs=$(( _mem_kb / 1572864 ))
-[[ "${_mem_jobs}" -lt 1 ]] && _mem_jobs=1
-JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
+if command -v nproc >/dev/null 2>&1; then
+  _nproc="$(nproc)"
+elif [[ "$(uname -s)" == "Darwin" ]]; then
+  _nproc="$(sysctl -n hw.ncpu)"
+else
+  _nproc=4
+fi
+if [[ -r /proc/meminfo ]]; then
+  _mem_kb="$(grep -i MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0)"
+  _mem_jobs=$(( _mem_kb / 1572864 ))
+  [[ "${_mem_jobs}" -lt 1 ]] && _mem_jobs=1
+  JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
+else
+  JOBS="${_nproc}"
+fi
 [[ "${JOBS}" -lt 1 ]] && JOBS=1
 SKIP_SYSTEM_DEPS="OFF"
 FORCE_REINSTALL="OFF"
@@ -83,13 +93,45 @@ if [[ "${EUID}" -ne 0 ]]; then
   fi
 fi
 
-if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]] && command -v apt-get >/dev/null 2>&1; then
-  wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | ${SUDO} tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
-  ${SUDO} apt-add-repository -y "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main"
-  ${SUDO} apt-get update -qq
-  ${SUDO} apt-get install -y --allow-downgrades gcc g++ make automake autoconf unzip git vim openssl gcc make cmake=3.31.11* cmake-data=3.31.11* curl tar wget p11-kit libasio-dev
-  ${SUDO} apt-mark hold cmake cmake-data
+if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]]; then
+  if command -v apt-get >/dev/null 2>&1; then
+    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | ${SUDO} tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+    ${SUDO} apt-add-repository -y "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main"
+    ${SUDO} apt-get update -qq
+    ${SUDO} apt-get install -y --allow-downgrades gcc g++ make automake autoconf unzip git vim openssl gcc make cmake=3.31.11* cmake-data=3.31.11* curl tar wget p11-kit libasio-dev
+    ${SUDO} apt-mark hold cmake cmake-data
+  elif command -v brew >/dev/null 2>&1; then
+    brew update
+    brew install git automake autoconf libtool openssl@3 wget || true
+    "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install_cmake_macos.sh"
+  else
+    echo "[WARN] Unknown package manager. Ensure cmake, git, automake, autoconf, libtool, and OpenSSL are installed."
+  fi
 fi
+
+BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
+OPENSSL_PREFIX=""
+if [[ -n "${BREW_PREFIX}" ]] && [[ -d "${BREW_PREFIX}/opt/openssl@3" ]]; then
+  OPENSSL_PREFIX="${BREW_PREFIX}/opt/openssl@3"
+  export PKG_CONFIG_PATH="${OPENSSL_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+fi
+
+# CMake 4 removed compatibility with projects declaring cmake_minimum_required()
+# older than 3.5. Some Fast-DDS 2.11 third-party dependencies still do that.
+CMAKE_POLICY_ARG=""
+if cmake --version | awk 'NR==1 {split($3, v, "."); exit !(v[1] >= 4)}'; then
+  CMAKE_POLICY_ARG="-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+fi
+
+patch_cmake4_removed_old_policies() {
+  local cmake_file="$1"
+  [[ -f "${cmake_file}" ]] || return 0
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    sed -i '' -E 's/cmake_policy[[:space:]]*\([[:space:]]*SET[[:space:]]+(CMP0063)[[:space:]]+OLD[[:space:]]*\)/cmake_policy(SET \1 NEW)/g' "${cmake_file}"
+  else
+    sed -i -E 's/cmake_policy[[:space:]]*\([[:space:]]*SET[[:space:]]+(CMP0063)[[:space:]]+OLD[[:space:]]*\)/cmake_policy(SET \1 NEW)/g' "${cmake_file}"
+  fi
+}
 
 rm -rf "${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}"
@@ -110,7 +152,8 @@ ${SUDO} mkdir -p "${INSTALL_PREFIX}"
 cmake -S "${WORKSPACE}/foonathan_memory_vendor" -B "${WORKSPACE}/foonathan_memory_vendor/build" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
-  -DCMAKE_CXX_FLAGS="-O3"
+  -DCMAKE_CXX_FLAGS="-O3" \
+  ${CMAKE_POLICY_ARG:+"${CMAKE_POLICY_ARG}"}
 cmake --build "${WORKSPACE}/foonathan_memory_vendor/build" -j"${JOBS}"
 ${SUDO} cmake --install "${WORKSPACE}/foonathan_memory_vendor/build"
 
@@ -118,7 +161,8 @@ ${SUDO} cmake --install "${WORKSPACE}/foonathan_memory_vendor/build"
 cmake -S "${WORKSPACE}/googletest" -B "${WORKSPACE}/googletest/build" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
-  -DCMAKE_CXX_FLAGS="-O3"
+  -DCMAKE_CXX_FLAGS="-O3" \
+  ${CMAKE_POLICY_ARG:+"${CMAKE_POLICY_ARG}"}
 cmake --build "${WORKSPACE}/googletest/build" -j"${JOBS}"
 ${SUDO} cmake --install "${WORKSPACE}/googletest/build"
 
@@ -126,15 +170,18 @@ ${SUDO} cmake --install "${WORKSPACE}/googletest/build"
 cmake -S "${WORKSPACE}/thirdparty/fastcdr" -B "${WORKSPACE}/thirdparty/fastcdr/build" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
-  -DCMAKE_CXX_FLAGS="-O3"
+  -DCMAKE_CXX_FLAGS="-O3" \
+  ${CMAKE_POLICY_ARG:+"${CMAKE_POLICY_ARG}"}
 cmake --build "${WORKSPACE}/thirdparty/fastcdr/build" -j"${JOBS}"
 ${SUDO} cmake --install "${WORKSPACE}/thirdparty/fastcdr/build"
 
 # TinyXML2
+patch_cmake4_removed_old_policies "${WORKSPACE}/thirdparty/tinyxml2/CMakeLists.txt"
 cmake -S "${WORKSPACE}/thirdparty/tinyxml2" -B "${WORKSPACE}/thirdparty/tinyxml2/build" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
-  -DCMAKE_CXX_FLAGS="-O3 -fPIC"
+  -DCMAKE_CXX_FLAGS="-O3 -fPIC" \
+  ${CMAKE_POLICY_ARG:+"${CMAKE_POLICY_ARG}"}
 cmake --build "${WORKSPACE}/thirdparty/tinyxml2/build" -j"${JOBS}"
 ${SUDO} cmake --install "${WORKSPACE}/thirdparty/tinyxml2/build"
 
@@ -153,17 +200,27 @@ cmake -S "${WORKSPACE}" -B "${WORKSPACE}/build" \
   -Dfoonathan_memory_DIR="${INSTALL_PREFIX}/lib/foonathan_memory/cmake/" \
   -DCMAKE_SYSTEM_PREFIX_PATH="${INSTALL_PREFIX}" \
   -DCMAKE_PREFIX_PATH="${INSTALL_PREFIX}" \
-  -DCMAKE_CXX_FLAGS="-DASIO_HAS_PTHREADS=1"
+  ${OPENSSL_PREFIX:+-DOPENSSL_ROOT_DIR="${OPENSSL_PREFIX}"} \
+  -DCMAKE_CXX_FLAGS="-DASIO_HAS_PTHREADS=1" \
+  ${CMAKE_POLICY_ARG:+"${CMAKE_POLICY_ARG}"}
 cmake --build "${WORKSPACE}/build" -j"${JOBS}"
 ${SUDO} cmake --install "${WORKSPACE}/build"
 
-# Update PATH and LD_LIBRARY_PATH in bashrc
-sed -i -e "/export PATH=.*fast-dds\/bin/d" ~/.bashrc
-echo "export PATH=\$PATH:${INSTALL_PREFIX}/bin" >> ~/.bashrc
-
-if ! grep -q "export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib" ~/.bashrc 2>/dev/null; then
-  echo "export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:\$LD_LIBRARY_PATH" >> ~/.bashrc
+# Update shell startup file with a hint for manually-run tools.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  SHELL_RC="${HOME}/.zshrc"
+  sed -i '' -e "/export PATH=.*fast-dds\/bin/d" "${SHELL_RC}" 2>/dev/null || true
+  echo "export PATH=\"\$PATH:${INSTALL_PREFIX}/bin\"" >> "${SHELL_RC}"
+else
+  SHELL_RC="${HOME}/.bashrc"
+  sed -i -e "/export PATH=.*fast-dds\/bin/d" "${SHELL_RC}" 2>/dev/null || true
+  echo "export PATH=\$PATH:${INSTALL_PREFIX}/bin" >> "${SHELL_RC}"
+  if ! grep -q "export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib" "${SHELL_RC}" 2>/dev/null; then
+    echo "export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:\$LD_LIBRARY_PATH" >> "${SHELL_RC}"
+  fi
 fi
-${SUDO} ldconfig
+if command -v ldconfig >/dev/null 2>&1; then
+  ${SUDO} ldconfig
+fi
 
 echo "[OK] Installed Fast-DDS v${FAST_DDS_TAG} to ${INSTALL_PREFIX}"

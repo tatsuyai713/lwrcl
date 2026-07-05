@@ -63,6 +63,7 @@ TEST_F(NamespaceTest, RelativeTopicNameResolved) {
   auto deadline = std::chrono::steady_clock::now() + 5s;
   while (received.load() == 0 && std::chrono::steady_clock::now() < deadline) {
     pub->publish(msg);
+    rclcpp::spin_some(node);
     std::this_thread::sleep_for(100ms);
   }
 
@@ -95,6 +96,7 @@ TEST_F(NamespaceTest, AbsoluteTopicBypassesNamespace) {
   auto deadline = std::chrono::steady_clock::now() + 5s;
   while (received.load() == 0 && std::chrono::steady_clock::now() < deadline) {
     pub->publish(msg);
+    rclcpp::spin_some(node);
     std::this_thread::sleep_for(100ms);
   }
 

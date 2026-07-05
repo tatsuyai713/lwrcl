@@ -4,11 +4,21 @@ set -euo pipefail
 ICEORYX_TAG="v2.0.6"
 INSTALL_PREFIX="/opt/iceoryx"
 BUILD_DIR="${HOME}/build-iceoryx"
-_nproc="$(nproc 2>/dev/null || echo 4)"
-_mem_kb="$(grep -i MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0)"
-_mem_jobs=$(( _mem_kb / 1572864 ))
-[[ "${_mem_jobs}" -lt 1 ]] && _mem_jobs=1
-JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
+if command -v nproc >/dev/null 2>&1; then
+  _nproc="$(nproc)"
+elif [[ "$(uname -s)" == "Darwin" ]]; then
+  _nproc="$(sysctl -n hw.ncpu)"
+else
+  _nproc=4
+fi
+if [[ -r /proc/meminfo ]]; then
+  _mem_kb="$(grep -i MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0)"
+  _mem_jobs=$(( _mem_kb / 1572864 ))
+  [[ "${_mem_jobs}" -lt 1 ]] && _mem_jobs=1
+  JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
+else
+  JOBS="${_nproc}"
+fi
 [[ "${JOBS}" -lt 1 ]] && JOBS=1
 SKIP_SYSTEM_DEPS="OFF"
 FORCE_REINSTALL="OFF"
@@ -58,7 +68,10 @@ fi
 
 SUDO=""
 if [[ "${EUID}" -ne 0 ]]; then
-  if command -v sudo >/dev/null 2>&1; then
+  INSTALL_PARENT="$(dirname "${INSTALL_PREFIX}")"
+  if { [[ -d "${INSTALL_PREFIX}" && -w "${INSTALL_PREFIX}" ]] || [[ -d "${INSTALL_PARENT}" && -w "${INSTALL_PARENT}" ]]; }; then
+    SUDO=""
+  elif command -v sudo >/dev/null 2>&1; then
     SUDO="sudo"
   else
     echo "[ERROR] Please run as root or install sudo." >&2
@@ -66,9 +79,14 @@ if [[ "${EUID}" -ne 0 ]]; then
   fi
 fi
 
-if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]] && command -v apt-get >/dev/null 2>&1; then
-  ${SUDO} apt-get update -qq
-  ${SUDO} apt-get install -y --no-install-recommends libacl1-dev libncurses5-dev
+if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]]; then
+  if command -v apt-get >/dev/null 2>&1; then
+    ${SUDO} apt-get update -qq
+    ${SUDO} apt-get install -y --no-install-recommends libacl1-dev libncurses5-dev
+  elif command -v brew >/dev/null 2>&1; then
+    brew update
+    brew install git cmake || true
+  fi
 fi
 
 ${SUDO} mkdir -p "${INSTALL_PREFIX}"

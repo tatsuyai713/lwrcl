@@ -28,3 +28,7 @@ install(FILES
 include/rclcpp/rclcpp.hpp
 include/rclcpp/qos.hpp
 DESTINATION include/rclcpp)
+
+install(FILES
+cyclonedds-lwrcl.xml
+DESTINATION etc)

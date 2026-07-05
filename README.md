@@ -19,7 +19,7 @@ lwrcl provides an API compatible with ROS 2's rclcpp. It supports **CycloneDDS**
 - **Interoperability with ROS 2** — Communicates directly with ROS 2 nodes via topics and services on the same DDS domain.
 - **DDS backend selection** — Choose between CycloneDDS, FastDDS, vsomeip, or Adaptive AUTOSAR at build time. Multiple backends can be installed simultaneously and switched as needed.
 - **Minimal dependencies** — Depends only on a DDS library and yaml-cpp, resulting in fast builds.
-- **Multi-platform** — Supports Linux (Ubuntu/Debian) and QNX 8.0.
+- **Multi-platform** — Supports Linux (Ubuntu/Debian), macOS (Homebrew), and QNX 8.0.
 - **Includes tf2 / tf2_ros** — Bundled coordinate transformation support.
 
 ---
@@ -238,6 +238,7 @@ Each value is the **median of 5 independent runs**.
 - Communication backend (CycloneDDS, FastDDS, vsomeip, or Adaptive AUTOSAR)
 - yaml-cpp (included as a submodule)
 - Boost (required for vsomeip backend)
+- macOS uses Homebrew. For compatibility, `install_cmake_macos.sh` installs/pins CMake 3.31.6 and `install_boost_macos.sh` installs Boost 1.85.
 
 ---
 
@@ -330,6 +331,57 @@ Built binaries are placed in `apps/install-fastdds/`.
 > **To use CycloneDDS, replace `fastdds` with `cyclonedds` in the commands above.**
 > **To use vsomeip, replace `fastdds` with `vsomeip` in the commands above.**
 > **For Adaptive AUTOSAR, run the backend-specific steps below.**
+
+## Build Instructions (macOS / Homebrew)
+
+On macOS, install build tools with Homebrew. DDS runtimes and lwrcl are still installed under the same `/opt` prefixes used on Linux. The scripts auto-detect both Apple Silicon and Intel Homebrew prefixes.
+
+```bash
+brew install git openssl@3 automake autoconf libtool bison flex
+./scripts/install_boost_macos.sh
+./scripts/install_cmake_macos.sh
+```
+
+`install_boost_macos.sh` installs Boost 1.85 from a local Homebrew tap for vsomeip compatibility. `install_cmake_macos.sh` downgrades Homebrew CMake to 3.31.6 and pins it, avoiding CMake 4 policy errors in older Fast-DDS dependencies.
+
+Recommended CycloneDDS flow:
+
+```bash
+./scripts/install_cyclonedds.sh
+./build_all.sh cyclonedds install
+```
+
+Install prefixes:
+
+| Backend | DDS runtime | lwrcl / data types |
+|---------|-------------|--------------------|
+| CycloneDDS | `/opt/cyclonedds` | `/opt/cyclonedds-libs` |
+| FastDDS | `/opt/fast-dds` | `/opt/fast-dds-libs` |
+| vsomeip | `/opt/vsomeip` | `/opt/vsomeip-libs` |
+
+FastDDS flow:
+
+```bash
+./scripts/install_fast_dds.sh
+./scripts/install_fast_dds_gen.sh
+./build_all.sh fastdds install
+```
+
+vsomeip flow:
+
+```bash
+./scripts/install_cyclonedds.sh
+./scripts/install_vsomeip.sh
+./build_all.sh vsomeip install
+```
+
+If the dynamic loader cannot find installed dylibs at runtime, set the backend-specific library path, for example:
+
+```bash
+export DYLD_LIBRARY_PATH=/opt/iceoryx/lib:/opt/cyclonedds/lib:/opt/cyclonedds-libs/lib:${DYLD_LIBRARY_PATH:-}
+```
+
+iceoryx shared-memory transport is enabled by default on macOS as well. `install_cyclonedds.sh` detects `/opt/iceoryx`; if it is missing, it runs `install_iceoryx.sh` first and then builds CycloneDDS with `ENABLE_SHM=ON`. Use `./scripts/install_cyclonedds.sh --disable-shm` or `--skip-iceoryx` only when you explicitly want a UDP-only CycloneDDS build.
 
 ### Adaptive AUTOSAR Build Flow
 
@@ -425,13 +477,11 @@ Switch verification checklist:
 - iceoryx profile: subscriber prints `I heard: 'Hello, world! ...'` with `iox-roudi` running and no runtime transport errors.
 - SOME/IP profile: subscriber prints `I heard: 'Hello, world! ...'`, and routing manager log shows `REGISTER EVENT` / `SUBSCRIBE`.
 
-Adaptive AUTOSAR Loaned Message API:
+Adaptive AUTOSAR transport acceleration:
 
-- `Publisher<T>::borrow_loaned_message()` and `publish(LoanedMessage<T>&&)` are available.
-- `Subscription<T>::take_loaned_message(LoanedSubscriptionMessage<T>&)` is available.
-- `can_loan_messages()` now returns `true` on Adaptive AUTOSAR backend (API always available).
-- With `ARA_COM_EVENT_BINDING=iceoryx` and `iox-roudi` running, trivially-copyable message types can use `ara::com::SkeletonEvent::Allocate/Send`. Non-trivial ROS message types safely fall back to typed `Send(const T&)`.
-- `example_zero_copy_pub` / `example_zero_copy_sub` are built for `adaptive-autosar` as well.
+- User code uses the same `Publisher<T>::publish(const T&)` and subscription callback API.
+- With `ARA_COM_EVENT_BINDING=iceoryx` and `iox-roudi` running, trivially-copyable message types can use the iceoryx-backed path internally. Non-trivial ROS message types safely fall back to typed `Send(const T&)`.
+- `example_zero_copy_pub` / `example_zero_copy_sub` are built for `adaptive-autosar` as normal publish/subscribe examples.
 
 ### Cleaning Build Directories
 
@@ -454,7 +504,7 @@ Adaptive AUTOSAR Loaned Message API:
 
 ## CycloneDDS Zero-Copy (iceoryx)
 
-For CycloneDDS backend, lwrcl uses native writer-loan/read-loan APIs when available and falls back safely when loaning is unavailable.
+For CycloneDDS backend, lwrcl uses native writer-loan/read-loan APIs when available and falls back safely when loaning is unavailable. To strictly verify native loaning, use fixed-size message types such as `fixedsized_msgs`; regular ROS messages with variable-length sequences may fall back.
 
 To enable SHM zero-copy transport with iceoryx, simply run:
 
@@ -472,12 +522,26 @@ To opt out of automatic iceoryx installation and build without SHM:
 ./scripts/install_cyclonedds.sh --disable-shm
 ```
 
-Once installed, start `iox-roudi` and set the following environment variables before running:
+The lwrcl install step also installs the default runtime profiles:
+
+- Fast DDS: `/opt/fast-dds-libs/etc/fastdds.xml`
+- CycloneDDS: `/opt/cyclonedds-libs/etc/cyclonedds-lwrcl.xml`
+
+lwrcl loads these profiles automatically when the corresponding environment variable is not already set. Fast DDS keeps both SHM and UDP enabled, so same-host peers can use SHM/DataSharing and non-local peers can fall back to UDP without changing the ROS 2-style API.
+
+For CycloneDDS SHM, start `iox-roudi` before running:
 
 ```bash
 export LD_LIBRARY_PATH=/opt/iceoryx/lib:/opt/cyclonedds/lib:/opt/cyclonedds-libs/lib:${LD_LIBRARY_PATH}
-export CYCLONEDDS_URI=file:///opt/cyclonedds/etc/cyclonedds-lwrcl.xml
+export DYLD_LIBRARY_PATH=/opt/iceoryx/lib:/opt/cyclonedds/lib:/opt/cyclonedds-libs/lib:${DYLD_LIBRARY_PATH:-}
 iox-roudi
+```
+
+You can still override the auto-loaded profile explicitly:
+
+```bash
+export CYCLONEDDS_URI=file:///opt/cyclonedds-libs/etc/cyclonedds-lwrcl.xml
+export FASTDDS_DEFAULT_PROFILES_FILE=/opt/fast-dds-libs/etc/fastdds.xml
 ```
 
 If you need strict ACL enforcement (instead of the default container-safe fallback), reinstall iceoryx separately:
@@ -504,7 +568,40 @@ services:
 
 If the host kernel/filesystem does not support tmpfs POSIX ACL, container settings alone cannot enable ACL.
 
-Then build and run with `cyclonedds` backend (`example_zero_copy_pub` / `example_zero_copy_sub`).
+Use the backend test runners to verify the accelerated transport path. `test_shm_zero_copy` uses the normal ROS 2-style `Publisher::publish(const T&)` and subscription callback API with `fixedsized_msgs::msg::FixedImageVgaMono8`; application code does not need to switch to a backend-specific message type or loaned-message API. The test also checks the active backend profile so a UDP-only or localhost-only configuration does not pass as a zero-copy/SHM setup.
+
+```bash
+./test/run_tests_fastdds.sh all
+./test/run_tests_cyclonedds.sh all
+```
+
+SHM/DataSharing is configured as the default transport fast path and the tests use the normal publish/subscribe API.
+
+---
+
+## Tests
+
+Backend-specific gtest suites are available under `test/`.
+
+```bash
+./test/run_tests_fastdds.sh all
+./test/run_tests_cyclonedds.sh all
+./test/run_tests_vsomeip.sh all
+```
+
+Local smoke tests can be run for a selected backend.
+
+```bash
+./run_smoke_local.sh --backend cyclonedds
+./run_smoke_local.sh --backend fastdds
+./run_smoke_local.sh --backend vsomeip
+```
+
+Use `--no-build` to validate already-built artifacts only.
+
+```bash
+./run_smoke_local.sh --backend cyclonedds --no-build
+```
 
 ---
 

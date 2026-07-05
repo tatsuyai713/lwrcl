@@ -8,12 +8,22 @@ CYCLONEDDS_CXX_TAG="0.10.5"
 INSTALL_PREFIX="/opt/cyclonedds"
 ICEORYX_PREFIX="/opt/iceoryx"
 BUILD_DIR="${HOME}/build-cyclonedds"
-_nproc="$(nproc 2>/dev/null || echo 4)"
-# Cap jobs by available memory (~1.5 GB per compiler job) to avoid OOM kills
-_mem_kb="$(grep -i MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0)"
-_mem_jobs=$(( _mem_kb / 1572864 ))
-[[ "${_mem_jobs}" -lt 1 ]] && _mem_jobs=1
-JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
+if command -v nproc >/dev/null 2>&1; then
+  _nproc="$(nproc)"
+elif [[ "$(uname -s)" == "Darwin" ]]; then
+  _nproc="$(sysctl -n hw.ncpu)"
+else
+  _nproc=4
+fi
+# Cap jobs by available memory (~1.5 GB per compiler job) to avoid OOM kills.
+if [[ -r /proc/meminfo ]]; then
+  _mem_kb="$(grep -i MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}' || echo 0)"
+  _mem_jobs=$(( _mem_kb / 1572864 ))
+  [[ "${_mem_jobs}" -lt 1 ]] && _mem_jobs=1
+  JOBS=$(( _nproc < _mem_jobs ? _nproc : _mem_jobs ))
+else
+  JOBS="${_nproc}"
+fi
 [[ "${JOBS}" -lt 1 ]] && JOBS=1
 ENABLE_SHM="AUTO"    # AUTO | ON | OFF
 SKIP_ICEORYX="OFF"   # OFF: auto-install iceoryx when SHM is needed; ON: skip
@@ -80,7 +90,10 @@ fi
 
 SUDO=""
 if [[ "${EUID}" -ne 0 ]]; then
-  if command -v sudo >/dev/null 2>&1; then
+  INSTALL_PARENT="$(dirname "${INSTALL_PREFIX}")"
+  if { [[ -d "${INSTALL_PREFIX}" && -w "${INSTALL_PREFIX}" ]] || [[ -d "${INSTALL_PARENT}" && -w "${INSTALL_PARENT}" ]]; }; then
+    SUDO=""
+  elif command -v sudo >/dev/null 2>&1; then
     SUDO="sudo"
   else
     echo "[ERROR] Please run as root or install sudo." >&2
@@ -88,9 +101,25 @@ if [[ "${EUID}" -ne 0 ]]; then
   fi
 fi
 
-if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]] && command -v apt-get >/dev/null 2>&1; then
-  ${SUDO} apt-get update -qq
-  ${SUDO} apt-get install -y --no-install-recommends libssl-dev bison flex libacl1-dev
+if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]]; then
+  if command -v apt-get >/dev/null 2>&1; then
+    ${SUDO} apt-get update -qq
+    ${SUDO} apt-get install -y --no-install-recommends libssl-dev bison flex libacl1-dev
+  elif command -v brew >/dev/null 2>&1; then
+    brew update
+    brew install git bison flex openssl@3 || true
+    "${SCRIPT_DIR}/install_cmake_macos.sh"
+  fi
+fi
+
+BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  if [[ -n "${BREW_PREFIX}" ]]; then
+    export PATH="${BREW_PREFIX}/opt/bison/bin:${BREW_PREFIX}/opt/flex/bin:${PATH}"
+    if [[ -d "${BREW_PREFIX}/opt/openssl@3" ]]; then
+      export PKG_CONFIG_PATH="${BREW_PREFIX}/opt/openssl@3/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+    fi
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -149,6 +178,7 @@ cmake -S "${BUILD_DIR}/cyclonedds" -B "${BUILD_DIR}/cyclonedds-build" \
   -DBUILD_SHARED_LIBS=ON \
   -DBUILD_IDLC=ON \
   -DENABLE_SOURCE_SPECIFIC_MULTICAST=ON \
+  ${BREW_PREFIX:+-DOPENSSL_ROOT_DIR="${BREW_PREFIX}/opt/openssl@3"} \
   "${core_extra_args[@]}"
 
 cmake --build "${BUILD_DIR}/cyclonedds-build" -j"${JOBS}"

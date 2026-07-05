@@ -59,7 +59,7 @@ if(DDS_BACKEND STREQUAL "fastdds")
     OUTPUT ros_msg_example_update_headers_done
     COMMAND ${CMAKE_COMMAND} -E echo "Running update_headers.sh for ${PROJECT_NAME}"
     COMMAND ${CMAKE_COMMAND} -E env bash
-            ${ROS_DATA_TYPES_INCLUDE_PATH}/../bin/update_headers.sh
+            "${FASTDDS_UPDATE_HEADERS_SCRIPT}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Patching generated headers for ${PROJECT_NAME}"
     VERBATIM

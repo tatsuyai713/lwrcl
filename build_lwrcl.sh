@@ -5,7 +5,14 @@ BACKEND="${1:-}"
 ACTION="${2:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JOBS=$(nproc 2>/dev/null || echo 4)
+if command -v nproc >/dev/null 2>&1; then
+    JOBS=$(nproc)
+elif [ "$(uname -s)" = "Darwin" ]; then
+    JOBS=$(sysctl -n hw.ncpu)
+else
+    JOBS=4
+fi
+BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
 
 # Check if BUILD_FFI is set (default OFF)
 BUILD_FFI_OPTION="${BUILD_FFI:-OFF}"
@@ -40,12 +47,17 @@ sudo mkdir -p "$LWRCL_PREFIX"
 
 if [ -n "${DDS_PREFIX:-}" ]; then
     export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="${DDS_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
 fi
 
 # Add iceoryx libraries if present (used by CycloneDDS SHM/zero-copy)
 ICEORYX_PREFIX="${ICEORYX_PREFIX:-/opt/iceoryx}"
 if [ -d "${ICEORYX_PREFIX}/lib" ]; then
     export LD_LIBRARY_PATH="${ICEORYX_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="${ICEORYX_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
+fi
+if [ -n "${BREW_PREFIX}" ]; then
+    export PATH="${BREW_PREFIX}/opt/bison/bin:${BREW_PREFIX}/opt/flex/bin:${PATH}"
 fi
 
 CMAKE_ARGS=(
@@ -56,6 +68,13 @@ CMAKE_ARGS=(
     -DCMAKE_INSTALL_PREFIX="$LWRCL_PREFIX"
     -DBUILD_FFI="$BUILD_FFI_OPTION"
 )
+
+if [ "$(uname -s)" = "Darwin" ]; then
+    CMAKE_ARGS+=(
+        -DCMAKE_MACOSX_RPATH=ON
+        -DCMAKE_INSTALL_RPATH="${LWRCL_PREFIX}/lib;${DDS_PREFIX:-}/lib;${VSOMEIP_PREFIX:-}/lib;${AUTOSAR_AP_PREFIX:-}/lib"
+    )
+fi
 
 if [ "$BACKEND" = "fastdds" ]; then
     CMAKE_ARGS+=(
@@ -73,11 +92,13 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
     )
 elif [ "$BACKEND" = "vsomeip" ]; then
     export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
     CMAKE_ARGS+=(
         -DVSOMEIP_PREFIX="${VSOMEIP_PREFIX}"
     )
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
     export LD_LIBRARY_PATH="${AUTOSAR_AP_PREFIX}/lib:${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="${AUTOSAR_AP_PREFIX}/lib:${DDS_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
     export PATH="${DDS_PREFIX}/bin:${PATH}"
     CMAKE_ARGS+=(
         -DAUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX}"

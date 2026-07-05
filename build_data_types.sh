@@ -6,7 +6,45 @@ ACTION="${2:-}"
 ORIGINAL_BACKEND="${BACKEND}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JOBS=$(nproc 2>/dev/null || echo 4)
+if command -v nproc >/dev/null 2>&1; then
+    JOBS=$(nproc)
+elif [ "$(uname -s)" = "Darwin" ]; then
+    JOBS=$(sysctl -n hw.ncpu)
+else
+    JOBS=4
+fi
+BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
+
+resolve_fastddsgen() {
+    local configured="${FASTDDS_GEN_BIN:-${FASTDDS_GEN_PREFIX:-}}"
+    local candidate
+
+    if [ -n "${configured}" ]; then
+        if [ -x "${configured}" ] && [ ! -d "${configured}" ]; then
+            printf '%s\n' "${configured}"
+            return 0
+        fi
+        if [ -x "${configured}/bin/fastddsgen" ]; then
+            printf '%s\n' "${configured}/bin/fastddsgen"
+            return 0
+        fi
+    fi
+
+    for candidate in /opt/fast-dds-gen/bin/fastddsgen
+    do
+        if [ -x "${candidate}" ]; then
+            printf '%s\n' "${candidate}"
+            return 0
+        fi
+    done
+
+    if command -v fastddsgen >/dev/null 2>&1; then
+        command -v fastddsgen
+        return 0
+    fi
+
+    return 1
+}
 
 generate_adaptive_autosar_artifacts() {
     local manifest_input mapping_input output_dir output_arxml output_mapping output_manifest
@@ -163,6 +201,7 @@ sudo mkdir -p "$LWRCL_PREFIX"
 
 if [ -n "${DDS_PREFIX:-}" ]; then
     export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="${DDS_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
 fi
 
 if [ "${ORIGINAL_BACKEND}" = "adaptive-autosar" ] && [ -d "${AUTOSAR_AP_PREFIX}/bin" ]; then
@@ -173,6 +212,10 @@ fi
 ICEORYX_PREFIX_RT="${ICEORYX_PREFIX:-/opt/iceoryx}"
 if [ -d "${ICEORYX_PREFIX_RT}/lib" ]; then
     export LD_LIBRARY_PATH="${ICEORYX_PREFIX_RT}/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="${ICEORYX_PREFIX_RT}/lib:${DYLD_LIBRARY_PATH:-}"
+fi
+if [ -n "${BREW_PREFIX}" ]; then
+    export PATH="${BREW_PREFIX}/opt/bison/bin:${BREW_PREFIX}/opt/flex/bin:${PATH}"
 fi
 
 if [ "${ORIGINAL_BACKEND}" = "adaptive-autosar" ]; then
@@ -187,12 +230,22 @@ CMAKE_ARGS=(
     -DCMAKE_INSTALL_PREFIX="$LWRCL_PREFIX"
 )
 
+if [ "$(uname -s)" = "Darwin" ]; then
+    CMAKE_ARGS+=(
+        -DCMAKE_MACOSX_RPATH=ON
+        -DCMAKE_INSTALL_RPATH="${LWRCL_PREFIX}/lib;${DDS_PREFIX:-}/lib;${VSOMEIP_PREFIX:-}/lib"
+    )
+fi
+
 if [ "$BACKEND" = "fastdds" ]; then
-    export PATH="${FASTDDS_GEN_PREFIX}/bin:${PATH}"
-    if ! command -v fastddsgen >/dev/null 2>&1; then
-        echo "fastddsgen not found. Set FASTDDS_GEN_PREFIX or install Fast DDS Gen (expected: ${FASTDDS_GEN_PREFIX}/bin/fastddsgen)."
+    FASTDDSGEN_EXECUTABLE="$(resolve_fastddsgen || true)"
+    if [ -z "${FASTDDSGEN_EXECUTABLE}" ]; then
+        echo "fastddsgen not found. Install Fast DDS Gen or set FASTDDS_GEN_PREFIX to its install prefix, or FASTDDS_GEN_BIN to the fastddsgen executable."
+        echo "Checked: ${FASTDDS_GEN_PREFIX:-/opt/fast-dds-gen}/bin/fastddsgen, /opt/fast-dds-gen/bin/fastddsgen, and PATH."
         exit 1
     fi
+    export PATH="$(dirname "${FASTDDSGEN_EXECUTABLE}"):${PATH}"
+    echo "Using fastddsgen: ${FASTDDSGEN_EXECUTABLE}"
     CMAKE_ARGS+=(
         -DCMAKE_SYSTEM_PREFIX_PATH="$DDS_PREFIX"
         -DCMAKE_PREFIX_PATH="$DDS_PREFIX"

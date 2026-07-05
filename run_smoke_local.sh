@@ -5,13 +5,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 NO_BUILD=0
-SELECT_BACKEND="adaptive-autosar"
+SELECT_BACKEND="${SMOKE_BACKEND:-}"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --no-build) NO_BUILD=1 ;;
     --backend) shift; SELECT_BACKEND="${1:-}";;
+    --backend=*) SELECT_BACKEND="${1#--backend=}" ;;
     -h|--help)
       echo "Usage: $0 [--no-build] [--backend <fastdds|cyclonedds|vsomeip|adaptive-autosar|all>]"
+      echo "       $0 [--no-build] [--backend=<fastdds|cyclonedds|vsomeip|adaptive-autosar|all>]"
       exit 0 ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
@@ -19,15 +21,56 @@ while [ "$#" -gt 0 ]; do
 done
 
 # Defaults (match workflow)
-DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
-ICEORYX_PREFIX="${ICEORYX_PREFIX:-/opt/iceoryx}"
-VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
-AUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX:-/opt/autosar-ap}"
-LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/autosar-ap-libs}"
-FASTDDS_PREFIX="${FASTDDS_PREFIX:-/opt/fastdds}"
+HOST_OS="$(uname -s)"
+if [ -z "$SELECT_BACKEND" ]; then
+  if [ "$HOST_OS" = "Darwin" ]; then
+    SELECT_BACKEND="fastdds"
+  else
+    SELECT_BACKEND="adaptive-autosar"
+  fi
+fi
 
-export PATH="$DDS_PREFIX/bin:$PATH"
-export LD_LIBRARY_PATH="${ICEORYX_PREFIX}/lib:${DDS_PREFIX}/lib:${VSOMEIP_PREFIX}/lib:${AUTOSAR_AP_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+case "$SELECT_BACKEND" in
+  fastdds|cyclonedds|vsomeip|adaptive-autosar|all) ;;
+  *) echo "Backend selection: FAIL (${SELECT_BACKEND})"; exit 1 ;;
+esac
+
+SELECTED_BACKENDS=()
+if [ "$SELECT_BACKEND" = "all" ]; then
+  SELECTED_BACKENDS=(fastdds cyclonedds vsomeip)
+  if [ "$HOST_OS" != "Darwin" ]; then
+    SELECTED_BACKENDS+=(adaptive-autosar)
+  fi
+else
+  SELECTED_BACKENDS=("$SELECT_BACKEND")
+fi
+SELECTED_BACKENDS_STR="${SELECTED_BACKENDS[*]}"
+
+: "${DDS_PREFIX:=/opt/cyclonedds}"
+: "${ICEORYX_PREFIX:=/opt/iceoryx}"
+: "${VSOMEIP_PREFIX:=/opt/vsomeip}"
+: "${AUTOSAR_AP_PREFIX:=/opt/autosar-ap}"
+: "${FASTDDS_PREFIX:=/opt/fast-dds}"
+
+case "$SELECT_BACKEND" in
+  fastdds) : "${LWRCL_PREFIX:=/opt/fast-dds-libs}" ;;
+  cyclonedds) : "${LWRCL_PREFIX:=/opt/cyclonedds-libs}" ;;
+  vsomeip) : "${LWRCL_PREFIX:=/opt/vsomeip-libs}" ;;
+  adaptive-autosar) : "${LWRCL_PREFIX:=/opt/autosar-ap-libs}" ;;
+  all)
+    if [ "$HOST_OS" = "Darwin" ]; then
+      : "${LWRCL_PREFIX:=/opt/fast-dds-libs}"
+    else
+      : "${LWRCL_PREFIX:=/opt/autosar-ap-libs}"
+    fi
+    ;;
+  *) : "${LWRCL_PREFIX:=/opt/autosar-ap-libs}" ;;
+esac
+
+export PATH="$FASTDDS_PREFIX/bin:$DDS_PREFIX/bin:$PATH"
+export LD_LIBRARY_PATH="${FASTDDS_PREFIX}/lib:${ICEORYX_PREFIX}/lib:${DDS_PREFIX}/lib:${VSOMEIP_PREFIX}/lib:${AUTOSAR_AP_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+export DYLD_LIBRARY_PATH="${ICEORYX_PREFIX}/lib:${DDS_PREFIX}/lib:${VSOMEIP_PREFIX}/lib:${AUTOSAR_AP_PREFIX}/lib:${LWRCL_PREFIX}/lib:${FASTDDS_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
+export NO_BUILD SELECT_BACKEND SELECTED_BACKENDS_STR DDS_PREFIX ICEORYX_PREFIX VSOMEIP_PREFIX AUTOSAR_AP_PREFIX LWRCL_PREFIX FASTDDS_PREFIX
 
 overall_fail=0
 
@@ -39,6 +82,7 @@ log_path() {
 }
 
 cleanup_runtime_processes() {
+  pkill -x routingmanagerd >/dev/null 2>&1 || true
   pkill -x autosar_vsomeip_routing_manager >/dev/null 2>&1 || true
   pkill -x iox-roudi >/dev/null 2>&1 || true
   pkill -x example_class_sub >/dev/null 2>&1 || true
@@ -47,6 +91,7 @@ cleanup_runtime_processes() {
   pkill -x example_service_client >/dev/null 2>&1 || true
   pkill -x example_zero_copy_sub >/dev/null 2>&1 || true
   pkill -x example_zero_copy_pub >/dev/null 2>&1 || true
+  rm -f /tmp/vsomeip-* >/dev/null 2>&1 || true
 }
 
 trap cleanup_runtime_processes EXIT INT TERM
@@ -126,28 +171,53 @@ run_test() {
   fi
 }
 
-# ---- environment banner (what you're asking for) ----------------------------
-if [ "$(uname -s)" != "Linux" ]; then
-  echo "Platform check: FAIL (Linux only)"
-  exit 1
-fi
-echo "Platform check: OK"
+plain_backend_app_dir() {
+  local backend="$1"
+  local candidates=(
+    "apps/install-${backend}/bin"
+    "apps/build-${backend}/lwrcl_example"
+  )
 
-if [ -d "apps/install-adaptive-autosar/bin" ]; then
-  if ! file "apps/install-adaptive-autosar/bin/example_class_pub" 2>/dev/null | grep -q ELF; then
-    echo "ELF check: FAIL"
-    exit 1
+  local dir
+  for dir in "${candidates[@]}"; do
+    if [ -x "${dir}/example_class_sub" ] && [ -x "${dir}/example_class_pub" ]; then
+      echo "$dir"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# ---- environment banner (what you're asking for) ----------------------------
+case "$HOST_OS" in
+  Linux|Darwin) echo "Platform check: OK (${HOST_OS})" ;;
+  *) echo "Platform check: FAIL (${HOST_OS} unsupported)"; exit 1 ;;
+esac
+
+for backend in "${SELECTED_BACKENDS[@]}"; do
+  app_bin="apps/install-${backend}/bin/example_class_pub"
+  if [ -x "$app_bin" ]; then
+    if [ "$HOST_OS" = "Darwin" ]; then
+      if ! file "$app_bin" 2>/dev/null | grep -Eq 'Mach-O'; then
+        echo "Binary format check: FAIL (${backend}, expected Mach-O)"
+        exit 1
+      fi
+    elif ! file "$app_bin" 2>/dev/null | grep -q ELF; then
+      echo "Binary format check: FAIL (${backend}, expected ELF)"
+      exit 1
+    fi
   fi
-fi
-echo "ELF check: OK"
+done
+echo "Binary format check: OK"
 
 echo "== ENV =="
-echo "  date: $(date -Is)"
+echo "  date: $(date '+%Y-%m-%dT%H:%M:%S%z')"
 echo "  host: $(hostname)"
 echo "  uname: $(uname -a)"
 echo "  user: $(id -un) uid=$(id -u) gid=$(id -g)"
 echo "  NO_BUILD=${NO_BUILD}"
 echo "  SELECT_BACKEND=${SELECT_BACKEND}"
+echo "  SELECTED_BACKENDS=${SELECTED_BACKENDS_STR}"
 echo "  DDS_PREFIX=${DDS_PREFIX}"
 echo "  ICEORYX_PREFIX=${ICEORYX_PREFIX}"
 echo "  VSOMEIP_PREFIX=${VSOMEIP_PREFIX}"
@@ -160,11 +230,15 @@ echo
 if [ "$NO_BUILD" -eq 0 ]; then
   run_test "Build" bash -lc '
     set -euo pipefail
-    sudo ldconfig || true
-    ./build_libraries.sh adaptive-autosar install
-    ./build_data_types.sh adaptive-autosar install
-    ./build_lwrcl.sh adaptive-autosar install
-    ./build_apps.sh adaptive-autosar install
+    if command -v ldconfig >/dev/null 2>&1; then
+      sudo ldconfig || true
+    fi
+    for backend in ${SELECTED_BACKENDS_STR}; do
+      ./build_libraries.sh "${backend}" install
+      ./build_data_types.sh "${backend}" install
+      ./build_lwrcl.sh "${backend}" install
+      ./build_apps.sh "${backend}" install
+    done
   ' || true
 else
   echo "Build: SKIP (--no-build)"
@@ -174,18 +248,57 @@ fi
 # ---- Installed artifacts ----------------------------------------------------
 run_test "Installed artifacts" bash -lc '
   set -euo pipefail
-  LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/autosar-ap-libs}"
   AUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX:-/opt/autosar-ap}"
-
   missing=0
-  [ -f "${LWRCL_PREFIX}/lib/liblwrcl.so" ] || { echo "Missing liblwrcl.so"; missing=1; }
-  [ -f "${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_manifest.arxml" ] || { echo "Missing arxml"; missing=1; }
-  [ -f "${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_manifest.yaml" ] || { echo "Missing manifest yaml"; missing=1; }
-  [ -f "${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml" ] || { echo "Missing manifest dds yaml"; missing=1; }
-  [ -f "${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml" ] || { echo "Missing vsomeip manifest yaml"; missing=1; }
-  [ -f "${LWRCL_PREFIX}/share/lwrcl/autosar/lwrcl_autosar_topic_mapping.yaml" ] || { echo "Missing topic mapping"; missing=1; }
-  [ -x "apps/install-adaptive-autosar/bin/example_spin" ] || { echo "Missing example_spin"; missing=1; }
-  [ -x "apps/install-adaptive-autosar/bin/example_service_server" ] || { echo "Missing example_service_server"; missing=1; }
+  require_app() {
+    local backend="$1"
+    local path="$2"
+    local label="$3"
+    if [ -x "$path" ]; then
+      return 0
+    fi
+    if [ "${NO_BUILD:-0}" -eq 1 ]; then
+      echo "Skip ${backend}: ${label} missing (--no-build)"
+    else
+      echo "Missing ${backend}: ${label}"
+      missing=1
+    fi
+  }
+
+  for backend in ${SELECTED_BACKENDS_STR}; do
+    case "$backend" in
+      fastdds) prefix="/opt/fast-dds-libs"; app_dir="apps/install-fastdds/bin" ;;
+      cyclonedds) prefix="/opt/cyclonedds-libs"; app_dir="apps/install-cyclonedds/bin" ;;
+      vsomeip) prefix="/opt/vsomeip-libs"; app_dir="apps/install-vsomeip/bin" ;;
+      adaptive-autosar) prefix="/opt/autosar-ap-libs"; app_dir="apps/install-adaptive-autosar/bin" ;;
+      *) echo "Unknown backend: $backend"; missing=1; continue ;;
+    esac
+
+    if [ "$backend" = "${SELECT_BACKEND:-}" ] && [ -n "${LWRCL_PREFIX:-}" ]; then
+      prefix="$LWRCL_PREFIX"
+    fi
+
+    if [ "$(uname -s)" = "Darwin" ]; then
+      [ -f "${prefix}/lib/liblwrcl.dylib" ] || { echo "Missing ${backend}: ${prefix}/lib/liblwrcl.dylib"; missing=1; }
+    else
+      [ -f "${prefix}/lib/liblwrcl.so" ] || { echo "Missing ${backend}: ${prefix}/lib/liblwrcl.so"; missing=1; }
+    fi
+
+    if [ "$backend" = "adaptive-autosar" ]; then
+      [ -f "${prefix}/share/lwrcl/autosar/lwrcl_autosar_manifest.arxml" ] || { echo "Missing ${backend}: arxml"; missing=1; }
+      [ -f "${prefix}/share/lwrcl/autosar/lwrcl_autosar_manifest.yaml" ] || { echo "Missing ${backend}: manifest yaml"; missing=1; }
+      [ -f "${prefix}/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml" ] || { echo "Missing ${backend}: manifest dds yaml"; missing=1; }
+      [ -f "${prefix}/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml" ] || { echo "Missing ${backend}: vsomeip manifest yaml"; missing=1; }
+      [ -f "${prefix}/share/lwrcl/autosar/lwrcl_autosar_topic_mapping.yaml" ] || { echo "Missing ${backend}: topic mapping"; missing=1; }
+    fi
+
+    require_app "$backend" "${app_dir}/example_spin" "example_spin"
+    require_app "$backend" "${app_dir}/example_class_pub" "example_class_pub"
+    require_app "$backend" "${app_dir}/example_class_sub" "example_class_sub"
+    if [ "$backend" = "vsomeip" ]; then
+      require_app "$backend" "${VSOMEIP_PREFIX:-/opt/vsomeip}/bin/routingmanagerd" "routingmanagerd"
+    fi
+  done
 
   if [ "$missing" -ne 0 ]; then exit 1; fi
 ' || true
@@ -310,19 +423,91 @@ loaned_message_zero_copy() {
 
 plain_backend_pubsub() {
   local backend="$1"
-  local install_dir="apps/install-${backend}/bin"
+  local install_dir
   local pub_log="/tmp/lwrcl_plain_${backend}_pub.log"
   local sub_log="/tmp/lwrcl_plain_${backend}_sub.log"
+  local rm_log="/tmp/lwrcl_plain_${backend}_rm.log"
+  local rm_pid=""
+  local rm_wd=""
+  local had_vsomeip_configuration=0
+  local old_vsomeip_configuration=""
+  local had_vsomeip_application_name=0
+  local old_vsomeip_application_name=""
+  local had_vsomeip_routing=0
+  local old_vsomeip_routing=""
 
+  install_dir="$(plain_backend_app_dir "$backend")"
   cleanup_runtime_processes
 
+  if [ "$backend" = "vsomeip" ]; then
+    if [ "${VSOMEIP_CONFIGURATION+x}" ]; then
+      had_vsomeip_configuration=1
+      old_vsomeip_configuration="$VSOMEIP_CONFIGURATION"
+    fi
+    if [ "${VSOMEIP_APPLICATION_NAME+x}" ]; then
+      had_vsomeip_application_name=1
+      old_vsomeip_application_name="$VSOMEIP_APPLICATION_NAME"
+    fi
+    if [ "${VSOMEIP_ROUTING+x}" ]; then
+      had_vsomeip_routing=1
+      old_vsomeip_routing="$VSOMEIP_ROUTING"
+    fi
+
+    unset VSOMEIP_CONFIGURATION
+    unset VSOMEIP_APPLICATION_NAME
+    unset VSOMEIP_ROUTING
+    export VSOMEIP_CONFIGURATION="${VSOMEIP_PREFIX}/etc/vsomeip-lwrcl.json"
+  fi
+
+  restore_plain_vsomeip_env() {
+    if [ "$backend" != "vsomeip" ]; then
+      return 0
+    fi
+    if [ "$had_vsomeip_configuration" -eq 1 ]; then
+      export VSOMEIP_CONFIGURATION="$old_vsomeip_configuration"
+    else
+      unset VSOMEIP_CONFIGURATION
+    fi
+    if [ "$had_vsomeip_application_name" -eq 1 ]; then
+      export VSOMEIP_APPLICATION_NAME="$old_vsomeip_application_name"
+    else
+      unset VSOMEIP_APPLICATION_NAME
+    fi
+    if [ "$had_vsomeip_routing" -eq 1 ]; then
+      export VSOMEIP_ROUTING="$old_vsomeip_routing"
+    else
+      unset VSOMEIP_ROUTING
+    fi
+  }
+
+  echo "Using app dir: ${install_dir}"
+  if [ "$backend" = "vsomeip" ]; then
+    if [ ! -x "${VSOMEIP_PREFIX}/bin/routingmanagerd" ]; then
+      echo "Missing vsomeip routing manager: ${VSOMEIP_PREFIX}/bin/routingmanagerd"
+      restore_plain_vsomeip_env
+      return 1
+    fi
+    read -r rm_pid rm_wd < <(start_bg_with_timeout 12 "$rm_log" "${VSOMEIP_PREFIX}/bin/routingmanagerd")
+    sleep 1
+  fi
   read -r sub_pid sub_wd < <(start_bg_with_timeout 10 "$sub_log" "${install_dir}/example_class_sub")
   sleep 1
   run_with_timeout 8 "$pub_log" "${install_dir}/example_class_pub" || true
   wait_bg "$sub_pid" "$sub_wd" >/dev/null 2>&1 || true
+  if [ "$backend" = "vsomeip" ]; then
+    wait_bg "$rm_pid" "$rm_wd" >/dev/null 2>&1 || true
+  fi
 
-  grep -q "Publishing: 'Hello, world!" "$pub_log"
-  grep -q "I heard: 'Hello, world!" "$sub_log"
+  restore_plain_vsomeip_env
+
+  if ! grep -q "Publishing: 'Hello, world!" "$pub_log"; then
+    echo "Publisher did not publish expected message. See ${pub_log}"
+    return 1
+  fi
+  if ! grep -q "I heard: 'Hello, world!" "$sub_log"; then
+    echo "Subscriber did not receive expected message. See ${sub_log}"
+    return 1
+  fi
   return 0
 }
 
@@ -332,19 +517,14 @@ need_plain_fastdds=0
 need_plain_cyclonedds=0
 need_plain_vsomeip=0
 
-case "$SELECT_BACKEND" in
-  adaptive-autosar) need_adaptive=1 ;;
-  fastdds) need_plain_fastdds=1 ;;
-  cyclonedds) need_plain_cyclonedds=1 ;;
-  vsomeip) need_plain_vsomeip=1 ;;
-  all)
-    need_adaptive=1
-    need_plain_fastdds=1
-    need_plain_cyclonedds=1
-    need_plain_vsomeip=1
-    ;;
-  *) echo "Backend selection: FAIL"; exit 1 ;;
-esac
+for backend in "${SELECTED_BACKENDS[@]}"; do
+  case "$backend" in
+    adaptive-autosar) need_adaptive=1 ;;
+    fastdds) need_plain_fastdds=1 ;;
+    cyclonedds) need_plain_cyclonedds=1 ;;
+    vsomeip) need_plain_vsomeip=1 ;;
+  esac
+done
 
 # ---- Adaptive AUTOSAR runtime profiles --------------------------------------
 if [ "$need_adaptive" -eq 1 ]; then
@@ -390,29 +570,29 @@ fi
 
 # ---- plain backends ---------------------------------------------------------
 if [ "$need_plain_fastdds" -eq 1 ]; then
-  if [ -x "apps/install-fastdds/bin/example_class_sub" ] && [ -x "apps/install-fastdds/bin/example_class_pub" ]; then
+  if plain_backend_app_dir fastdds >/dev/null; then
     run_test "Plain backend (fastdds)" plain_backend_pubsub fastdds || true
   else
-    echo "Plain backend (fastdds): SKIP (missing binaries)"
-    echo "Plain backend (fastdds): OK"
+    echo "Plain backend (fastdds): FAIL (missing binaries)"
+    overall_fail=1
   fi
 fi
 
 if [ "$need_plain_cyclonedds" -eq 1 ]; then
-  if [ -x "apps/install-cyclonedds/bin/example_class_sub" ] && [ -x "apps/install-cyclonedds/bin/example_class_pub" ]; then
+  if plain_backend_app_dir cyclonedds >/dev/null; then
     run_test "Plain backend (cyclonedds)" plain_backend_pubsub cyclonedds || true
   else
-    echo "Plain backend (cyclonedds): SKIP (missing binaries)"
-    echo "Plain backend (cyclonedds): OK"
+    echo "Plain backend (cyclonedds): FAIL (missing binaries)"
+    overall_fail=1
   fi
 fi
 
 if [ "$need_plain_vsomeip" -eq 1 ]; then
-  if [ -x "apps/install-vsomeip/bin/example_class_sub" ] && [ -x "apps/install-vsomeip/bin/example_class_pub" ]; then
+  if plain_backend_app_dir vsomeip >/dev/null; then
     run_test "Plain backend (vsomeip)" plain_backend_pubsub vsomeip || true
   else
-    echo "Plain backend (vsomeip): SKIP (missing binaries)"
-    echo "Plain backend (vsomeip): OK"
+    echo "Plain backend (vsomeip): FAIL (missing binaries)"
+    overall_fail=1
   fi
 fi
 

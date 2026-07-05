@@ -21,6 +21,9 @@ namespace lwrcl
   template <typename T>
   class Serialization;
 
+  template <typename T>
+  class LoanedMessage;
+
   class IPublisher
   {
   public:
@@ -137,6 +140,8 @@ namespace lwrcl
       publish_impl(message);
     }
 
+    void publish(LoanedMessage<T> &&loaned_message);
+
     int32_t get_subscriber_count() override
     {
       return subscriber_count_.load();
@@ -154,8 +159,10 @@ namespace lwrcl
 
     bool can_loan_messages() const
     {
-      return false;
+      return true;
     }
+
+    LoanedMessage<T> borrow_loaned_message();
 
     using SharedPtr = std::shared_ptr<Publisher<T>>;
 
@@ -205,6 +212,111 @@ namespace lwrcl
     std::atomic<bool> stopped_;
     std::atomic<int32_t> subscriber_count_;
   };
+
+  template <typename T>
+  class LoanedMessage
+  {
+  public:
+    using MessageType = T;
+
+    explicit LoanedMessage(Publisher<T> &publisher)
+        : publisher_(&publisher),
+          message_(new T()),
+          is_valid_(message_ != nullptr)
+    {
+    }
+
+    LoanedMessage(LoanedMessage &&other) noexcept
+        : publisher_(other.publisher_),
+          message_(std::move(other.message_)),
+          is_valid_(other.is_valid_)
+    {
+      other.publisher_ = nullptr;
+      other.is_valid_ = false;
+    }
+
+    LoanedMessage &operator=(LoanedMessage &&other) noexcept
+    {
+      if (this != &other)
+      {
+        publisher_ = other.publisher_;
+        message_ = std::move(other.message_);
+        is_valid_ = other.is_valid_;
+        other.publisher_ = nullptr;
+        other.is_valid_ = false;
+      }
+      return *this;
+    }
+
+    LoanedMessage(const LoanedMessage &) = delete;
+    LoanedMessage &operator=(const LoanedMessage &) = delete;
+
+    bool is_valid() const
+    {
+      return is_valid_ && message_ != nullptr;
+    }
+
+    bool is_loaned() const
+    {
+      return false;
+    }
+
+    T &get()
+    {
+      if (!is_valid())
+      {
+        throw std::runtime_error("Attempting to access invalid loaned message");
+      }
+      return *message_;
+    }
+
+    const T &get() const
+    {
+      if (!is_valid())
+      {
+        throw std::runtime_error("Attempting to access invalid loaned message");
+      }
+      return *message_;
+    }
+
+    T *operator->() { return &get(); }
+    const T *operator->() const { return &get(); }
+    T &operator*() { return get(); }
+    const T &operator*() const { return get(); }
+
+    std::unique_ptr<T> release_heap_sample()
+    {
+      is_valid_ = false;
+      return std::move(message_);
+    }
+
+  private:
+    Publisher<T> *publisher_;
+    std::unique_ptr<T> message_;
+    bool is_valid_;
+  };
+
+  template <typename T>
+  LoanedMessage<T> Publisher<T>::borrow_loaned_message()
+  {
+    return LoanedMessage<T>(*this);
+  }
+
+  template <typename T>
+  void Publisher<T>::publish(LoanedMessage<T> &&loaned_message)
+  {
+    if (!loaned_message.is_valid())
+    {
+      throw std::runtime_error("Cannot publish invalid loaned message");
+    }
+
+    auto sample = loaned_message.release_heap_sample();
+    if (!sample)
+    {
+      throw std::runtime_error("Failed to publish loaned message: heap sample is invalid");
+    }
+    publish_impl(*sample);
+  }
 
 } // namespace lwrcl
 

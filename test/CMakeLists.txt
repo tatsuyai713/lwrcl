@@ -8,7 +8,17 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if(NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
+if(APPLE)
+    set(CMAKE_MACOSX_RPATH ON)
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+    list(APPEND CMAKE_INSTALL_RPATH
+        /opt/fast-dds/lib
+        /opt/fast-dds-libs/lib
+        /opt/cyclonedds/lib
+        /opt/cyclonedds-libs/lib
+        /opt/vsomeip/lib
+        /opt/vsomeip-libs/lib)
+elseif(NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 endif()
 
@@ -42,7 +52,11 @@ if(DDS_BACKEND STREQUAL "fastdds")
                         ${LWRCL_INSTALL_PREFIX}/include/optionparser)
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
 
-    set(DDS_LIBRARIES fastrtps OpenSSL::SSL OpenSSL::Crypto)
+    if(APPLE)
+        list(APPEND CMAKE_INSTALL_RPATH "${DDS_PREFIX}/lib" "${LWRCL_INSTALL_PREFIX}/lib")
+    endif()
+
+    set(DDS_LIBRARIES fastrtps fastcdr OpenSSL::SSL OpenSSL::Crypto)
 
 elseif(DDS_BACKEND STREQUAL "cyclonedds")
     set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/cyclonedds-libs)
@@ -79,26 +93,30 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
     link_directories(${DDS_PREFIX}/lib)
 
+    if(APPLE)
+        list(APPEND CMAKE_INSTALL_RPATH "${DDS_PREFIX}/lib" "${LWRCL_INSTALL_PREFIX}/lib")
+    endif()
+
     # CycloneDDS built with SHM=ON may require explicit iceoryx linkage.
     set(CYCLONEDDS_SHM_LIBRARIES "")
     if(TARGET iceoryx_binding_c::iceoryx_binding_c)
       list(APPEND CYCLONEDDS_SHM_LIBRARIES iceoryx_binding_c::iceoryx_binding_c)
-    elseif(EXISTS "${ICEORYX_PREFIX}/lib/libiceoryx_binding_c.so")
+    elseif(EXISTS "${ICEORYX_PREFIX}/lib/libiceoryx_binding_c.so" OR EXISTS "${ICEORYX_PREFIX}/lib/libiceoryx_binding_c.dylib")
       list(APPEND CYCLONEDDS_SHM_LIBRARIES iceoryx_binding_c)
     endif()
     if(TARGET iceoryx_posh::iceoryx_posh)
       list(APPEND CYCLONEDDS_SHM_LIBRARIES iceoryx_posh::iceoryx_posh)
-    elseif(EXISTS "${ICEORYX_PREFIX}/lib/libiceoryx_posh.so")
+    elseif(EXISTS "${ICEORYX_PREFIX}/lib/libiceoryx_posh.so" OR EXISTS "${ICEORYX_PREFIX}/lib/libiceoryx_posh.dylib")
       list(APPEND CYCLONEDDS_SHM_LIBRARIES iceoryx_posh)
     endif()
     if(TARGET iceoryx_hoofs::iceoryx_hoofs)
       list(APPEND CYCLONEDDS_SHM_LIBRARIES iceoryx_hoofs::iceoryx_hoofs)
-    elseif(EXISTS "${ICEORYX_PREFIX}/lib/libiceoryx_hoofs.so")
+    elseif(EXISTS "${ICEORYX_PREFIX}/lib/libiceoryx_hoofs.so" OR EXISTS "${ICEORYX_PREFIX}/lib/libiceoryx_hoofs.dylib")
       list(APPEND CYCLONEDDS_SHM_LIBRARIES iceoryx_hoofs)
     endif()
     if(TARGET iceoryx_hoofs::iceoryx_platform)
       list(APPEND CYCLONEDDS_SHM_LIBRARIES iceoryx_hoofs::iceoryx_platform)
-    elseif(EXISTS "${ICEORYX_PREFIX}/lib/libiceoryx_platform.so")
+    elseif(EXISTS "${ICEORYX_PREFIX}/lib/libiceoryx_platform.so" OR EXISTS "${ICEORYX_PREFIX}/lib/libiceoryx_platform.dylib")
       list(APPEND CYCLONEDDS_SHM_LIBRARIES iceoryx_platform)
     endif()
 
@@ -122,18 +140,36 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
     link_directories(${VSOMEIP_PREFIX}/lib)
     link_directories(${DDS_PREFIX}/lib)
 
+    if(APPLE)
+        list(APPEND CMAKE_INSTALL_RPATH "${VSOMEIP_PREFIX}/lib" "${DDS_PREFIX}/lib" "${LWRCL_INSTALL_PREFIX}/lib")
+    endif()
+
     set(DDS_LIBRARIES vsomeip3 lwrcl_cdr)
 else()
     message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', or 'vsomeip'.")
 endif()
 
 # --- Common link libraries ---------------------------------------------------
-set(COMMON_LIBS ${DDS_LIBRARIES} std_msgs sensor_msgs lwrcl yaml-cpp gtest gtest_main)
+set(COMMON_MESSAGE_LIBS std_msgs sensor_msgs)
+if(DDS_BACKEND STREQUAL "fastdds" OR DDS_BACKEND STREQUAL "cyclonedds")
+    list(APPEND COMMON_MESSAGE_LIBS fixedsized_msgs)
+endif()
+
+set(COMMON_LIBS ${DDS_LIBRARIES} ${COMMON_MESSAGE_LIBS} lwrcl yaml-cpp gtest gtest_main)
 
 # --- Helper macro to add a test executable -----------------------------------
 macro(add_lwrcl_test TEST_NAME TEST_SOURCE)
     add_executable(${TEST_NAME} ${TEST_SOURCE})
     target_link_libraries(${TEST_NAME} PRIVATE ${COMMON_LIBS})
+    target_compile_definitions(${TEST_NAME} PRIVATE
+      LWRCL_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    if(DDS_BACKEND STREQUAL "fastdds")
+      target_compile_definitions(${TEST_NAME} PRIVATE LWRCL_BACKEND_FASTDDS=1)
+    elseif(DDS_BACKEND STREQUAL "cyclonedds")
+      target_compile_definitions(${TEST_NAME} PRIVATE LWRCL_BACKEND_CYCLONEDDS=1)
+    elseif(DDS_BACKEND STREQUAL "vsomeip")
+      target_compile_definitions(${TEST_NAME} PRIVATE LWRCL_BACKEND_VSOMEIP=1)
+    endif()
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
     # Give each test a generous timeout (30 seconds)
     set_tests_properties(${TEST_NAME} PROPERTIES TIMEOUT 30)
@@ -198,9 +234,15 @@ add_lwrcl_test(test_timer_control         src/test_timer_control.cpp)
 add_lwrcl_test(test_qos_presets           src/test_qos_presets.cpp)
 
 # ============================================================================
-# Fast DDS / CycloneDDS zero-copy tests
+# Backend transport fast-path tests
 # ============================================================================
-if(DDS_BACKEND STREQUAL "fastdds" OR DDS_BACKEND STREQUAL "cyclonedds")
-    # 19. Zero-copy (LoanedMessage)
-    add_lwrcl_test(test_zero_copy         src/test_zero_copy.cpp)
+# 19. Normal ROS-compatible publish/subscribe API
+add_lwrcl_test(test_zero_copy             src/test_zero_copy.cpp)
+
+if(DDS_BACKEND STREQUAL "cyclonedds")
+    # 20. iceoryx SHM path with fixed-size messages and normal API
+    add_lwrcl_test(test_shm_zero_copy     src/test_shm_zero_copy.cpp)
+elseif(DDS_BACKEND STREQUAL "fastdds")
+    # 20. FastDDS SHM/DataSharing path with fixed-size messages and normal API
+    add_lwrcl_test(test_shm_zero_copy     src/test_shm_zero_copy.cpp)
 endif()

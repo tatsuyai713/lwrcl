@@ -22,6 +22,85 @@
 
 namespace lwrcl
 {
+  template <typename T>
+  class LoanedSubscriptionMessage
+  {
+  public:
+    struct SampleInfo
+    {
+      bool valid_data = false;
+    };
+
+    LoanedSubscriptionMessage() = default;
+
+    explicit LoanedSubscriptionMessage(std::shared_ptr<T> message)
+        : message_(std::move(message))
+    {
+    }
+
+    LoanedSubscriptionMessage(const LoanedSubscriptionMessage &) = delete;
+    LoanedSubscriptionMessage &operator=(const LoanedSubscriptionMessage &) = delete;
+
+    LoanedSubscriptionMessage(LoanedSubscriptionMessage &&other) noexcept
+        : message_(std::move(other.message_))
+    {
+    }
+
+    LoanedSubscriptionMessage &operator=(LoanedSubscriptionMessage &&other) noexcept
+    {
+      if (this != &other)
+      {
+        message_ = std::move(other.message_);
+      }
+      return *this;
+    }
+
+    bool is_valid() const
+    {
+      return message_ != nullptr;
+    }
+
+    explicit operator bool() const
+    {
+      return is_valid();
+    }
+
+    T &get()
+    {
+      if (!is_valid())
+      {
+        throw std::runtime_error("Attempting to access invalid loaned message");
+      }
+      return *message_;
+    }
+
+    const T &get() const
+    {
+      if (!is_valid())
+      {
+        throw std::runtime_error("Attempting to access invalid loaned message");
+      }
+      return *message_;
+    }
+
+    T *operator->() { return &get(); }
+    const T *operator->() const { return &get(); }
+    T &operator*() { return get(); }
+    const T &operator*() const { return get(); }
+
+    SampleInfo get_sample_info() const
+    {
+      return SampleInfo{is_valid()};
+    }
+
+    void release()
+    {
+      message_.reset();
+    }
+
+  private:
+    std::shared_ptr<T> message_;
+  };
 
   // Forward declarations
   template <typename T>
@@ -195,6 +274,19 @@ namespace lwrcl
       out_msg = std::move(*msg_ptr);
       return true;
     }
+
+    bool take_loaned(LoanedSubscriptionMessage<T> &out_loaned)
+    {
+      lwrcl::MessageInfo info;
+      std::shared_ptr<T> msg_ptr;
+      if (!take(msg_ptr, info))
+      {
+        return false;
+      }
+      out_loaned = LoanedSubscriptionMessage<T>(std::move(msg_ptr));
+      return out_loaned.is_valid();
+    }
+
     bool has_message()
     {
       std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
@@ -338,6 +430,33 @@ namespace lwrcl
     bool take(T &out_msg, lwrcl::MessageInfo &info)
     {
       return waitset_.take(out_msg, info);
+    }
+
+    bool take(std::shared_ptr<T> &out_msg, lwrcl::MessageInfo &info)
+    {
+      return waitset_.take(out_msg, info);
+    }
+
+    bool take(std::shared_ptr<T> &out_msg)
+    {
+      lwrcl::MessageInfo info;
+      return waitset_.take(out_msg, info);
+    }
+
+    bool take(T &out_msg)
+    {
+      lwrcl::MessageInfo info;
+      return waitset_.take(out_msg, info);
+    }
+
+    bool take_loaned_message(LoanedSubscriptionMessage<T> &out_loaned)
+    {
+      return waitset_.take_loaned(out_loaned);
+    }
+
+    bool can_loan_messages() const
+    {
+      return true;
     }
 
     bool has_message()

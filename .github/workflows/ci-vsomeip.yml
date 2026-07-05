@@ -110,6 +110,11 @@ jobs:
           sudo ldconfig
           ./build_all.sh vsomeip install
 
+      - name: Verify tests use normal publish API
+        run: |
+          set -euo pipefail
+          ! grep -R "borrow_loaned_message\|LoanedMessage\|LoanedSubscriptionMessage\|can_loan_messages\|is_loaned\|take_loaned" test/src test/CMakeLists.txt README.md README_JA.md
+
       # ── Run tests ───────────────────────────────────────────────────
       - name: Run tests (vsomeip)
         run: |

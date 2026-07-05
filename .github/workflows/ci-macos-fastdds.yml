@@ -1,0 +1,76 @@
+name: CI (macOS FastDDS)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DDS_PREFIX: /opt/fast-dds
+  LWRCL_PREFIX: /opt/fast-dds-libs
+  FASTDDS_GEN_PREFIX: /opt/fast-dds-gen
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install system packages
+        run: |
+          ./scripts/install_dependencies.sh
+
+      - name: Cache FastDDS
+        id: cache-fastdds
+        uses: actions/cache@v4
+        with:
+          path: |
+            /opt/fast-dds
+            /opt/fast-dds-gen
+          key: macos-fastdds-${{ runner.os }}-${{ runner.arch }}-v1
+
+      - name: Build & install FastDDS
+        if: steps.cache-fastdds.outputs.cache-hit != 'true'
+        run: |
+          ./scripts/install_fast_dds.sh
+          ./scripts/install_fast_dds_gen.sh
+
+      - name: Configure environment
+        run: |
+          echo "$DDS_PREFIX/bin" >> "$GITHUB_PATH"
+          echo "$FASTDDS_GEN_PREFIX/bin" >> "$GITHUB_PATH"
+          echo "DYLD_LIBRARY_PATH=$DDS_PREFIX/lib:$LWRCL_PREFIX/lib" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$DDS_PREFIX/lib:$LWRCL_PREFIX/lib" >> "$GITHUB_ENV"
+
+      - name: Build & install lwrcl (FastDDS)
+        run: |
+          ./build_all.sh fastdds install
+
+      - name: Verify installed FastDDS runtime profile
+        run: |
+          set -euo pipefail
+          test -f "$LWRCL_PREFIX/etc/fastdds.xml"
+          grep -q "<type>SHM</type>" "$LWRCL_PREFIX/etc/fastdds.xml"
+          grep -q "<transport_id>shm_transport</transport_id>" "$LWRCL_PREFIX/etc/fastdds.xml"
+          grep -q "<transport_id>udpv4_transport</transport_id>" "$LWRCL_PREFIX/etc/fastdds.xml"
+          ! grep -q "<interfaceWhiteList>" "$LWRCL_PREFIX/etc/fastdds.xml"
+          ! grep -q "<address>127.0.0.1</address>" "$LWRCL_PREFIX/etc/fastdds.xml"
+
+      - name: Verify tests use normal publish API
+        run: |
+          set -euo pipefail
+          ! grep -R "borrow_loaned_message\|LoanedMessage\|LoanedSubscriptionMessage\|can_loan_messages\|is_loaned\|take_loaned" test/src test/CMakeLists.txt README.md README_JA.md
+
+      - name: Run tests (FastDDS)
+        run: |
+          ./test/run_tests_fastdds.sh all

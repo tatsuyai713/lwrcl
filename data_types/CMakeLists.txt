@@ -8,6 +8,21 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(APPLE)
+    set(CMAKE_MACOSX_RPATH ON)
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+    set(LWRCL_ALLOW_MULTIPLE_DEFINITION_LINK_FLAG "")
+    list(APPEND CMAKE_INSTALL_RPATH
+        /opt/fast-dds/lib
+        /opt/fast-dds-libs/lib
+        /opt/cyclonedds/lib
+        /opt/cyclonedds-libs/lib
+        /opt/vsomeip/lib
+        /opt/vsomeip-libs/lib)
+else()
+    set(LWRCL_ALLOW_MULTIPLE_DEFINITION_LINK_FLAG "")
+endif()
+
 if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 else()
@@ -40,6 +55,10 @@ if(DDS_BACKEND STREQUAL "fastdds")
     include_directories(${LWRCL_INSTALL_PREFIX}/include
                         ${LWRCL_INSTALL_PREFIX}/include/optionparser)
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
+
+    if(APPLE)
+        list(APPEND CMAKE_INSTALL_RPATH "${LWRCL_INSTALL_PREFIX}/lib")
+    endif()
 
     add_subdirectory(src/ros-data-types-for-fastdds)
 

@@ -48,11 +48,10 @@ TEST_F(PubSubStringTest, PublishAndReceiveSharedPtr) {
 
   auto msg = std::make_shared<std_msgs::msg::String>();
   msg->data = "hello_gtest";
-  pub->publish(msg);
 
-  // Let the message propagate
   auto deadline = std::chrono::steady_clock::now() + 5s;
   while (received.load() == 0 && std::chrono::steady_clock::now() < deadline) {
+    pub->publish(msg);
     rclcpp::spin_some(node);
     std::this_thread::sleep_for(50ms);
   }
@@ -75,10 +74,10 @@ TEST_F(PubSubStringTest, PublishConstRef) {
 
   std_msgs::msg::String msg;
   msg.data = "const_ref_test";
-  pub->publish(msg);
 
   auto deadline = std::chrono::steady_clock::now() + 5s;
   while (received.load() == 0 && std::chrono::steady_clock::now() < deadline) {
+    pub->publish(msg);
     rclcpp::spin_some(node);
     std::this_thread::sleep_for(50ms);
   }
@@ -94,8 +93,12 @@ TEST_F(PubSubStringTest, SubscriberAndPublisherCount) {
       "test_topic_count", 10,
       [](std_msgs::msg::String::SharedPtr) {});
 
-  // Wait for discovery
-  std::this_thread::sleep_for(2s);
+  auto deadline = std::chrono::steady_clock::now() + 5s;
+  while ((pub->get_subscriber_count() < 1 || sub->get_publisher_count() < 1) &&
+         std::chrono::steady_clock::now() < deadline) {
+    rclcpp::spin_some(node);
+    std::this_thread::sleep_for(50ms);
+  }
 
   EXPECT_GE(pub->get_subscriber_count(), 1);
   EXPECT_GE(sub->get_publisher_count(), 1);

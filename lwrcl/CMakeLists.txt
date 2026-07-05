@@ -10,6 +10,18 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(APPLE)
+    set(CMAKE_MACOSX_RPATH ON)
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+    list(APPEND CMAKE_INSTALL_RPATH
+        /opt/fast-dds/lib
+        /opt/fast-dds-libs/lib
+        /opt/cyclonedds/lib
+        /opt/cyclonedds-libs/lib
+        /opt/vsomeip/lib
+        /opt/vsomeip-libs/lib)
+endif()
+
 if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 else()
@@ -51,6 +63,10 @@ if(DDS_BACKEND STREQUAL "fastdds")
     include_directories(${LWRCL_INSTALL_PREFIX}/include
                         ${LWRCL_INSTALL_PREFIX}/include/optionparser)
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
+
+    if(APPLE)
+        list(APPEND CMAKE_INSTALL_RPATH "${LWRCL_INSTALL_PREFIX}/lib" "${DDS_PREFIX}/lib")
+    endif()
 
     set(DDS_LIBRARIES fastrtps CACHE INTERNAL "DDS link libraries")
 
@@ -103,6 +119,10 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
     link_directories(${DDS_PREFIX}/lib)
 
+    if(APPLE)
+        list(APPEND CMAKE_INSTALL_RPATH "${LWRCL_INSTALL_PREFIX}/lib" "${DDS_PREFIX}/lib" "${ICEORYX_PREFIX}/lib")
+    endif()
+
     # CycloneDDS built with SHM=ON may require explicit iceoryx linkage.
     set(CYCLONEDDS_SHM_LIBRARIES "")
     if(TARGET iceoryx_binding_c::iceoryx_binding_c)
@@ -131,7 +151,7 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
     # The QNX cross-linker does not search -L paths for transitive (NEEDED)
     # shared-library dependencies.  Tell it explicitly where to find iceoryx
     # so that libddsc.so / libddscxx.so (built with ENABLE_SHM=ON) resolve.
-    if(CYCLONEDDS_SHM_LIBRARIES AND EXISTS "${ICEORYX_PREFIX}/lib")
+    if(CYCLONEDDS_SHM_LIBRARIES AND EXISTS "${ICEORYX_PREFIX}/lib" AND NOT APPLE)
         set(CMAKE_EXE_LINKER_FLAGS
             "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath-link,${ICEORYX_PREFIX}/lib")
         set(CMAKE_SHARED_LINKER_FLAGS
@@ -165,6 +185,10 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
     include_directories(${LWRCL_INSTALL_PREFIX}/include)
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
     link_directories(${VSOMEIP_PREFIX}/lib)
+
+    if(APPLE)
+        list(APPEND CMAKE_INSTALL_RPATH "${LWRCL_INSTALL_PREFIX}/lib" "${VSOMEIP_PREFIX}/lib")
+    endif()
 
     set(DDS_LIBRARIES vsomeip3 lwrcl_cdr CACHE INTERNAL "Transport + CDR link libraries")
 

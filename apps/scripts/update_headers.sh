@@ -9,7 +9,16 @@ camel_to_snake() {
 
 snake_to_camel() {
     local input="$1"
-    echo "$input" | sed -r 's/(^|_)([a-z])/\U\2/g'
+    awk -v value="$input" 'BEGIN {
+        n = split(value, parts, "_")
+        for (i = 1; i <= n; i++) {
+            if (parts[i] == "") {
+                continue
+            }
+            printf "%s%s", toupper(substr(parts[i], 1, 1)), substr(parts[i], 2)
+        }
+        printf "\n"
+    }'
 }
 
 folder_path="$(pwd)"
@@ -57,13 +66,23 @@ find "$folder_path" -type f -name "*.hpp" | while read -r file_path; do
 
     # <memory>インクルードを追加（既に存在しない場合のみ）
     if ! echo "$file_content" | grep -q "#include <memory>"; then
-        # ヘッダーガードの後、最初の#includeまたはnamespaceの前に<memory>を追加
+        # Insert portably; BSD sed and GNU sed disagree on the append syntax.
         if echo "$file_content" | grep -q "#ifndef.*_HPP"; then
-            # ヘッダーガードがある場合、#define行の後に追加
-            file_content=$(echo "$file_content" | sed '/^#define.*_HPP/a\\n#include <memory>')
+            file_content=$(printf '%s\n' "$file_content" | awk '
+                /^#define.*_HPP/ && !inserted {
+                    print
+                    print ""
+                    print "#include <memory>"
+                    inserted=1
+                    next
+                }
+                { print }
+            ')
         else
-            # ヘッダーガードがない場合、ファイルの先頭に追加
-            file_content=$(echo "$file_content" | sed '1i#include <memory>')
+            file_content=$(printf '%s\n' "$file_content" | awk '
+                BEGIN { print "#include <memory>" }
+                { print }
+            ')
         fi
         echo "Added #include <memory> to $file_name"
     fi
@@ -163,6 +182,96 @@ find "$folder_path" -type f -name "*.hpp" | while read -r file_path; do
     echo "Created snake_case file: ${snake_name}.hpp"
 
     echo "Modified the file $file_name"
+done
+
+# ----------------------------------------------------------------
+# Fix for case-insensitive filesystems (e.g., macOS mounted volumes)
+# On case-insensitive FS, idlc may overwrite snake_case wrappers
+# when regenerating PascalCase files (Image.hpp == image.hpp).
+# This pass ensures all wrappers contain the correct wrapper content.
+# ----------------------------------------------------------------
+echo "Ensuring snake_case wrappers are correct..."
+find "$folder_path" -type f -name "*_cyclone.hpp" | while read -r cyclone_file; do
+    base_name=$(basename "$cyclone_file" "_cyclone.hpp")
+    directory_path=$(dirname "$cyclone_file")
+
+    # Skip files that don't have an uppercase letter (shouldn't happen, but guard)
+    if [[ ! "$base_name" =~ [A-Z] ]]; then
+        continue
+    fi
+
+    snake_name=$(camel_to_snake "$base_name")
+    snake_file="$directory_path/${snake_name}.hpp"
+
+    # If the snake_case file is identical to the PascalCase name, skip
+    # (e.g., a single-lowercase-word class — unlikely but safe)
+    if [ "$snake_name" = "$base_name" ]; then
+        continue
+    fi
+
+    directory_name=$(basename "$directory_path")
+    parent_path=$(dirname "$directory_path")
+    parent_directory_path=$(basename "$parent_path")
+    include_guard=$(echo "${parent_directory_path}__${directory_name}__${snake_name}.hpp" | tr '[:lower:]' '[:upper:]' | tr '/' '_' | tr '.' '_')
+
+    # (Re)create the wrapper — idempotent
+    {
+    echo "#ifndef ${include_guard}"
+    echo "#define ${include_guard}"
+    echo ""
+    echo "#include \"dds/dds.hpp\""
+    echo "#include \"${base_name}_cyclone.hpp\""
+    echo ""
+    echo "#endif  // ${include_guard}"
+    } > "$snake_file"
+    echo "Ensured wrapper: ${snake_name}.hpp -> ${base_name}_cyclone.hpp"
+done
+
+# ----------------------------------------------------------------
+# Normalize generated-IDL includes across package/subdir boundaries.
+# idlc can emit includes such as "action_msgs/msg/GoalInfo.hpp".
+# After this script renames generated headers to *_cyclone.hpp, those
+# includes must point at the renamed headers, especially on case-sensitive
+# include resolution during macOS builds.
+# ----------------------------------------------------------------
+echo "Updating generated header includes across packages..."
+generated_root=$(dirname "$folder_path")
+find "$folder_path" -type f -name "*_cyclone.hpp" | while read -r cyclone_file; do
+    temp_file=$(mktemp)
+    changed=false
+    directory_path=$(dirname "$cyclone_file")
+
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^([[:space:]]*#include[[:space:]]+\")([^\"]+/)?([^/\"\<]+)\.hpp(\".*)$ ]]; then
+            include_prefix="${BASH_REMATCH[1]}"
+            include_dir="${BASH_REMATCH[2]}"
+            header_name="${BASH_REMATCH[3]}"
+            include_suffix="${BASH_REMATCH[4]}"
+
+            if [[ "$header_name" != *_cyclone ]]; then
+                if [ -n "$include_dir" ]; then
+                    candidate="${generated_root}/${include_dir}${header_name}_cyclone.hpp"
+                else
+                    candidate="${directory_path}/${header_name}_cyclone.hpp"
+                fi
+
+                if [ -f "$candidate" ]; then
+                    echo "${include_prefix}${include_dir}${header_name}_cyclone.hpp${include_suffix}" >> "$temp_file"
+                    echo "  Updated generated include in $(basename "$cyclone_file"): ${include_dir}${header_name}.hpp -> ${include_dir}${header_name}_cyclone.hpp"
+                    changed=true
+                    continue
+                fi
+            fi
+        fi
+
+        echo "$line" >> "$temp_file"
+    done < "$cyclone_file"
+
+    if [ "$changed" = "true" ]; then
+        mv "$temp_file" "$cyclone_file"
+    else
+        rm -f "$temp_file"
+    fi
 done
 
 # サービス用のリクエスト/レスポンス処理

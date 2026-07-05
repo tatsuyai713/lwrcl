@@ -126,7 +126,7 @@ if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]] && command -v apt-get >/dev/null 2>&1; th
 fi
 
 ${SUDO} mkdir -p "${INSTALL_PREFIX}"
-${SUDO} chmod 777 -R "${INSTALL_PREFIX}"
+${SUDO} chmod -R 777 "${INSTALL_PREFIX}"
 
 # shellcheck disable=SC1090
 source ~/"${QNX_PATH}/qnxsdp-env.sh"

@@ -96,7 +96,7 @@ namespace lwrcl
     bool as_bool() const;
     int as_int() const;
     double as_double() const;
-    std::string as_string() const;
+    std::string as_string() const override;
     std::vector<bool> as_bool_array() const;
     std::vector<int> as_integer_array() const;
     std::vector<double> as_double_array() const;
@@ -138,7 +138,8 @@ namespace lwrcl
         {
           oss << ",";
         }
-        oss << vec[i];
+        const typename std::vector<T>::value_type value = vec[i];
+        oss << value;
       }
       return oss.str();
     }
@@ -378,8 +379,8 @@ namespace lwrcl
     virtual ~Node();
     Node(const Node &) = delete;
     Node &operator=(const Node &) = delete;
-    Node(Node &&) = default;
-    Node &operator=(Node &&) = default;
+    Node(Node &&) = delete;
+    Node &operator=(Node &&) = delete;
 
     void set_parameters(const std::vector<std::shared_ptr<ParameterBase>> &parameters);
     void set_parameters(const std::vector<Parameter> &parameters);
@@ -539,8 +540,8 @@ namespace lwrcl
 
       SingleThreadedExecutor(const SingleThreadedExecutor &) = delete;
       SingleThreadedExecutor &operator=(const SingleThreadedExecutor &) = delete;
-      SingleThreadedExecutor(SingleThreadedExecutor &&) = default;
-      SingleThreadedExecutor &operator=(SingleThreadedExecutor &&) = default;
+      SingleThreadedExecutor(SingleThreadedExecutor &&) = delete;
+      SingleThreadedExecutor &operator=(SingleThreadedExecutor &&) = delete;
 
       void add_node(Node::SharedPtr node);
       void remove_node(Node::SharedPtr node);
@@ -564,8 +565,8 @@ namespace lwrcl
 
       MultiThreadedExecutor(const MultiThreadedExecutor &) = delete;
       MultiThreadedExecutor &operator=(const MultiThreadedExecutor &) = delete;
-      MultiThreadedExecutor(MultiThreadedExecutor &&) = default;
-      MultiThreadedExecutor &operator=(MultiThreadedExecutor &&) = default;
+      MultiThreadedExecutor(MultiThreadedExecutor &&) = delete;
+      MultiThreadedExecutor &operator=(MultiThreadedExecutor &&) = delete;
 
       void add_node(Node::SharedPtr node);
       void remove_node(Node::SharedPtr node);

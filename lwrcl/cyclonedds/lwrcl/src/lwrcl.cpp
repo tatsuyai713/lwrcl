@@ -81,6 +81,37 @@ namespace lwrcl
           static_cast<uint32_t>(nanoseconds.count()));
     }
 
+    bool file_exists(const char *path)
+    {
+      return path != nullptr && ::access(path, R_OK) == 0;
+    }
+
+    void configure_cyclonedds_shm_default()
+    {
+      if (std::getenv("CYCLONEDDS_URI") != nullptr)
+      {
+        return;
+      }
+
+      static const char *config_candidates[] = {
+          "/opt/qnx/cyclonedds-libs/etc/cyclonedds-lwrcl.xml",
+          "/opt/cyclonedds-libs/etc/cyclonedds-lwrcl.xml",
+          "/opt/qnx/cyclonedds/etc/cyclonedds-lwrcl.xml",
+          "/opt/cyclonedds/etc/cyclonedds-lwrcl.xml",
+          "./cyclonedds-lwrcl.xml",
+      };
+
+      for (const char *candidate : config_candidates)
+      {
+        if (file_exists(candidate))
+        {
+          std::string uri = std::string("file://") + candidate;
+          ::setenv("CYCLONEDDS_URI", uri.c_str(), 0);
+          return;
+        }
+      }
+    }
+
     bool parse_parameter_int(const std::string &text, int &value)
     {
       if (text.empty()) return false;
@@ -761,6 +792,7 @@ namespace lwrcl
       , participant_owned_(true)  // <-- then participant_owned_
       , parameters_()
   {
+    configure_cyclonedds_shm_default();
     try {
       dds::domain::qos::DomainParticipantQos participant_qos;
       dds::domain::DomainParticipant dp(domain_id, participant_qos);
@@ -785,6 +817,7 @@ namespace lwrcl
       , participant_owned_(true)
       , parameters_()
   {
+    configure_cyclonedds_shm_default();
     try {
       dds::domain::qos::DomainParticipantQos participant_qos;
       dds::domain::DomainParticipant dp(domain_id, participant_qos);
@@ -809,6 +842,7 @@ namespace lwrcl
       , participant_owned_(true)
       , parameters_()
   {
+    configure_cyclonedds_shm_default();
     try {
       dds::domain::qos::DomainParticipantQos participant_qos;
       dds::domain::DomainParticipant dp(domain_id, participant_qos);
@@ -833,6 +867,7 @@ namespace lwrcl
       , participant_owned_(true)
       , parameters_()
   {
+    configure_cyclonedds_shm_default();
     try {
       dds::domain::qos::DomainParticipantQos participant_qos;
       dds::domain::DomainParticipant dp(domain_id, participant_qos);
@@ -858,6 +893,7 @@ namespace lwrcl
       , parameters_()
   {
     int domain_id = 0; // Default domain ID
+    configure_cyclonedds_shm_default();
     try {
       dds::domain::qos::DomainParticipantQos participant_qos;
       dds::domain::DomainParticipant dp(domain_id, participant_qos);
@@ -883,6 +919,7 @@ namespace lwrcl
       , parameters_()
   {
     int domain_id = 0;
+    configure_cyclonedds_shm_default();
     try {
       dds::domain::qos::DomainParticipantQos participant_qos;
       dds::domain::DomainParticipant dp(domain_id, participant_qos);
@@ -908,6 +945,7 @@ namespace lwrcl
       , parameters_()
   {
     int domain_id = 0;
+    configure_cyclonedds_shm_default();
     try {
       dds::domain::qos::DomainParticipantQos participant_qos;
       dds::domain::DomainParticipant dp(domain_id, participant_qos);

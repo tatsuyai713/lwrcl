@@ -5,8 +5,15 @@ BACKEND="${1:-}"
 ACTION="${2:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JOBS=$(nproc 2>/dev/null || echo 4)
+if command -v nproc >/dev/null 2>&1; then
+    JOBS=$(nproc)
+elif [ "$(uname -s)" = "Darwin" ]; then
+    JOBS=$(sysctl -n hw.ncpu)
+else
+    JOBS=4
+fi
 CMAKE_DDS_BACKEND="$BACKEND"
+BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
 
 if [ "$BACKEND" = "fastdds" ]; then
     DDS_PREFIX="/opt/fast-dds"
@@ -40,6 +47,13 @@ sudo mkdir -p "$LWRCL_PREFIX"
 
 if [ -n "${DDS_PREFIX:-}" ]; then
     export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="${DDS_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
+fi
+if [ -n "${VSOMEIP_PREFIX:-}" ]; then
+    export DYLD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
+fi
+if [ -n "${BREW_PREFIX}" ]; then
+    export PATH="${BREW_PREFIX}/opt/bison/bin:${BREW_PREFIX}/opt/flex/bin:${PATH}"
 fi
 
 CMAKE_ARGS=(
@@ -53,6 +67,13 @@ CMAKE_ARGS=(
     -DYAML_CPP_BUILD_TOOLS=OFF
     -DYAML_CPP_BUILD_TESTS=OFF
 )
+
+if [ "$(uname -s)" = "Darwin" ]; then
+    CMAKE_ARGS+=(
+        -DCMAKE_MACOSX_RPATH=ON
+        -DCMAKE_INSTALL_RPATH="${LWRCL_PREFIX}/lib;${DDS_PREFIX:-}/lib;${VSOMEIP_PREFIX:-}/lib"
+    )
+fi
 
 if [ "$BACKEND" = "fastdds" ]; then
     CMAKE_ARGS+=(

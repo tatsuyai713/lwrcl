@@ -6,8 +6,28 @@
         "file": { "enable": "false" },
         "dlt": "false"
     },
-    "applications": [],
+    "applications": [
+        { "name": "routingmanagerd", "id": "0x0001" }
+    ],
     "services": [],
+    "routing": {
+        "host": {
+            "name": "routingmanagerd",
+            "unicast": "127.0.0.1",
+            "port": "31490"
+        },
+        "guests": {
+            "unicast": "127.0.0.1",
+            "ports": {
+                "lwrcl": {
+                    "range": {
+                        "first": "31492",
+                        "last": "31999"
+                    }
+                }
+            }
+        }
+    },
     "service-discovery": {
         "enable": "true",
         "multicast": "224.244.224.245",

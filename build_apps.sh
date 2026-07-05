@@ -5,7 +5,45 @@ BACKEND="${1:-}"
 ACTION="${2:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JOBS=$(nproc 2>/dev/null || echo 4)
+if command -v nproc >/dev/null 2>&1; then
+    JOBS=$(nproc)
+elif [ "$(uname -s)" = "Darwin" ]; then
+    JOBS=$(sysctl -n hw.ncpu)
+else
+    JOBS=4
+fi
+BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
+
+resolve_fastddsgen() {
+    local configured="${FASTDDS_GEN_BIN:-${FASTDDS_GEN_PREFIX:-}}"
+    local candidate
+
+    if [ -n "${configured}" ]; then
+        if [ -x "${configured}" ] && [ ! -d "${configured}" ]; then
+            printf '%s\n' "${configured}"
+            return 0
+        fi
+        if [ -x "${configured}/bin/fastddsgen" ]; then
+            printf '%s\n' "${configured}/bin/fastddsgen"
+            return 0
+        fi
+    fi
+
+    for candidate in /opt/fast-dds-gen/bin/fastddsgen
+    do
+        if [ -x "${candidate}" ]; then
+            printf '%s\n' "${candidate}"
+            return 0
+        fi
+    done
+
+    if command -v fastddsgen >/dev/null 2>&1; then
+        command -v fastddsgen
+        return 0
+    fi
+
+    return 1
+}
 
 if [ "$BACKEND" = "fastdds" ]; then
     DDS_PREFIX="/opt/fast-dds"
@@ -40,11 +78,16 @@ fi
 mkdir -p "$INSTALL_DIR"
 
 export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+export DYLD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LWRCL_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
 
 # Add iceoryx libraries if present (used by CycloneDDS SHM/zero-copy)
 ICEORYX_PREFIX="${ICEORYX_PREFIX:-/opt/iceoryx}"
 if [ -d "${ICEORYX_PREFIX}/lib" ]; then
     export LD_LIBRARY_PATH="${ICEORYX_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="${ICEORYX_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
+fi
+if [ -n "${BREW_PREFIX}" ]; then
+    export PATH="${BREW_PREFIX}/opt/bison/bin:${BREW_PREFIX}/opt/flex/bin:${PATH}"
 fi
 
 CMAKE_ARGS=(
@@ -55,8 +98,22 @@ CMAKE_ARGS=(
     -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"
 )
 
+if [ "$(uname -s)" = "Darwin" ]; then
+    CMAKE_ARGS+=(
+        -DCMAKE_MACOSX_RPATH=ON
+        -DCMAKE_INSTALL_RPATH="${INSTALL_DIR}/lib;${LWRCL_PREFIX}/lib;${DDS_PREFIX:-}/lib;${VSOMEIP_PREFIX:-}/lib;${AUTOSAR_AP_PREFIX:-}/lib"
+    )
+fi
+
 if [ "$BACKEND" = "fastdds" ]; then
-    export PATH="/opt/fast-dds-gen/bin:${DDS_PREFIX}/bin:${PATH}"
+    FASTDDSGEN_EXECUTABLE="$(resolve_fastddsgen || true)"
+    if [ -z "${FASTDDSGEN_EXECUTABLE}" ]; then
+        echo "fastddsgen not found. Install Fast DDS Gen or set FASTDDS_GEN_PREFIX to its install prefix, or FASTDDS_GEN_BIN to the fastddsgen executable."
+        echo "Checked: ${FASTDDS_GEN_PREFIX:-/opt/fast-dds-gen}/bin/fastddsgen, /opt/fast-dds-gen/bin/fastddsgen, and PATH."
+        exit 1
+    fi
+    export PATH="$(dirname "${FASTDDSGEN_EXECUTABLE}"):${DDS_PREFIX}/bin:${PATH}"
+    echo "Using fastddsgen: ${FASTDDSGEN_EXECUTABLE}"
     CMAKE_ARGS+=(
         -DCMAKE_SYSTEM_PREFIX_PATH="$LWRCL_PREFIX"
         -DCMAKE_PREFIX_PATH="$LWRCL_PREFIX"
@@ -74,6 +131,7 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
 elif [ "$BACKEND" = "vsomeip" ]; then
     export PATH="${DDS_PREFIX}/bin:${PATH}"
     export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
     CMAKE_ARGS+=(
         -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
         -DVSOMEIP_PREFIX="${VSOMEIP_PREFIX}"
@@ -81,6 +139,7 @@ elif [ "$BACKEND" = "vsomeip" ]; then
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
     export PATH="${AUTOSAR_AP_PREFIX}/bin:${DDS_PREFIX}/bin:${PATH}"
     export LD_LIBRARY_PATH="${AUTOSAR_AP_PREFIX}/lib:${DDS_PREFIX}/lib:${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="${AUTOSAR_AP_PREFIX}/lib:${DDS_PREFIX}/lib:${VSOMEIP_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
     AUTOSAR_EVENT_BINDING="${AUTOSAR_EVENT_BINDING:-auto}"
     AUTOSAR_GEN_DIR="${BUILD_DIR}/autosar"
     AUTOSAR_GEN_MAPPING="${AUTOSAR_GEN_DIR}/lwrcl_autosar_topic_mapping.yaml"

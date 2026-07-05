@@ -76,11 +76,16 @@ if [[ "${EUID}" -ne 0 ]]; then
   fi
 fi
 
-if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]] && command -v apt-get >/dev/null 2>&1; then
-  if ! dpkg -l | grep -qw openjdk-11-jre || ! dpkg -l | grep -qw openjdk-11-jdk; then
-    ${SUDO} apt-get update -qq
-    ${SUDO} apt-get purge -y openjdk-* default-jdk default-jre --autoremove || true
-    ${SUDO} apt-get install -y openjdk-11-jre openjdk-11-jdk
+if [[ "${SKIP_SYSTEM_DEPS}" != "ON" ]]; then
+  if command -v apt-get >/dev/null 2>&1; then
+    if ! dpkg -l | grep -qw openjdk-11-jre || ! dpkg -l | grep -qw openjdk-11-jdk; then
+      ${SUDO} apt-get update -qq
+      ${SUDO} apt-get purge -y openjdk-* default-jdk default-jre --autoremove || true
+      ${SUDO} apt-get install -y openjdk-11-jre openjdk-11-jdk wget unzip
+    fi
+  elif command -v brew >/dev/null 2>&1; then
+    brew update
+    brew install openjdk@11 wget unzip || true
   fi
 fi
 
@@ -96,7 +101,16 @@ ${SUDO} wget "https://services.gradle.org/distributions/gradle-${GRADLE_TAG}-bin
 ${SUDO} unzip "gradle-${GRADLE_TAG}-bin.zip"
 ${SUDO} rm -f "gradle-${GRADLE_TAG}-bin.zip"
 
-export JAVA_HOME="$(readlink -f /usr/bin/java | sed "s:bin/java::")"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  if /usr/libexec/java_home -v 11 >/dev/null 2>&1; then
+    export JAVA_HOME="$(/usr/libexec/java_home -v 11)"
+  else
+    BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
+    export JAVA_HOME="${BREW_PREFIX}/opt/openjdk@11/libexec/openjdk.jdk/Contents/Home"
+  fi
+else
+  export JAVA_HOME="$(readlink -f /usr/bin/java | sed "s:bin/java::")"
+fi
 export PATH="${PATH}:${GRADLE_PREFIX}/gradle-${GRADLE_TAG}/bin"
 
 # Install Fast-DDS-Gen
@@ -105,19 +119,41 @@ ${SUDO} rm -rf "${INSTALL_PREFIX}"
 ${SUDO} mkdir -p "${INSTALL_PREFIX}"
 git clone --recursive -b "v${FAST_DDS_GEN_TAG}" https://github.com/eProsima/Fast-DDS-Gen.git fast-dds-gen
 cd fast-dds-gen
-gradle assemble
-${SUDO} "${GRADLE_PREFIX}/gradle-${GRADLE_TAG}/bin/gradle" install --install_path="${INSTALL_PREFIX}"
 
-# Update bashrc
-sed -i -e "/export PATH=.*gradle.*\/bin/d" ~/.bashrc
-echo "export PATH=\$PATH:${GRADLE_PREFIX}/gradle-${GRADLE_TAG}/bin" >> ~/.bashrc
+"${GRADLE_PREFIX}/gradle-${GRADLE_TAG}/bin/gradle" --no-daemon clean jar
+if [[ ! -f "share/fastddsgen/java/fastddsgen.jar" ]]; then
+  echo "[ERROR] Gradle did not produce share/fastddsgen/java/fastddsgen.jar." >&2
+  exit 1
+fi
 
-sed -i -e '/export JAVA_HOME=/d' ~/.bashrc
-echo 'export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")' >> ~/.bashrc
+${SUDO} env \
+  "JAVA_HOME=${JAVA_HOME}" \
+  "PATH=${PATH}" \
+  "${GRADLE_PREFIX}/gradle-${GRADLE_TAG}/bin/gradle" \
+  --no-daemon install --install_path="${INSTALL_PREFIX}"
 
-sed -i -e "/export PATH=.*fast-dds-gen\/bin/d" ~/.bashrc
-echo "export PATH=\$PATH:${INSTALL_PREFIX}/bin" >> ~/.bashrc
+if [[ ! -x "${INSTALL_PREFIX}/bin/fastddsgen" ]] || [[ ! -f "${INSTALL_PREFIX}/share/fastddsgen/java/fastddsgen.jar" ]]; then
+  echo "[ERROR] Fast-DDS-Gen install failed under ${INSTALL_PREFIX}." >&2
+  exit 1
+fi
 
-${SUDO} ldconfig
+# Update shell startup file with tool paths.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  SHELL_RC="${HOME}/.zshrc"
+  sed -i '' -e "/export PATH=.*gradle.*\/bin/d" "${SHELL_RC}" 2>/dev/null || true
+  sed -i '' -e '/export JAVA_HOME=/d' "${SHELL_RC}" 2>/dev/null || true
+  sed -i '' -e "/export PATH=.*fast-dds-gen\/bin/d" "${SHELL_RC}" 2>/dev/null || true
+else
+  SHELL_RC="${HOME}/.bashrc"
+  sed -i -e "/export PATH=.*gradle.*\/bin/d" "${SHELL_RC}" 2>/dev/null || true
+  sed -i -e '/export JAVA_HOME=/d' "${SHELL_RC}" 2>/dev/null || true
+  sed -i -e "/export PATH=.*fast-dds-gen\/bin/d" "${SHELL_RC}" 2>/dev/null || true
+fi
+echo "export JAVA_HOME=\"${JAVA_HOME}\"" >> "${SHELL_RC}"
+echo "export PATH=\"\$PATH:${GRADLE_PREFIX}/gradle-${GRADLE_TAG}/bin:${INSTALL_PREFIX}/bin\"" >> "${SHELL_RC}"
+
+if command -v ldconfig >/dev/null 2>&1; then
+  ${SUDO} ldconfig
+fi
 
 echo "[OK] Installed Fast-DDS-Gen v${FAST_DDS_GEN_TAG} to ${INSTALL_PREFIX}"
