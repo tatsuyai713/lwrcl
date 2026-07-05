@@ -142,16 +142,5 @@ set(_RMME_LINK_LIBS
 target_link_libraries(sensor_bundle_publisher  PRIVATE ${_RMME_LINK_LIBS})
 target_link_libraries(sensor_bundle_subscriber PRIVATE ${_RMME_LINK_LIBS})
 
-# ── Install ───────────────────────────────────────────────────────────────
-if(DDS_BACKEND STREQUAL "fastdds")
-  set(_RMME_INSTALL_PREFIX "/opt/fast-dds-apps")
-elseif(DDS_BACKEND STREQUAL "cyclonedds")
-  set(_RMME_INSTALL_PREFIX "/opt/cyclonedds-apps")
-elseif(DDS_BACKEND STREQUAL "vsomeip")
-  set(_RMME_INSTALL_PREFIX "/opt/vsomeip-apps")
-elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
-  set(_RMME_INSTALL_PREFIX "/opt/autosar-ap-apps")
-endif()
-
 install(TARGETS sensor_bundle_publisher sensor_bundle_subscriber
-        RUNTIME DESTINATION "${_RMME_INSTALL_PREFIX}/bin/${PROJECT_NAME}")
+        RUNTIME DESTINATION "bin/${PROJECT_NAME}")

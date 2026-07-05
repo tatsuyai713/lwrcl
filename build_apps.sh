@@ -14,6 +14,33 @@ else
 fi
 BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
 
+ensure_dir() {
+    local dir="$1"
+    if mkdir -p "$dir" 2>/dev/null; then
+        return
+    fi
+    sudo mkdir -p "$dir"
+}
+
+copy_file() {
+    local src="$1"
+    local dst="$2"
+    if cp "$src" "$dst" 2>/dev/null; then
+        return
+    fi
+    sudo cp "$src" "$dst"
+}
+
+cmake_install() {
+    local build_dir="$1"
+    local prefix="$2"
+    if [ -w "$prefix" ]; then
+        cmake --install "$build_dir" --prefix "$prefix"
+    else
+        sudo cmake --install "$build_dir" --prefix "$prefix"
+    fi
+}
+
 resolve_fastddsgen() {
     local configured="${FASTDDS_GEN_BIN:-${FASTDDS_GEN_PREFIX:-}}"
     local candidate
@@ -46,20 +73,20 @@ resolve_fastddsgen() {
 }
 
 if [ "$BACKEND" = "fastdds" ]; then
-    DDS_PREFIX="/opt/fast-dds"
-    LWRCL_PREFIX="/opt/fast-dds-libs"
+    DDS_PREFIX="${DDS_PREFIX:-/opt/fast-dds}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/fast-dds-libs}"
 elif [ "$BACKEND" = "cyclonedds" ]; then
-    DDS_PREFIX="/opt/cyclonedds"
-    LWRCL_PREFIX="/opt/cyclonedds-libs"
+    DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/cyclonedds-libs}"
 elif [ "$BACKEND" = "vsomeip" ]; then
-    DDS_PREFIX="/opt/cyclonedds"
-    VSOMEIP_PREFIX="/opt/vsomeip"
-    LWRCL_PREFIX="/opt/vsomeip-libs"
-elif [ "$BACKEND" = "adaptive-autosar" ]; then
-    AUTOSAR_AP_PREFIX="/opt/autosar-ap"
-    DDS_PREFIX="/opt/cyclonedds"
+    DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
     VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
-    LWRCL_PREFIX="/opt/autosar-ap-libs"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/vsomeip-libs}"
+elif [ "$BACKEND" = "adaptive-autosar" ]; then
+    AUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX:-/opt/autosar-ap}"
+    DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
+    VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/autosar-ap-libs}"
     AUTOSAR_APP_SOURCE_ROOT="${AUTOSAR_APP_SOURCE_ROOT:-${SCRIPT_DIR}/apps}"
 else
     echo "Usage: $0 <fastdds|cyclonedds|vsomeip|adaptive-autosar> [install|clean]"
@@ -67,7 +94,7 @@ else
 fi
 
 BUILD_DIR="${SCRIPT_DIR}/apps/build-${BACKEND}"
-INSTALL_DIR="${SCRIPT_DIR}/apps/install-${BACKEND}"
+INSTALL_DIR="${APPS_INSTALL_DIR:-${SCRIPT_DIR}/apps/install-${BACKEND}}"
 
 if [ "$ACTION" = "clean" ]; then
     rm -rf "$BUILD_DIR"
@@ -96,6 +123,7 @@ CMAKE_ARGS=(
     -DCMAKE_BUILD_TYPE=Debug
     -DDDS_BACKEND="$BACKEND"
     -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"
+    -DLWRCL_INSTALL_PREFIX="$LWRCL_PREFIX"
 )
 
 if [ "$(uname -s)" = "Darwin" ]; then
@@ -117,6 +145,7 @@ if [ "$BACKEND" = "fastdds" ]; then
     CMAKE_ARGS+=(
         -DCMAKE_SYSTEM_PREFIX_PATH="$LWRCL_PREFIX"
         -DCMAKE_PREFIX_PATH="$LWRCL_PREFIX"
+        -DDDS_PREFIX="$DDS_PREFIX"
         -Dfastcdr_DIR="${DDS_PREFIX}/lib/cmake/fastcdr/"
         -Dfastrtps_DIR="${DDS_PREFIX}/share/fastrtps/cmake/"
         -Dfoonathan_memory_DIR="${DDS_PREFIX}/lib/foonathan_memory/cmake/"
@@ -126,6 +155,8 @@ if [ "$BACKEND" = "fastdds" ]; then
 elif [ "$BACKEND" = "cyclonedds" ]; then
     export PATH="${DDS_PREFIX}/bin:${PATH}"
     CMAKE_ARGS+=(
+        -DDDS_PREFIX="$DDS_PREFIX"
+        -DICEORYX_PREFIX="$ICEORYX_PREFIX"
         -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
     )
 elif [ "$BACKEND" = "vsomeip" ]; then
@@ -133,6 +164,7 @@ elif [ "$BACKEND" = "vsomeip" ]; then
     export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
     export DYLD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
     CMAKE_ARGS+=(
+        -DDDS_PREFIX="$DDS_PREFIX"
         -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
         -DVSOMEIP_PREFIX="${VSOMEIP_PREFIX}"
     )
@@ -227,6 +259,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
 
     CMAKE_ARGS+=(
         -DAUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX}"
+        -DLWRCL_INSTALL_PREFIX="$LWRCL_PREFIX"
         -DDDS_PREFIX="${DDS_PREFIX}"
         -DVSOMEIP_PREFIX="${VSOMEIP_PREFIX}"
         -DAUTOSAR_GENERATED_PROXY_SKELETON_DIR="${AUTOSAR_GEN_PROXY_SKELETON_DIR}"
@@ -238,23 +271,23 @@ cmake "${CMAKE_ARGS[@]}"
 cmake --build "$BUILD_DIR" -j "$JOBS"
 
 if [ "$ACTION" = "install" ]; then
-    sudo cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
+    cmake_install "$BUILD_DIR" "$INSTALL_DIR"
     if [ "$BACKEND" = "adaptive-autosar" ]; then
         AUTOSAR_INSTALL_DIR="${LWRCL_PREFIX}/share/lwrcl/autosar"
-        sudo mkdir -p "${AUTOSAR_INSTALL_DIR}"
-        sudo cp "${AUTOSAR_GEN_MAPPING}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_topic_mapping.yaml"
-        sudo cp "${AUTOSAR_GEN_MANIFEST_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest.yaml"
+        ensure_dir "${AUTOSAR_INSTALL_DIR}"
+        copy_file "${AUTOSAR_GEN_MAPPING}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_topic_mapping.yaml"
+        copy_file "${AUTOSAR_GEN_MANIFEST_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest.yaml"
         if [ -f "${AUTOSAR_GEN_MANIFEST_DDS_YAML}" ]; then
-            sudo cp "${AUTOSAR_GEN_MANIFEST_DDS_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest_dds.yaml"
+            copy_file "${AUTOSAR_GEN_MANIFEST_DDS_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest_dds.yaml"
         fi
         if [ -f "${AUTOSAR_GEN_MANIFEST_ICEORYX_YAML}" ]; then
-            sudo cp "${AUTOSAR_GEN_MANIFEST_ICEORYX_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest_iceoryx.yaml"
+            copy_file "${AUTOSAR_GEN_MANIFEST_ICEORYX_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest_iceoryx.yaml"
         fi
         if [ -f "${AUTOSAR_GEN_MANIFEST_VSOMEIP_YAML}" ]; then
-            sudo cp "${AUTOSAR_GEN_MANIFEST_VSOMEIP_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest_vsomeip.yaml"
+            copy_file "${AUTOSAR_GEN_MANIFEST_VSOMEIP_YAML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest_vsomeip.yaml"
         fi
         if [ -f "${AUTOSAR_GEN_ARXML}" ]; then
-            sudo cp "${AUTOSAR_GEN_ARXML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest.arxml"
+            copy_file "${AUTOSAR_GEN_ARXML}" "${AUTOSAR_INSTALL_DIR}/lwrcl_autosar_manifest.arxml"
         fi
     fi
 fi

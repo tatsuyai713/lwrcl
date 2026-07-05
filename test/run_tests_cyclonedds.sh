@@ -7,9 +7,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-DDS_PREFIX="/opt/cyclonedds"
-LWRCL_PREFIX="/opt/cyclonedds-libs"
-ICEORYX_PREFIX="/opt/iceoryx"
+DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
+LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/cyclonedds-libs}"
+ICEORYX_PREFIX="${ICEORYX_PREFIX:-/opt/iceoryx}"
 BUILD_DIR="${SCRIPT_DIR}/build-cyclonedds"
 ROUDI_PID=""
 if command -v nproc >/dev/null 2>&1; then

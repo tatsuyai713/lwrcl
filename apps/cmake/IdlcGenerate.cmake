@@ -29,7 +29,24 @@ function(idlc_generate)
   endif()
 
   if(NOT IDLCG_IDL_INCLUDE_PREFIX)
-    set(IDLCG_IDL_INCLUDE_PREFIX "/opt/cyclonedds-libs/include")
+    if(LWRCL_INSTALL_PREFIX)
+      set(IDLCG_IDL_INCLUDE_PREFIX "${LWRCL_INSTALL_PREFIX}/include")
+    else()
+      set(IDLCG_IDL_INCLUDE_PREFIX "/opt/cyclonedds-libs/include")
+    endif()
+  endif()
+
+  set(IDLCG_COMMAND "${IDLCG_IDLC}")
+  if(APPLE)
+    set(ICEORYX_PREFIX "$ENV{ICEORYX_PREFIX}" CACHE PATH "iceoryx install prefix")
+    if(NOT ICEORYX_PREFIX)
+      set(ICEORYX_PREFIX "/opt/iceoryx" CACHE PATH "iceoryx install prefix" FORCE)
+    endif()
+    set(IDLCG_COMMAND
+      ${CMAKE_COMMAND} -E env
+      "DYLD_LIBRARY_PATH=${ICEORYX_PREFIX}/lib:${LWRCL_INSTALL_PREFIX}/lib:$ENV{DYLD_LIBRARY_PATH}"
+      "LD_LIBRARY_PATH=${ICEORYX_PREFIX}/lib:${LWRCL_INSTALL_PREFIX}/lib:$ENV{LD_LIBRARY_PATH}"
+      "${IDLCG_IDLC}")
   endif()
 
   # 生成先ディレクトリ
@@ -61,7 +78,7 @@ function(idlc_generate)
     add_custom_command(
       OUTPUT "${GEN_CPP}"
       WORKING_DIRECTORY "${GEN_MSG_DIR}"
-      COMMAND "${IDLCG_IDLC}"
+      COMMAND ${IDLCG_COMMAND}
               -l cxx
               -fcase-sensitive
               -I "${IDLCG_IDL_ROOT}"

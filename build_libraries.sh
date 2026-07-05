@@ -15,21 +15,39 @@ fi
 CMAKE_DDS_BACKEND="$BACKEND"
 BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
 
+ensure_dir() {
+    local dir="$1"
+    if mkdir -p "$dir" 2>/dev/null; then
+        return
+    fi
+    sudo mkdir -p "$dir"
+}
+
+cmake_install() {
+    local build_dir="$1"
+    local prefix="$2"
+    if [ -w "$prefix" ]; then
+        cmake --install "$build_dir" --prefix "$prefix"
+    else
+        sudo cmake --install "$build_dir" --prefix "$prefix"
+    fi
+}
+
 if [ "$BACKEND" = "fastdds" ]; then
-    DDS_PREFIX="/opt/fast-dds"
-    LWRCL_PREFIX="/opt/fast-dds-libs"
+    DDS_PREFIX="${DDS_PREFIX:-/opt/fast-dds}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/fast-dds-libs}"
 elif [ "$BACKEND" = "cyclonedds" ]; then
-    DDS_PREFIX="/opt/cyclonedds"
-    LWRCL_PREFIX="/opt/cyclonedds-libs"
+    DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/cyclonedds-libs}"
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
     # libraries/CMakeLists.txt has no adaptive-autosar backend.
     # Build yaml-cpp with CycloneDDS settings and install it into autosar-ap-libs.
-    DDS_PREFIX="/opt/cyclonedds"
-    LWRCL_PREFIX="/opt/autosar-ap-libs"
+    DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/autosar-ap-libs}"
     CMAKE_DDS_BACKEND="cyclonedds"
 elif [ "$BACKEND" = "vsomeip" ]; then
-    VSOMEIP_PREFIX="/opt/vsomeip"
-    LWRCL_PREFIX="/opt/vsomeip-libs"
+    VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/vsomeip-libs}"
 else
     echo "Usage: $0 <fastdds|cyclonedds|adaptive-autosar|vsomeip> [install|clean]"
     exit 1
@@ -43,7 +61,7 @@ if [ "$ACTION" = "clean" ]; then
     exit 0
 fi
 
-sudo mkdir -p "$LWRCL_PREFIX"
+ensure_dir "$LWRCL_PREFIX"
 
 if [ -n "${DDS_PREFIX:-}" ]; then
     export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
@@ -99,5 +117,5 @@ cmake "${CMAKE_ARGS[@]}"
 cmake --build "$BUILD_DIR" -j "$JOBS"
 
 if [ "$ACTION" = "install" ]; then
-    sudo cmake --install "$BUILD_DIR" --prefix "$LWRCL_PREFIX"
+    cmake_install "$BUILD_DIR" "$LWRCL_PREFIX"
 fi

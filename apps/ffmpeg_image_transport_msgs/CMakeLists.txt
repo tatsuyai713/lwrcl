@@ -10,7 +10,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_compile_options(-Wall -Wextra -Wnon-virtual-dtor -Wno-deprecated-declarations -Wno-unused-result)
 
 set(UPDATE_HEADERS_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/update_headers.sh")
-set(IDLC_EXECUTABLE /opt/cyclonedds/bin/idlc)
+if(DEFINED DDS_PREFIX)
+  set(IDLC_EXECUTABLE "${DDS_PREFIX}/bin/idlc")
+else()
+  set(IDLC_EXECUTABLE /opt/cyclonedds/bin/idlc)
+endif()
 
 include(../cmake/IdlcGenerate.cmake)
 include(../cmake/RosMsgToIdl.cmake)
@@ -73,32 +77,24 @@ set_target_properties(ffmpeg_image_transport_msgs PROPERTIES
   OUTPUT_NAME ffmpeg_image_transport_msgs
 )
 
-# Choose sysroot per-OS without touching CMAKE_INSTALL_PREFIX
-if(CMAKE_SYSTEM_NAME STREQUAL "QNX")
-  set(CYCLONEDDS_SYSROOT "/opt/qnx/cyclonedds-libs")
-else()
-  set(CYCLONEDDS_SYSROOT "/opt/cyclonedds-libs")
-endif()
-
 # Per-target RPATH for the installed artifact
 set_target_properties(ffmpeg_image_transport_msgs PROPERTIES
-  INSTALL_RPATH "${CYCLONEDDS_SYSROOT}/lib"
+  INSTALL_RPATH "${LWRCL_INSTALL_PREFIX}/lib"
 )
 
-# Absolute DESTINATION paths (ignore CMAKE_INSTALL_PREFIX)
 install(TARGETS ffmpeg_image_transport_msgs
-  LIBRARY DESTINATION "${CYCLONEDDS_SYSROOT}/lib"
-  ARCHIVE DESTINATION "${CYCLONEDDS_SYSROOT}/lib"
-  RUNTIME DESTINATION "${CYCLONEDDS_SYSROOT}/bin"
+  LIBRARY DESTINATION "lib"
+  ARCHIVE DESTINATION "lib"
+  RUNTIME DESTINATION "bin"
 )
 
 install(DIRECTORY "${CMAKE_BINARY_DIR}/generated/"
-  DESTINATION "${CYCLONEDDS_SYSROOT}/include"
+  DESTINATION "include"
   FILES_MATCHING PATTERN "*.hpp"
 )
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/"
-  DESTINATION "${CYCLONEDDS_SYSROOT}/include/${PROJECT_NAME}"
+  DESTINATION "include/${PROJECT_NAME}"
   FILES_MATCHING PATTERN "*.idl"
 )
 

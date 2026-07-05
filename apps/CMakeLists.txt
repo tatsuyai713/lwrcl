@@ -11,13 +11,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(APPLE)
     set(CMAKE_MACOSX_RPATH ON)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
-    list(APPEND CMAKE_INSTALL_RPATH
-        /opt/fast-dds/lib
-        /opt/fast-dds-libs/lib
-        /opt/cyclonedds/lib
-        /opt/cyclonedds-libs/lib
-        /opt/vsomeip/lib
-        /opt/vsomeip-libs/lib)
 endif()
 
 if(NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
@@ -44,7 +37,10 @@ if(DDS_BACKEND STREQUAL "fastdds")
         set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/fast-dds-libs)
     endif()
 
-    set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix")
+    set(LWRCL_INSTALL_PREFIX "$ENV{LWRCL_PREFIX}" CACHE PATH "LWRCL install prefix")
+    if(NOT LWRCL_INSTALL_PREFIX)
+        set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix" FORCE)
+    endif()
 
     set(ROS_DATA_TYPES_INCLUDE_PATH ${LWRCL_INSTALL_PREFIX}/include)
     set(FASTDDS_UPDATE_HEADERS_SCRIPT
@@ -94,14 +90,20 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
         set(ICEORYX_PREFIX_DEFAULT /opt/iceoryx)
     endif()
 
-    set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix")
-    set(DDS_PREFIX "${DDS_PREFIX_DEFAULT}" CACHE PATH "DDS install prefix")
+    set(LWRCL_INSTALL_PREFIX "$ENV{LWRCL_PREFIX}" CACHE PATH "LWRCL install prefix")
+    if(NOT LWRCL_INSTALL_PREFIX)
+        set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix" FORCE)
+    endif()
+    set(DDS_PREFIX "$ENV{DDS_PREFIX}" CACHE PATH "DDS install prefix")
+    if(NOT DDS_PREFIX)
+        set(DDS_PREFIX "${DDS_PREFIX_DEFAULT}" CACHE PATH "DDS install prefix" FORCE)
+    endif()
 
     # Use SYSTEM so compiler warnings in CycloneDDS third-party headers are suppressed.
     include_directories(SYSTEM ${DDS_PREFIX}/include)
     include_directories(SYSTEM ${DDS_PREFIX}/include/ddscxx)
     # iceoryx headers (required when CycloneDDS is built with ENABLE_SHM=ON)
-    set(ICEORYX_PREFIX "${ICEORYX_PREFIX}" CACHE PATH "iceoryx install prefix")
+    set(ICEORYX_PREFIX "$ENV{ICEORYX_PREFIX}" CACHE PATH "iceoryx install prefix")
     if(NOT ICEORYX_PREFIX)
         set(ICEORYX_PREFIX "${ICEORYX_PREFIX_DEFAULT}")
     endif()
@@ -187,12 +189,21 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
         set(VSOMEIP_PREFIX_DEFAULT /opt/vsomeip)
     endif()
 
-    set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix")
+    set(LWRCL_INSTALL_PREFIX "$ENV{LWRCL_PREFIX}" CACHE PATH "LWRCL install prefix")
+    if(NOT LWRCL_INSTALL_PREFIX)
+        set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix" FORCE)
+    endif()
     # DDS_PREFIX: CycloneDDS install path used ONLY for idlc binary location.
     # Headers and libraries are intentionally NOT added to the build to avoid
     # conflicts with the CDR stub headers installed under VSOMEIP_PREFIX.
-    set(DDS_PREFIX "${DDS_PREFIX_DEFAULT}" CACHE PATH "CycloneDDS install prefix (idlc tool only)")
-    set(VSOMEIP_PREFIX "${VSOMEIP_PREFIX_DEFAULT}" CACHE PATH "vsomeip install prefix")
+    set(DDS_PREFIX "$ENV{DDS_PREFIX}" CACHE PATH "CycloneDDS install prefix (idlc tool only)")
+    if(NOT DDS_PREFIX)
+        set(DDS_PREFIX "${DDS_PREFIX_DEFAULT}" CACHE PATH "CycloneDDS install prefix (idlc tool only)" FORCE)
+    endif()
+    set(VSOMEIP_PREFIX "$ENV{VSOMEIP_PREFIX}" CACHE PATH "vsomeip install prefix")
+    if(NOT VSOMEIP_PREFIX)
+        set(VSOMEIP_PREFIX "${VSOMEIP_PREFIX_DEFAULT}" CACHE PATH "vsomeip install prefix" FORCE)
+    endif()
 
     # CDR stub headers (dds/dds.hpp, org/eclipse/cyclonedds/...) live under VSOMEIP_PREFIX.
     # These replace the real CycloneDDS-CXX headers for CDR-only builds.
@@ -246,10 +257,22 @@ elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
         set(ICEORYX_PREFIX_DEFAULT /opt/iceoryx)
     endif()
 
-    set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix")
-    set(AUTOSAR_AP_PREFIX "${AUTOSAR_AP_PREFIX_DEFAULT}" CACHE PATH "Adaptive AUTOSAR AP install prefix")
-    set(DDS_PREFIX "${DDS_PREFIX_DEFAULT}" CACHE PATH "CycloneDDS install prefix (transitive dep)")
-    set(VSOMEIP_PREFIX "${VSOMEIP_PREFIX_DEFAULT}" CACHE PATH "vsomeip install prefix (transitive dep)")
+    set(LWRCL_INSTALL_PREFIX "$ENV{LWRCL_PREFIX}" CACHE PATH "LWRCL install prefix")
+    if(NOT LWRCL_INSTALL_PREFIX)
+        set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix" FORCE)
+    endif()
+    set(AUTOSAR_AP_PREFIX "$ENV{AUTOSAR_AP_PREFIX}" CACHE PATH "Adaptive AUTOSAR AP install prefix")
+    if(NOT AUTOSAR_AP_PREFIX)
+        set(AUTOSAR_AP_PREFIX "${AUTOSAR_AP_PREFIX_DEFAULT}" CACHE PATH "Adaptive AUTOSAR AP install prefix" FORCE)
+    endif()
+    set(DDS_PREFIX "$ENV{DDS_PREFIX}" CACHE PATH "CycloneDDS install prefix (transitive dep)")
+    if(NOT DDS_PREFIX)
+        set(DDS_PREFIX "${DDS_PREFIX_DEFAULT}" CACHE PATH "CycloneDDS install prefix (transitive dep)" FORCE)
+    endif()
+    set(VSOMEIP_PREFIX "$ENV{VSOMEIP_PREFIX}" CACHE PATH "vsomeip install prefix (transitive dep)")
+    if(NOT VSOMEIP_PREFIX)
+        set(VSOMEIP_PREFIX "${VSOMEIP_PREFIX_DEFAULT}" CACHE PATH "vsomeip install prefix (transitive dep)" FORCE)
+    endif()
     set(AUTOSAR_GENERATED_PROXY_SKELETON_DIR "${AUTOSAR_GENERATED_PROXY_SKELETON_DIR}" CACHE PATH "Generated Adaptive AUTOSAR proxy/skeleton header directory")
 
     # Find Adaptive AUTOSAR package
@@ -258,7 +281,7 @@ elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
     find_package(AdaptiveAutosarAP REQUIRED)
 
     # iceoryx headers (transitive CycloneDDS dependency)
-    set(ICEORYX_PREFIX "${ICEORYX_PREFIX}" CACHE PATH "iceoryx install prefix")
+    set(ICEORYX_PREFIX "$ENV{ICEORYX_PREFIX}" CACHE PATH "iceoryx install prefix")
     if(NOT ICEORYX_PREFIX)
         set(ICEORYX_PREFIX "${ICEORYX_PREFIX_DEFAULT}")
     endif()

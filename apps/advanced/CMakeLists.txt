@@ -237,27 +237,16 @@ target_link_libraries(diagnostic_aggregator   PRIVATE ${COMMON_LINK_LIBS})
 target_link_libraries(adaptive_image_pipeline PRIVATE ${COMMON_LINK_LIBS})
 target_link_libraries(state_machine_controller PRIVATE ${COMMON_LINK_LIBS})
 
-# ── Install ───────────────────────────────────────────────────────────────
-if(DDS_BACKEND STREQUAL "fastdds")
-  set(APP_INSTALL_PREFIX "/opt/fast-dds-apps")
-elseif(DDS_BACKEND STREQUAL "cyclonedds")
-  set(APP_INSTALL_PREFIX "/opt/cyclonedds-apps")
-elseif(DDS_BACKEND STREQUAL "vsomeip")
-  set(APP_INSTALL_PREFIX "/opt/vsomeip-apps")
-elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
-  set(APP_INSTALL_PREFIX "/opt/autosar-ap-apps")
-endif()
-
 install(TARGETS
   video_stream_pipeline
   diagnostic_aggregator
   adaptive_image_pipeline
   state_machine_controller
-  RUNTIME DESTINATION "${APP_INSTALL_PREFIX}/bin/advanced"
+  RUNTIME DESTINATION "bin/advanced"
 )
 
 install(DIRECTORY config/
-  DESTINATION "${APP_INSTALL_PREFIX}/bin/advanced/config"
+  DESTINATION "bin/advanced/config"
   FILES_MATCHING PATTERN "*.yaml"
 )
 

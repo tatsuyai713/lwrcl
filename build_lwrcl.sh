@@ -14,22 +14,49 @@ else
 fi
 BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
 
+ensure_dir() {
+    local dir="$1"
+    if mkdir -p "$dir" 2>/dev/null; then
+        return
+    fi
+    sudo mkdir -p "$dir"
+}
+
+copy_file_optional() {
+    local src="$1"
+    local dst="$2"
+    if cp "$src" "$dst" 2>/dev/null; then
+        return
+    fi
+    sudo cp "$src" "$dst" 2>/dev/null || true
+}
+
+cmake_install() {
+    local build_dir="$1"
+    local prefix="$2"
+    if [ -w "$prefix" ]; then
+        cmake --install "$build_dir" --prefix "$prefix"
+    else
+        sudo cmake --install "$build_dir" --prefix "$prefix"
+    fi
+}
+
 # Check if BUILD_FFI is set (default OFF)
 BUILD_FFI_OPTION="${BUILD_FFI:-OFF}"
 
 if [ "$BACKEND" = "fastdds" ]; then
-    DDS_PREFIX="/opt/fast-dds"
-    LWRCL_PREFIX="/opt/fast-dds-libs"
+    DDS_PREFIX="${DDS_PREFIX:-/opt/fast-dds}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/fast-dds-libs}"
 elif [ "$BACKEND" = "cyclonedds" ]; then
-    DDS_PREFIX="/opt/cyclonedds"
-    LWRCL_PREFIX="/opt/cyclonedds-libs"
+    DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/cyclonedds-libs}"
 elif [ "$BACKEND" = "vsomeip" ]; then
-    VSOMEIP_PREFIX="/opt/vsomeip"
-    LWRCL_PREFIX="/opt/vsomeip-libs"
+    VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/vsomeip-libs}"
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
-    AUTOSAR_AP_PREFIX="/opt/autosar-ap"
-    DDS_PREFIX="/opt/cyclonedds"
-    LWRCL_PREFIX="/opt/autosar-ap-libs"
+    AUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX:-/opt/autosar-ap}"
+    DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/autosar-ap-libs}"
 else
     echo "Usage: $0 <fastdds|cyclonedds|vsomeip|adaptive-autosar> [install|clean]"
     exit 1
@@ -43,7 +70,7 @@ if [ "$ACTION" = "clean" ]; then
     exit 0
 fi
 
-sudo mkdir -p "$LWRCL_PREFIX"
+ensure_dir "$LWRCL_PREFIX"
 
 if [ -n "${DDS_PREFIX:-}" ]; then
     export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
@@ -66,6 +93,7 @@ CMAKE_ARGS=(
     -DCMAKE_BUILD_TYPE=Debug
     -DDDS_BACKEND="$BACKEND"
     -DCMAKE_INSTALL_PREFIX="$LWRCL_PREFIX"
+    -DLWRCL_INSTALL_PREFIX="$LWRCL_PREFIX"
     -DBUILD_FFI="$BUILD_FFI_OPTION"
 )
 
@@ -80,6 +108,7 @@ if [ "$BACKEND" = "fastdds" ]; then
     CMAKE_ARGS+=(
         -DCMAKE_SYSTEM_PREFIX_PATH="$DDS_PREFIX"
         -DCMAKE_PREFIX_PATH="$DDS_PREFIX"
+        -DDDS_PREFIX="$DDS_PREFIX"
         -Dfastcdr_DIR="${DDS_PREFIX}/lib/cmake/fastcdr/"
         -Dfastrtps_DIR="${DDS_PREFIX}/share/fastrtps/cmake/"
         -Dfoonathan_memory_DIR="${DDS_PREFIX}/lib/foonathan_memory/cmake/"
@@ -88,12 +117,15 @@ if [ "$BACKEND" = "fastdds" ]; then
 elif [ "$BACKEND" = "cyclonedds" ]; then
     export PATH="${DDS_PREFIX}/bin:${PATH}"
     CMAKE_ARGS+=(
+        -DDDS_PREFIX="$DDS_PREFIX"
+        -DICEORYX_PREFIX="$ICEORYX_PREFIX"
         -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
     )
 elif [ "$BACKEND" = "vsomeip" ]; then
     export LD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
     export DYLD_LIBRARY_PATH="${VSOMEIP_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
     CMAKE_ARGS+=(
+        -DDDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
         -DVSOMEIP_PREFIX="${VSOMEIP_PREFIX}"
     )
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
@@ -111,8 +143,8 @@ cmake "${CMAKE_ARGS[@]}"
 cmake --build "$BUILD_DIR" -j "$JOBS"
 
 if [ "$ACTION" = "install" ]; then
-    sudo cmake --install "$BUILD_DIR" --prefix "$LWRCL_PREFIX"
+    cmake_install "$BUILD_DIR" "$LWRCL_PREFIX"
     if [ "$BACKEND" = "fastdds" ]; then
-        sudo cp "${SCRIPT_DIR}/lwrcl/fastdds/lwrcl/fastdds.xml" "$DDS_PREFIX/" 2>/dev/null || true
+        copy_file_optional "${SCRIPT_DIR}/lwrcl/fastdds/lwrcl/fastdds.xml" "$DDS_PREFIX/"
     fi
 fi

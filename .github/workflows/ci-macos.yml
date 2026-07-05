@@ -1,0 +1,193 @@
+name: CI (macOS)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FASTDDS_PREFIX: /opt/fast-dds
+  FASTDDS_GEN_PREFIX: /opt/fast-dds-gen
+  DDS_PREFIX: /opt/cyclonedds
+  ICEORYX_PREFIX: /opt/iceoryx
+  VSOMEIP_PREFIX: /opt/vsomeip
+  AUTOSAR_AP_PREFIX: /opt/autosar-ap
+  ADAPTIVE_AUTOSAR_REF: master
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [fastdds, cyclonedds, vsomeip, adaptive-autosar]
+        include:
+          - backend: fastdds
+            lwrcl_prefix: /opt/fast-dds-libs
+          - backend: cyclonedds
+            lwrcl_prefix: /opt/cyclonedds-libs
+          - backend: vsomeip
+            lwrcl_prefix: /opt/vsomeip-libs
+          - backend: adaptive-autosar
+            lwrcl_prefix: /opt/autosar-ap-libs
+
+    env:
+      LWRCL_PREFIX: ${{ matrix.lwrcl_prefix }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install system packages
+        run: |
+          ./scripts/install_dependencies.sh
+          python3 -m venv "$RUNNER_TEMP/ci-python"
+          "$RUNNER_TEMP/ci-python/bin/python" -m pip install --upgrade pip
+          "$RUNNER_TEMP/ci-python/bin/python" -m pip install pyyaml
+          echo "$RUNNER_TEMP/ci-python/bin" >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/usr/bin/env bash\nsysctl -n hw.ncpu\n' > "$RUNNER_TEMP/bin/nproc"
+          chmod +x "$RUNNER_TEMP/bin/nproc"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Cache FastDDS
+        if: matrix.backend == 'fastdds'
+        id: cache-fastdds
+        uses: actions/cache@v4
+        with:
+          path: |
+            /opt/fast-dds
+            /opt/fast-dds-gen
+          key: macos-fastdds-${{ runner.os }}-${{ runner.arch }}-v2
+
+      - name: Build & install FastDDS
+        if: matrix.backend == 'fastdds' && steps.cache-fastdds.outputs.cache-hit != 'true'
+        run: |
+          ./scripts/install_fast_dds.sh
+          ./scripts/install_fast_dds_gen.sh
+
+      - name: Cache CycloneDDS stack
+        if: matrix.backend == 'cyclonedds' || matrix.backend == 'vsomeip' || matrix.backend == 'adaptive-autosar'
+        id: cache-cyclonedds-stack
+        uses: actions/cache@v4
+        with:
+          path: |
+            /opt/cyclonedds
+            /opt/iceoryx
+          key: macos-cyclonedds-iceoryx-${{ runner.os }}-${{ runner.arch }}-v2
+
+      - name: Build & install CycloneDDS stack
+        if: (matrix.backend == 'cyclonedds' || matrix.backend == 'vsomeip' || matrix.backend == 'adaptive-autosar') && steps.cache-cyclonedds-stack.outputs.cache-hit != 'true'
+        run: |
+          ./scripts/install_cyclonedds.sh
+
+      - name: Cache vsomeip
+        if: matrix.backend == 'vsomeip' || matrix.backend == 'adaptive-autosar'
+        id: cache-vsomeip
+        uses: actions/cache@v4
+        with:
+          path: /opt/vsomeip
+          key: macos-vsomeip-${{ runner.os }}-${{ runner.arch }}-v2
+
+      - name: Build & install vsomeip
+        if: (matrix.backend == 'vsomeip' || matrix.backend == 'adaptive-autosar') && steps.cache-vsomeip.outputs.cache-hit != 'true'
+        run: |
+          ./scripts/install_vsomeip.sh
+
+      - name: Cache Adaptive AUTOSAR runtime
+        if: matrix.backend == 'adaptive-autosar'
+        id: cache-adaptive-autosar
+        uses: actions/cache@v4
+        with:
+          path: /opt/autosar-ap
+          key: macos-adaptive-autosar-${{ env.ADAPTIVE_AUTOSAR_REF }}-${{ runner.os }}-${{ runner.arch }}-v2
+
+      - name: Build & install Adaptive AUTOSAR runtime
+        if: matrix.backend == 'adaptive-autosar' && steps.cache-adaptive-autosar.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/adaptive_autosar_build"
+          mkdir -p "$WORK"
+          cd "$WORK"
+          git clone --depth 1 --branch "$ADAPTIVE_AUTOSAR_REF" https://github.com/tatsuyai713/Adaptive-AUTOSAR.git
+          cd Adaptive-AUTOSAR
+          ./scripts/build_and_install_autosar_ap.sh \
+            --prefix "$AUTOSAR_AP_PREFIX" \
+            --build-dir build-ci \
+            --without-platform-app \
+            --vsomeip-prefix "$VSOMEIP_PREFIX" \
+            --iceoryx-prefix "$ICEORYX_PREFIX" \
+            --cyclonedds-prefix "$DDS_PREFIX"
+
+      - name: Configure environment
+        run: |
+          echo "$FASTDDS_PREFIX/bin" >> "$GITHUB_PATH"
+          echo "$FASTDDS_GEN_PREFIX/bin" >> "$GITHUB_PATH"
+          echo "$DDS_PREFIX/bin" >> "$GITHUB_PATH"
+          echo "$ICEORYX_PREFIX/bin" >> "$GITHUB_PATH"
+          echo "$VSOMEIP_PREFIX/bin" >> "$GITHUB_PATH"
+          echo "$AUTOSAR_AP_PREFIX/bin" >> "$GITHUB_PATH"
+          echo "DYLD_LIBRARY_PATH=$FASTDDS_PREFIX/lib:$ICEORYX_PREFIX/lib:$DDS_PREFIX/lib:$VSOMEIP_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$FASTDDS_PREFIX/lib:$ICEORYX_PREFIX/lib:$DDS_PREFIX/lib:$VSOMEIP_PREFIX/lib:$AUTOSAR_AP_PREFIX/lib:$LWRCL_PREFIX/lib" >> "$GITHUB_ENV"
+
+      - name: Build & install lwrcl
+        run: |
+          ./build_all.sh "${{ matrix.backend }}" install
+
+      - name: Verify installed FastDDS runtime profile
+        if: matrix.backend == 'fastdds'
+        run: |
+          set -euo pipefail
+          test -f "$LWRCL_PREFIX/etc/fastdds.xml"
+          grep -q "<type>SHM</type>" "$LWRCL_PREFIX/etc/fastdds.xml"
+          grep -q "<transport_id>shm_transport</transport_id>" "$LWRCL_PREFIX/etc/fastdds.xml"
+          grep -q "<transport_id>udpv4_transport</transport_id>" "$LWRCL_PREFIX/etc/fastdds.xml"
+          ! grep -q "<interfaceWhiteList>" "$LWRCL_PREFIX/etc/fastdds.xml"
+          ! grep -q "<address>127.0.0.1</address>" "$LWRCL_PREFIX/etc/fastdds.xml"
+
+      - name: Verify installed CycloneDDS runtime profile
+        if: matrix.backend == 'cyclonedds'
+        run: |
+          set -euo pipefail
+          test -f "$LWRCL_PREFIX/etc/cyclonedds-lwrcl.xml"
+          grep -q "<SharedMemory>" "$LWRCL_PREFIX/etc/cyclonedds-lwrcl.xml"
+          grep -q "<Enable>true</Enable>" "$LWRCL_PREFIX/etc/cyclonedds-lwrcl.xml"
+
+      - name: Verify Adaptive AUTOSAR installed artifacts
+        if: matrix.backend == 'adaptive-autosar'
+        run: |
+          set -euo pipefail
+          test -f "$LWRCL_PREFIX/lib/liblwrcl.dylib"
+          test -f "$LWRCL_PREFIX/share/lwrcl/autosar/lwrcl_autosar_manifest.yaml"
+          test -f "$LWRCL_PREFIX/share/lwrcl/autosar/lwrcl_autosar_manifest_dds.yaml"
+          test -f "$LWRCL_PREFIX/share/lwrcl/autosar/lwrcl_autosar_manifest_vsomeip.yaml"
+          test -f "$LWRCL_PREFIX/share/lwrcl/autosar/lwrcl_autosar_topic_mapping.yaml"
+          test -x apps/install-adaptive-autosar/bin/example_spin
+          test -x apps/install-adaptive-autosar/bin/example_service_server
+
+      - name: Verify tests use normal publish API
+        run: |
+          set -euo pipefail
+          ! grep -R "borrow_loaned_message\|LoanedMessage\|LoanedSubscriptionMessage\|can_loan_messages\|is_loaned\|take_loaned" test/src test/CMakeLists.txt README.md README_JA.md
+
+      - name: Run tests
+        if: matrix.backend == 'fastdds' || matrix.backend == 'cyclonedds' || matrix.backend == 'vsomeip'
+        run: |
+          case "${{ matrix.backend }}" in
+            fastdds) ./test/run_tests_fastdds.sh all ;;
+            cyclonedds) ./test/run_tests_cyclonedds.sh all ;;
+            vsomeip) ./test/run_tests_vsomeip.sh all ;;
+          esac
+
+      - name: Run Adaptive AUTOSAR smoke
+        if: matrix.backend == 'adaptive-autosar'
+        run: |
+          ./run_smoke_local.sh --backend adaptive-autosar --no-build

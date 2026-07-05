@@ -138,16 +138,5 @@ set(_RME_LINK_LIBS
 target_link_libraries(sample_data_publisher  PRIVATE ${_RME_LINK_LIBS})
 target_link_libraries(sample_data_subscriber PRIVATE ${_RME_LINK_LIBS})
 
-# ── Install ───────────────────────────────────────────────────────────────
-if(DDS_BACKEND STREQUAL "fastdds")
-  set(_RME_INSTALL_PREFIX "/opt/fast-dds-apps")
-elseif(DDS_BACKEND STREQUAL "cyclonedds")
-  set(_RME_INSTALL_PREFIX "/opt/cyclonedds-apps")
-elseif(DDS_BACKEND STREQUAL "vsomeip")
-  set(_RME_INSTALL_PREFIX "/opt/vsomeip-apps")
-elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
-  set(_RME_INSTALL_PREFIX "/opt/autosar-ap-apps")
-endif()
-
 install(TARGETS sample_data_publisher sample_data_subscriber
-        RUNTIME DESTINATION "${_RME_INSTALL_PREFIX}/bin/${PROJECT_NAME}")
+        RUNTIME DESTINATION "bin/${PROJECT_NAME}")

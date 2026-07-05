@@ -103,20 +103,12 @@ if(OpenCV_FOUND)
   target_link_libraries(ROSCustomTypeImagePubSub PRIVATE ${OpenCV_LIBRARIES})
 endif()
 
-# --- Install ---
-# Choose sysroot per-OS without touching CMAKE_INSTALL_PREFIX
-if(CMAKE_SYSTEM_NAME STREQUAL "QNX")
-  set(CYCLONEDDS_SYSROOT "/opt/qnx/cyclonedds-apps")
-else()
-  set(CYCLONEDDS_SYSROOT "/opt/cyclonedds-apps")
-endif()
-
 install(TARGETS ROSCustomTypeImagePubSub
-    RUNTIME DESTINATION "${CYCLONEDDS_SYSROOT}/bin/ROSCustomTypeImagePubSub/${BIN_INSTALL_DIR}"
+    RUNTIME DESTINATION "bin/ROSCustomTypeImagePubSub/${BIN_INSTALL_DIR}"
 )
 
 install(FILES config/config.yaml
-        DESTINATION "${CYCLONEDDS_SYSROOT}/bin/ROSCustomTypeImagePubSub/${BIN_INSTALL_DIR}/config"
+        DESTINATION "bin/ROSCustomTypeImagePubSub/${BIN_INSTALL_DIR}/config"
         PERMISSIONS OWNER_READ GROUP_READ WORLD_READ
 )
 

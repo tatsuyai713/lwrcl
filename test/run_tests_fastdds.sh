@@ -7,8 +7,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-DDS_PREFIX="/opt/fast-dds"
-LWRCL_PREFIX="/opt/fast-dds-libs"
+DDS_PREFIX="${DDS_PREFIX:-/opt/fast-dds}"
+LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/fast-dds-libs}"
 BUILD_DIR="${SCRIPT_DIR}/build-fastdds"
 SOURCE_LWRCL_LIB_DIR="${ROOT_DIR}/lwrcl/build-fastdds/fastdds/lwrcl"
 if command -v nproc >/dev/null 2>&1; then

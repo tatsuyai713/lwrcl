@@ -7,9 +7,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-VSOMEIP_PREFIX="/opt/vsomeip"
-DDS_PREFIX="/opt/cyclonedds"
-LWRCL_PREFIX="/opt/vsomeip-libs"
+VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
+DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
+LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/vsomeip-libs}"
 BUILD_DIR="${SCRIPT_DIR}/build-vsomeip"
 if command -v nproc >/dev/null 2>&1; then
     JOBS=$(nproc)

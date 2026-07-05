@@ -96,7 +96,10 @@ jobs:
 
       - name: Install Python dependency for ARXML generation
         run: |
-          python3 -m pip install --user pyyaml
+          python3 -m venv "$RUNNER_TEMP/ci-python"
+          "$RUNNER_TEMP/ci-python/bin/python" -m pip install --upgrade pip
+          "$RUNNER_TEMP/ci-python/bin/python" -m pip install pyyaml
+          echo "$RUNNER_TEMP/ci-python/bin" >> "$GITHUB_PATH"
 
       - name: Build & install lwrcl (Adaptive AUTOSAR)
         run: |

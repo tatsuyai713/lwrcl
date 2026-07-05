@@ -173,7 +173,11 @@ run_test() {
 
 plain_backend_app_dir() {
   local backend="$1"
-  local candidates=(
+  local candidates=()
+  if [ -n "${APPS_INSTALL_DIR:-}" ]; then
+    candidates+=("${APPS_INSTALL_DIR}/bin")
+  fi
+  candidates+=(
     "apps/install-${backend}/bin"
     "apps/build-${backend}/lwrcl_example"
   )
@@ -429,6 +433,9 @@ plain_backend_pubsub() {
   local rm_log="/tmp/lwrcl_plain_${backend}_rm.log"
   local rm_pid=""
   local rm_wd=""
+  local roudi_log="/tmp/lwrcl_plain_${backend}_roudi.log"
+  local roudi_pid=""
+  local roudi_wd=""
   local had_vsomeip_configuration=0
   local old_vsomeip_configuration=""
   local had_vsomeip_application_name=0
@@ -490,12 +497,24 @@ plain_backend_pubsub() {
     read -r rm_pid rm_wd < <(start_bg_with_timeout 12 "$rm_log" "${VSOMEIP_PREFIX}/bin/routingmanagerd")
     sleep 1
   fi
+  if [ "$backend" = "cyclonedds" ]; then
+    if [ ! -x "${ICEORYX_PREFIX}/bin/iox-roudi" ]; then
+      echo "Missing iceoryx RouDi: ${ICEORYX_PREFIX}/bin/iox-roudi"
+      restore_plain_vsomeip_env
+      return 1
+    fi
+    read -r roudi_pid roudi_wd < <(start_bg_with_timeout 12 "$roudi_log" "${ICEORYX_PREFIX}/bin/iox-roudi")
+    sleep 1
+  fi
   read -r sub_pid sub_wd < <(start_bg_with_timeout 10 "$sub_log" "${install_dir}/example_class_sub")
   sleep 1
   run_with_timeout 8 "$pub_log" "${install_dir}/example_class_pub" || true
   wait_bg "$sub_pid" "$sub_wd" >/dev/null 2>&1 || true
   if [ "$backend" = "vsomeip" ]; then
     wait_bg "$rm_pid" "$rm_wd" >/dev/null 2>&1 || true
+  fi
+  if [ "$backend" = "cyclonedds" ]; then
+    wait_bg "$roudi_pid" "$roudi_wd" >/dev/null 2>&1 || true
   fi
 
   restore_plain_vsomeip_env
@@ -506,6 +525,10 @@ plain_backend_pubsub() {
   fi
   if ! grep -q "I heard: 'Hello, world!" "$sub_log"; then
     echo "Subscriber did not receive expected message. See ${sub_log}"
+    return 1
+  fi
+  if [ "$backend" = "cyclonedds" ] && grep -Eiq "error|fatal|panic" "$roudi_log"; then
+    echo "RouDi reported an error. See ${roudi_log}"
     return 1
   fi
   return 0

@@ -15,6 +15,33 @@ else
 fi
 BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
 
+ensure_dir() {
+    local dir="$1"
+    if mkdir -p "$dir" 2>/dev/null; then
+        return
+    fi
+    sudo mkdir -p "$dir"
+}
+
+copy_file() {
+    local src="$1"
+    local dst="$2"
+    if cp "$src" "$dst" 2>/dev/null; then
+        return
+    fi
+    sudo cp "$src" "$dst"
+}
+
+cmake_install() {
+    local build_dir="$1"
+    local prefix="$2"
+    if [ -w "$prefix" ]; then
+        cmake --install "$build_dir" --prefix "$prefix"
+    else
+        sudo cmake --install "$build_dir" --prefix "$prefix"
+    fi
+}
+
 resolve_fastddsgen() {
     local configured="${FASTDDS_GEN_BIN:-${FASTDDS_GEN_PREFIX:-}}"
     local candidate
@@ -131,49 +158,49 @@ install_adaptive_autosar_artifacts() {
     local output_dir install_dir
     output_dir="${BUILD_DIR}/autosar"
     install_dir="${LWRCL_PREFIX}/share/lwrcl/autosar"
-    sudo mkdir -p "${install_dir}"
+    ensure_dir "${install_dir}"
 
     if [ -f "${output_dir}/lwrcl_autosar_manifest.arxml" ]; then
-        sudo cp "${output_dir}/lwrcl_autosar_manifest.arxml" "${install_dir}/"
+        copy_file "${output_dir}/lwrcl_autosar_manifest.arxml" "${install_dir}/"
     fi
     if [ -f "${output_dir}/lwrcl_autosar_topic_mapping.yaml" ]; then
-        sudo cp "${output_dir}/lwrcl_autosar_topic_mapping.yaml" "${install_dir}/"
+        copy_file "${output_dir}/lwrcl_autosar_topic_mapping.yaml" "${install_dir}/"
     fi
     if [ -f "${output_dir}/lwrcl_autosar_manifest.yaml" ]; then
-        sudo cp "${output_dir}/lwrcl_autosar_manifest.yaml" "${install_dir}/"
+        copy_file "${output_dir}/lwrcl_autosar_manifest.yaml" "${install_dir}/"
     fi
     # Install the generated proxy/skeleton header to share/ (NOT include/).
     # The lwrcl library needs it for template definitions, but apps override it
     # with their own generated header via -I<app-gen-dir> at compile time.
     local gen_install_dir="${install_dir}/generated"
-    sudo mkdir -p "${gen_install_dir}"
+    ensure_dir "${gen_install_dir}"
     if [ -f "${output_dir}/generated/lwrcl_autosar_proxy_skeleton.hpp" ]; then
-        sudo cp "${output_dir}/generated/lwrcl_autosar_proxy_skeleton.hpp" "${gen_install_dir}/"
+        copy_file "${output_dir}/generated/lwrcl_autosar_proxy_skeleton.hpp" "${gen_install_dir}/"
     fi
 }
 
 if [ "$BACKEND" = "fastdds" ]; then
-    DDS_PREFIX="/opt/fast-dds"
+    DDS_PREFIX="${DDS_PREFIX:-/opt/fast-dds}"
     FASTDDS_GEN_PREFIX="${FASTDDS_GEN_PREFIX:-/opt/fast-dds-gen}"
-    LWRCL_PREFIX="/opt/fast-dds-libs"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/fast-dds-libs}"
 elif [ "$BACKEND" = "cyclonedds" ]; then
-    DDS_PREFIX="/opt/cyclonedds"
-    LWRCL_PREFIX="/opt/cyclonedds-libs"
+    DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/cyclonedds-libs}"
 elif [ "$BACKEND" = "vsomeip" ]; then
     # vsomeip compiles data types against the standalone CDR library.
     # CycloneDDS is needed ONLY for the idlc code generator tool.
     # The stub CMake configs at VSOMEIP_PREFIX provide CycloneDDS::ddsc
     # and CycloneDDS-CXX::ddscxx targets pointing to liblwrcl_cdr.a.
     IDLC_PREFIX="${IDLC_PREFIX:-/opt/cyclonedds}"
-    VSOMEIP_PREFIX="/opt/vsomeip"
-    LWRCL_PREFIX="/opt/vsomeip-libs"
+    VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/vsomeip-libs}"
     # Override backend to cyclonedds for data type generation pipeline
     BACKEND="cyclonedds"
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
     # Adaptive AUTOSAR wraps CycloneDDS internally, so data types are
     # identical to CycloneDDS-generated types linked against real CycloneDDS.
-    DDS_PREFIX="/opt/cyclonedds"
-    LWRCL_PREFIX="/opt/autosar-ap-libs"
+    DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/autosar-ap-libs}"
     AUTOSAR_AP_PREFIX="${AUTOSAR_AP_PREFIX:-/opt/autosar-ap}"
     # Override backend to cyclonedds for data type generation pipeline
     BACKEND="cyclonedds"
@@ -197,7 +224,7 @@ if [ "$ACTION" = "clean" ]; then
     exit 0
 fi
 
-sudo mkdir -p "$LWRCL_PREFIX"
+ensure_dir "$LWRCL_PREFIX"
 
 if [ -n "${DDS_PREFIX:-}" ]; then
     export LD_LIBRARY_PATH="${DDS_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
@@ -270,10 +297,12 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
         ICEORYX_CMAKE="${ICEORYX_PREFIX_RT}/lib/cmake"
         if [ -d "${ICEORYX_CMAKE}" ]; then
             CMAKE_ARGS+=(
+                -DICEORYX_PREFIX="${ICEORYX_PREFIX_RT}"
                 -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake;${ICEORYX_CMAKE}"
             )
         else
             CMAKE_ARGS+=(
+                -DICEORYX_PREFIX="${ICEORYX_PREFIX_RT}"
                 -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake"
             )
         fi
@@ -284,7 +313,7 @@ cmake "${CMAKE_ARGS[@]}"
 cmake --build "$BUILD_DIR" -j "$JOBS"
 
 if [ "$ACTION" = "install" ]; then
-    sudo cmake --install "$BUILD_DIR" --prefix "$LWRCL_PREFIX"
+    cmake_install "$BUILD_DIR" "$LWRCL_PREFIX"
     if [ "${ORIGINAL_BACKEND}" = "adaptive-autosar" ]; then
         install_adaptive_autosar_artifacts
     fi
