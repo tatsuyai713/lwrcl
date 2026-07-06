@@ -6,6 +6,7 @@
  *         wait_for_service, spin_until_future_complete
  */
 #include <gtest/gtest.h>
+#include <atomic>
 #include <chrono>
 #include <memory>
 #include <string>
@@ -33,12 +34,12 @@ TEST_F(ServiceTest, ServiceRequestResponse) {
 
   // Server node
   auto server_node = rclcpp::Node::make_shared("test_server_" + unique_suffix);
-  bool request_received = false;
+  std::atomic<bool> request_received{false};
   auto server = server_node->create_service<sensor_msgs::srv::SetCameraInfo>(
       service_name,
       [&](const std::shared_ptr<sensor_msgs::srv::SetCameraInfo::Request>,
           std::shared_ptr<sensor_msgs::srv::SetCameraInfo::Response> response) {
-        request_received = true;
+        request_received.store(true);
         response->success = true;
         response->status_message = "OK";
       });
@@ -62,5 +63,5 @@ TEST_F(ServiceTest, ServiceRequestResponse) {
   server.reset();
   rclcpp::shutdown();
 
-  EXPECT_TRUE(request_received);
+  EXPECT_TRUE(request_received.load());
 }

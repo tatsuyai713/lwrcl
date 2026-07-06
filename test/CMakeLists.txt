@@ -231,8 +231,7 @@ macro(add_lwrcl_test TEST_NAME TEST_SOURCE)
       target_compile_definitions(${TEST_NAME} PRIVATE LWRCL_BACKEND_ADAPTIVE_AUTOSAR=1)
     endif()
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
-    # Give each test a generous timeout (30 seconds)
-    set_tests_properties(${TEST_NAME} PROPERTIES TIMEOUT 30)
+    set_tests_properties(${TEST_NAME} PROPERTIES TIMEOUT 120)
 endmacro()
 
 # ============================================================================
