@@ -152,6 +152,79 @@ with open(mapping_path, "r", encoding="utf-8") as f:
     mapping = json.load(f)
 
 topics = mapping.setdefault("topic_mappings", [])
+
+def used_ints(key):
+    values = set()
+    for topic in topics:
+        ara = topic.get("ara", {})
+        value = ara.get(key)
+        if value is None:
+            continue
+        try:
+            values.add(int(str(value), 0))
+        except ValueError:
+            pass
+    return values
+
+def allocate_u16(base, span, seed, used):
+    digest = int(hashlib.sha1(seed.encode("utf-8")).hexdigest()[:8], 16)
+    for offset in range(span):
+        candidate = base + ((digest + offset) % span)
+        if candidate not in used:
+            used.add(candidate)
+            return candidate
+    raise SystemExit(f"unable to allocate AUTOSAR id for {seed}")
+
+def format_hex(value):
+    return f"0x{value:04X}"
+
+def add_topic_mapping(
+    ros_topic,
+    dds_topic,
+    type_name,
+    service_interface,
+    instance_specifier,
+    event,
+    service_id,
+    event_group_id,
+    event_id,
+):
+    if any(t.get("dds_topic") == dds_topic for t in topics):
+        return
+    token = dds_topic
+    for prefix in ("rt/", "rq/", "rr/", "rp/"):
+        if token.startswith(prefix):
+            token = token[len(prefix):]
+            break
+    token = token.strip("/").replace("/", "_") or "root"
+    topics.append(
+        {
+            "ros_topic": ros_topic,
+            "dds_topic": dds_topic,
+            "type_name": type_name,
+            "ara": {
+                "service_interface": service_interface,
+                "instance_specifier": instance_specifier,
+                "event": event,
+                "event_binding": "dds",
+                "service_interface_id": format_hex(service_id),
+                "service_instance_id": format_hex(0x0001),
+                "event_group_id": format_hex(event_group_id),
+                "event_id": format_hex(event_id),
+                "major_version": 1,
+                "minor_version": 0,
+                "dds_domain_id": 0,
+                "iceoryx_service": token,
+                "iceoryx_instance": "adaptive",
+                "iceoryx_event": "status",
+                "iceoryx_runtime_name": "adaptive_autosar_ara_com",
+                "iceoryx_history_capacity": 0,
+                "iceoryx_queue_capacity": 256,
+                "iceoryx_history_request": 0,
+            },
+        }
+    )
+
 if not any(t.get("dds_topic") == "rt/test_ns/chatter" for t in topics):
     base = next(
         (
@@ -178,9 +251,54 @@ if not any(t.get("dds_topic") == "rt/test_ns/chatter" for t in topics):
     ara["iceoryx_service"] = suffix
     topics.append(alias)
 
-    with open(mapping_path, "w", encoding="utf-8") as f:
-        json.dump(mapping, f, indent=2)
-        f.write("\n")
+used_service_ids = used_ints("service_interface_id")
+used_event_ids = used_ints("event_id")
+service_name = "test_camera_service"
+service_type = "sensor_msgs::srv::SetCameraInfo"
+interface_key = f"srv:{service_type}:/{service_name}"
+existing_service_ids = []
+for topic in topics:
+    if topic.get("dds_topic") in {
+        "rp/test_camera_service_Request",
+        "rp/test_camera_service_Response",
+    }:
+        value = topic.get("ara", {}).get("service_interface_id")
+        if value is not None:
+            try:
+                existing_service_ids.append(int(str(value), 0))
+            except ValueError:
+                pass
+service_id = existing_service_ids[0] if existing_service_ids else allocate_u16(0x5000, 0x1000, interface_key, used_service_ids)
+req_event_id = allocate_u16(0x8100, 0x0700, interface_key + ":req", used_event_ids)
+res_event_id = allocate_u16(0x8800, 0x0700, interface_key + ":res", used_event_ids)
+interface_name = "Ros2Srv_sensor_msgs_srv_SetCameraInfo_test_camera_service"
+instance_specifier = "/autosar/ros2/service/test_camera_service"
+add_topic_mapping(
+    "/test_camera_service_Request",
+    "rp/test_camera_service_Request",
+    "sensor_msgs::srv::SetCameraInfo_Request",
+    interface_name,
+    instance_specifier,
+    "request",
+    service_id,
+    0x0001,
+    req_event_id,
+)
+add_topic_mapping(
+    "/test_camera_service_Response",
+    "rp/test_camera_service_Response",
+    "sensor_msgs::srv::SetCameraInfo_Response",
+    interface_name,
+    instance_specifier,
+    "response",
+    service_id,
+    0x0002,
+    res_event_id,
+)
+
+with open(mapping_path, "w", encoding="utf-8") as f:
+    json.dump(mapping, f, indent=2)
+    f.write("\n")
 PY
     autosar-generate-proxy-skeleton \
         --mapping "${AUTOSAR_TEST_MAPPING}" \
