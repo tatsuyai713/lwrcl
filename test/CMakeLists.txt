@@ -230,6 +230,9 @@ macro(add_lwrcl_test TEST_NAME TEST_SOURCE)
     elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
       target_compile_definitions(${TEST_NAME} PRIVATE LWRCL_BACKEND_ADAPTIVE_AUTOSAR=1)
       target_include_directories(${TEST_NAME} BEFORE PRIVATE ${AUTOSAR_GENERATED_PROXY_SKELETON_DIR})
+      target_compile_options(${TEST_NAME} PRIVATE
+        "$<$<COMPILE_LANGUAGE:CXX>:-include>"
+        "$<$<COMPILE_LANGUAGE:CXX>:${AUTOSAR_GENERATED_PROXY_SKELETON_DIR}/lwrcl_autosar_proxy_skeleton.hpp>")
     endif()
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
     set_tests_properties(${TEST_NAME} PROPERTIES TIMEOUT 120)
