@@ -353,6 +353,27 @@ do_run() {
         fi
 
         suite=""
+        list_log="/tmp/lwrcl_test_adaptive_${test_name}_list.log"
+        set +e
+        run_with_timeout "${AUTOSAR_TEST_TIMEOUT}" "$list_log" "./${test_name}" --gtest_list_tests
+        list_status=$?
+        set -e
+        if [ "$list_status" -eq 124 ]; then
+            echo "[FAIL] ${test_name}: --gtest_list_tests timed out after ${AUTOSAR_TEST_TIMEOUT}s"
+            echo "       log: ${list_log}"
+            sed -n '1,220p' "$list_log"
+            RESULT=1
+            failed=$((failed + 1))
+            continue
+        elif [ "$list_status" -ne 0 ]; then
+            echo "[FAIL] ${test_name}: --gtest_list_tests failed with status ${list_status}"
+            echo "       log: ${list_log}"
+            sed -n '1,220p' "$list_log"
+            RESULT=1
+            failed=$((failed + 1))
+            continue
+        fi
+
         while IFS= read -r line; do
             if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_/]*\.$ ]]; then
                 suite="${line}"
@@ -399,7 +420,7 @@ do_run() {
                     failed=$((failed + 1))
                 fi
             fi
-        done < <("./${test_name}" --gtest_list_tests)
+        done < "$list_log"
     done
 
     echo ""
