@@ -31,6 +31,7 @@ jobs:
 
       - name: Install system packages
         run: |
+          sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure-cli*
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake automake autoconf git curl \
