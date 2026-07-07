@@ -11,6 +11,7 @@ DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
 LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/cyclonedds-libs}"
 ICEORYX_PREFIX="${ICEORYX_PREFIX:-/opt/iceoryx}"
 BUILD_DIR="${SCRIPT_DIR}/build-cyclonedds"
+NO_SHM_CONFIG="${BUILD_DIR}/cyclonedds-no-shm.xml"
 ROUDI_PID=""
 if command -v nproc >/dev/null 2>&1; then
     JOBS=$(nproc)
@@ -41,6 +42,9 @@ cleanup_roudi() {
         wait "${ROUDI_PID}" 2>/dev/null || true
         ROUDI_PID=""
     fi
+    if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+        pkill -x iox-roudi >/dev/null 2>&1 || true
+    fi
 }
 
 start_roudi() {
@@ -51,24 +55,46 @@ start_roudi() {
     fi
 
     if pgrep -x iox-roudi >/dev/null 2>&1; then
-        return 0
+        if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+            pkill -x iox-roudi >/dev/null 2>&1 || true
+        else
+            return 0
+        fi
     fi
 
+    rm -f /tmp/lwrcl_test_iox_roudi.log
     "${ICEORYX_PREFIX}/bin/iox-roudi" > /tmp/lwrcl_test_iox_roudi.log 2>&1 &
     ROUDI_PID=$!
 
-    for _ in {1..100}; do
+    for _ in {1..300}; do
         if ! kill -0 "${ROUDI_PID}" 2>/dev/null; then
             echo "[ERROR] iox-roudi failed to start. See /tmp/lwrcl_test_iox_roudi.log" >&2
+            sed -n '1,120p' /tmp/lwrcl_test_iox_roudi.log >&2 2>/dev/null || true
             return 1
         fi
-        if grep -Eiq "RouDi is ready|RouDi is up and running|iox-roudi" /tmp/lwrcl_test_iox_roudi.log 2>/dev/null; then
+        if grep -Eiq "RouDi is ready|RouDi is up and running|RouDi is running|RouDi process started|IPC runtime interface" /tmp/lwrcl_test_iox_roudi.log 2>/dev/null; then
             return 0
         fi
         sleep 0.1
     done
 
-    return 0
+    echo "[ERROR] Timed out waiting for iox-roudi readiness. See /tmp/lwrcl_test_iox_roudi.log" >&2
+    sed -n '1,160p' /tmp/lwrcl_test_iox_roudi.log >&2 2>/dev/null || true
+    return 1
+}
+
+write_no_shm_config() {
+    mkdir -p "${BUILD_DIR}"
+    cat > "${NO_SHM_CONFIG}" <<'CYCLONEDDS_XML'
+<?xml version="1.0" encoding="UTF-8" ?>
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain Id="any">
+    <SharedMemory>
+      <Enable>false</Enable>
+    </SharedMemory>
+  </Domain>
+</CycloneDDS>
+CYCLONEDDS_XML
 }
 
 trap cleanup_roudi EXIT INT TERM
@@ -107,7 +133,9 @@ do_run() {
     cd "${BUILD_DIR}"
 
     RESULT=0
-    env -u CYCLONEDDS_URI ctest --output-on-failure -j 1 -E '^test_shm_zero_copy$' || RESULT=$?
+    write_no_shm_config
+    CYCLONEDDS_URI="file://${NO_SHM_CONFIG}" \
+    ctest --output-on-failure -j 1 -E '^test_shm_zero_copy$' || RESULT=$?
 
     if ctest -N -R '^test_shm_zero_copy$' | grep -q 'test_shm_zero_copy'; then
         DEFAULT_CYCLONEDDS_URI=""
