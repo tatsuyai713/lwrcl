@@ -197,7 +197,7 @@ jobs:
             fastdds) ./test/run_tests_fastdds.sh all ;;
             cyclonedds) ./test/run_tests_cyclonedds.sh all ;;
             vsomeip) ./test/run_tests_vsomeip.sh all ;;
-            adaptive-autosar) ./test/run_tests_adaptive_autosar.sh all ;;
+            adaptive-autosar) AUTOSAR_TEST_TIMEOUT=5 ./test/run_tests_adaptive_autosar.sh all ;;
           esac
 
       - name: Run Adaptive AUTOSAR smoke

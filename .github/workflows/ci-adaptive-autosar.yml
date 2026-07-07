@@ -139,7 +139,7 @@ jobs:
 
       - name: Run tests (Adaptive AUTOSAR)
         run: |
-          ./test/run_tests_adaptive_autosar.sh all
+          AUTOSAR_TEST_TIMEOUT=5 ./test/run_tests_adaptive_autosar.sh all
 
       - name: Run Adaptive AUTOSAR smoke
         run: |
