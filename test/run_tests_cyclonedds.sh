@@ -12,6 +12,7 @@ LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/cyclonedds-libs}"
 ICEORYX_PREFIX="${ICEORYX_PREFIX:-/opt/iceoryx}"
 BUILD_DIR="${SCRIPT_DIR}/build-cyclonedds"
 NO_SHM_CONFIG="${BUILD_DIR}/cyclonedds-no-shm.xml"
+SHM_CONFIG="${BUILD_DIR}/cyclonedds-shm.xml"
 ROUDI_PID=""
 if command -v nproc >/dev/null 2>&1; then
     JOBS=$(nproc)
@@ -89,8 +90,35 @@ write_no_shm_config() {
 <?xml version="1.0" encoding="UTF-8" ?>
 <CycloneDDS xmlns="https://cdds.io/config">
   <Domain Id="any">
+    <General>
+      <Interfaces>
+        <NetworkInterface address="127.0.0.1" multicast="true" />
+      </Interfaces>
+      <AllowMulticast>true</AllowMulticast>
+    </General>
     <SharedMemory>
       <Enable>false</Enable>
+    </SharedMemory>
+  </Domain>
+</CycloneDDS>
+CYCLONEDDS_XML
+}
+
+write_shm_config() {
+    mkdir -p "${BUILD_DIR}"
+    cat > "${SHM_CONFIG}" <<'CYCLONEDDS_XML'
+<?xml version="1.0" encoding="UTF-8" ?>
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain Id="any">
+    <General>
+      <Interfaces>
+        <NetworkInterface address="127.0.0.1" multicast="true" />
+      </Interfaces>
+      <AllowMulticast>true</AllowMulticast>
+    </General>
+    <SharedMemory>
+      <Enable>true</Enable>
+      <LogLevel>warn</LogLevel>
     </SharedMemory>
   </Domain>
 </CycloneDDS>
@@ -139,7 +167,10 @@ do_run() {
 
     if ctest -N -R '^test_shm_zero_copy$' | grep -q 'test_shm_zero_copy'; then
         DEFAULT_CYCLONEDDS_URI=""
-        if [ -n "${CYCLONEDDS_URI:-}" ]; then
+        write_shm_config
+        if [ -f "${SHM_CONFIG}" ]; then
+            DEFAULT_CYCLONEDDS_URI="file://${SHM_CONFIG}"
+        elif [ -n "${CYCLONEDDS_URI:-}" ]; then
             DEFAULT_CYCLONEDDS_URI="${CYCLONEDDS_URI}"
         elif [ -f "${LWRCL_PREFIX}/etc/cyclonedds-lwrcl.xml" ]; then
             DEFAULT_CYCLONEDDS_URI="file://${LWRCL_PREFIX}/etc/cyclonedds-lwrcl.xml"
