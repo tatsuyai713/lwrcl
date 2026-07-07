@@ -22,15 +22,34 @@ elseif(NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 endif()
 
-# --- Google Test via FetchContent -------------------------------------------
-include(FetchContent)
-FetchContent_Declare(
-  googletest
-  GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG        v1.13.0
-)
+# --- Google Test ------------------------------------------------------------
+# Prefer the repository-local copy used by yaml-cpp tests. CI runners can lose
+# network/DNS after dependency installation, so tests must not require a late
+# git clone during CMake configure.
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+set(LWRCL_LOCAL_GOOGLETEST_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/../libraries/src/yaml-cpp/test/googletest-1.13.0")
+if(EXISTS "${LWRCL_LOCAL_GOOGLETEST_DIR}/CMakeLists.txt")
+  add_subdirectory("${LWRCL_LOCAL_GOOGLETEST_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/googletest")
+else()
+  find_package(GTest QUIET)
+  if(GTest_FOUND)
+    if(NOT TARGET gtest)
+      add_library(gtest ALIAS GTest::gtest)
+    endif()
+    if(NOT TARGET gtest_main)
+      add_library(gtest_main ALIAS GTest::gtest_main)
+    endif()
+  else()
+    include(FetchContent)
+    FetchContent_Declare(
+      googletest
+      GIT_REPOSITORY https://github.com/google/googletest.git
+      GIT_TAG        v1.13.0
+    )
+    FetchContent_MakeAvailable(googletest)
+  endif()
+endif()
 
 enable_testing()
 
