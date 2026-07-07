@@ -15,6 +15,7 @@ VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
 LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/autosar-ap-libs}"
 BUILD_DIR="${SCRIPT_DIR}/build-adaptive-autosar"
 AUTOSAR_TEST_TIMEOUT="${AUTOSAR_TEST_TIMEOUT:-10}"
+AUTOSAR_CYCLONEDDS_CONFIG="${BUILD_DIR}/autosar/cyclonedds-test.xml"
 AUTOSAR_TEST_GEN_DIR="${BUILD_DIR}/autosar/generated"
 AUTOSAR_TEST_MAPPING="${BUILD_DIR}/autosar/lwrcl_autosar_topic_mapping.yaml"
 AUTOSAR_TEST_MANIFEST="${BUILD_DIR}/autosar/lwrcl_autosar_manifest.yaml"
@@ -68,6 +69,26 @@ start_runtime() {
         ROUTING_MANAGER_PID=$!
     fi
     sleep 1
+}
+
+write_cyclonedds_test_config() {
+    mkdir -p "$(dirname "${AUTOSAR_CYCLONEDDS_CONFIG}")"
+    cat > "${AUTOSAR_CYCLONEDDS_CONFIG}" <<'CYCLONEDDS_XML'
+<?xml version="1.0" encoding="UTF-8" ?>
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain Id="any">
+    <General>
+      <Interfaces>
+        <NetworkInterface address="127.0.0.1" multicast="true" />
+      </Interfaces>
+      <AllowMulticast>true</AllowMulticast>
+    </General>
+    <SharedMemory>
+      <Enable>false</Enable>
+    </SharedMemory>
+  </Domain>
+</CycloneDDS>
+CYCLONEDDS_XML
 }
 
 run_with_timeout() {
@@ -193,6 +214,8 @@ do_run() {
     fi
 
     echo "=== [Adaptive AUTOSAR] Running tests ==="
+    write_cyclonedds_test_config
+    export CYCLONEDDS_URI="file://${AUTOSAR_CYCLONEDDS_CONFIG}"
     cd "${BUILD_DIR}"
     RESULT=0
     total=0

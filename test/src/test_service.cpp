@@ -28,9 +28,14 @@ protected:
 };
 
 TEST_F(ServiceTest, ServiceRequestResponse) {
+#if defined(LWRCL_BACKEND_ADAPTIVE_AUTOSAR)
+  const std::string unique_suffix = "adaptive_autosar";
+  const std::string service_name = "test_camera_service";
+#else
   const auto unique_suffix = std::to_string(
       std::chrono::steady_clock::now().time_since_epoch().count());
   const auto service_name = "test_camera_service_" + unique_suffix;
+#endif
 
   // Server node
   auto server_node = rclcpp::Node::make_shared("test_server_" + unique_suffix);
