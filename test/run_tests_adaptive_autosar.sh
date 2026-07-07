@@ -14,6 +14,7 @@ ICEORYX_PREFIX="${ICEORYX_PREFIX:-/opt/iceoryx}"
 VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
 LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/autosar-ap-libs}"
 BUILD_DIR="${SCRIPT_DIR}/build-adaptive-autosar"
+AUTOSAR_TEST_TIMEOUT="${AUTOSAR_TEST_TIMEOUT:-45}"
 AUTOSAR_TEST_GEN_DIR="${BUILD_DIR}/autosar/generated"
 AUTOSAR_TEST_MAPPING="${BUILD_DIR}/autosar/lwrcl_autosar_topic_mapping.yaml"
 AUTOSAR_TEST_MANIFEST="${BUILD_DIR}/autosar/lwrcl_autosar_manifest.yaml"
@@ -67,6 +68,29 @@ start_runtime() {
         ROUTING_MANAGER_PID=$!
     fi
     sleep 1
+}
+
+run_with_timeout() {
+    local timeout_seconds="$1"
+    local log_file="$2"
+    shift 2
+
+    "$@" > "$log_file" 2>&1 &
+    local pid=$!
+    local start_time=$SECONDS
+
+    while kill -0 "$pid" 2>/dev/null; do
+        if [ $((SECONDS - start_time)) -ge "$timeout_seconds" ]; then
+            kill -TERM "$pid" 2>/dev/null || true
+            sleep 1
+            kill -KILL "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            return 124
+        fi
+        sleep 0.2
+    done
+
+    wait "$pid"
 }
 
 trap cleanup_runtime EXIT INT TERM
@@ -203,12 +227,18 @@ do_run() {
                 cleanup_runtime
                 start_runtime
                 set +e
-                "./${test_name}" "--gtest_filter=${filter}" > "$log" 2>&1
+                run_with_timeout "${AUTOSAR_TEST_TIMEOUT}" "$log" "./${test_name}" "--gtest_filter=${filter}"
                 status=$?
                 set -e
                 cleanup_runtime
 
-                if grep -q "\\[  FAILED  \\]" "$log"; then
+                if [ "$status" -eq 124 ]; then
+                    echo "[FAIL] ${filter} (timeout after ${AUTOSAR_TEST_TIMEOUT}s)"
+                    echo "       log: ${log}"
+                    sed -n '1,220p' "$log"
+                    RESULT=1
+                    failed=$((failed + 1))
+                elif grep -q "\\[  FAILED  \\]" "$log"; then
                     echo "[FAIL] ${filter}"
                     echo "       log: ${log}"
                     sed -n '1,220p' "$log"
