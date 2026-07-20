@@ -43,15 +43,33 @@ else
     export DYLD_LIBRARY_PATH="${LWRCL_PREFIX}/lib:${AUTOSAR_AP_PREFIX}/lib:${ICEORYX_PREFIX}/lib:${DDS_PREFIX}/lib:${VSOMEIP_PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
 fi
 
+terminate_pid() {
+    local pid="$1"
+    local timeout_seconds="${2:-2}"
+
+    if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+        return 0
+    fi
+
+    kill -TERM "$pid" 2>/dev/null || true
+    local start_time=$SECONDS
+    while kill -0 "$pid" 2>/dev/null; do
+        if [ $((SECONDS - start_time)) -ge "$timeout_seconds" ]; then
+            kill -KILL "$pid" 2>/dev/null || true
+            break
+        fi
+        sleep 0.1
+    done
+    wait "$pid" 2>/dev/null || true
+}
+
 cleanup_runtime() {
     if [ -n "${ROUTING_MANAGER_PID}" ] && kill -0 "${ROUTING_MANAGER_PID}" 2>/dev/null; then
-        kill -TERM "${ROUTING_MANAGER_PID}" 2>/dev/null || true
-        wait "${ROUTING_MANAGER_PID}" 2>/dev/null || true
+        terminate_pid "${ROUTING_MANAGER_PID}"
         ROUTING_MANAGER_PID=""
     fi
     if [ -n "${ROUDI_PID}" ] && kill -0 "${ROUDI_PID}" 2>/dev/null; then
-        kill -TERM "${ROUDI_PID}" 2>/dev/null || true
-        wait "${ROUDI_PID}" 2>/dev/null || true
+        terminate_pid "${ROUDI_PID}"
         ROUDI_PID=""
     fi
     pkill -x autosar_vsomeip_routing_manager >/dev/null 2>&1 || true
@@ -96,15 +114,24 @@ run_with_timeout() {
     local log_file="$2"
     shift 2
 
-    "$@" > "$log_file" 2>&1 &
-    local pid=$!
+    local pid
+    local kill_target
+    if command -v setsid >/dev/null 2>&1; then
+        setsid "$@" > "$log_file" 2>&1 &
+        pid=$!
+        kill_target="-$pid"
+    else
+        "$@" > "$log_file" 2>&1 &
+        pid=$!
+        kill_target="$pid"
+    fi
     local start_time=$SECONDS
 
     while kill -0 "$pid" 2>/dev/null; do
         if [ $((SECONDS - start_time)) -ge "$timeout_seconds" ]; then
-            kill -TERM "$pid" 2>/dev/null || true
+            kill -TERM "$kill_target" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
             sleep 1
-            kill -KILL "$pid" 2>/dev/null || true
+            kill -KILL "$kill_target" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
             wait "$pid" 2>/dev/null || true
             return 124
         fi
