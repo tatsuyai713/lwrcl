@@ -8,6 +8,7 @@
 #include <cerrno>
 #include <cctype>
 #include <climits>
+#include <cmath>
 #include <condition_variable>
 #include <csignal>
 #include <cstdarg>
@@ -21,15 +22,29 @@
 #include <memory>
 #include <mutex>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <unistd.h>
 
 namespace lwrcl
 {
+  namespace
+  {
+    Duration period_from_rate_hz(double rate_hz)
+    {
+      if (!std::isfinite(rate_hz) || rate_hz <= 0.0)
+      {
+        throw std::invalid_argument("rate_hz must be finite and greater than zero");
+      }
+      return Duration(std::chrono::duration<double>(1.0 / rate_hz));
+    }
+  }
+
   std::condition_variable s_waiting_cv;
   std::mutex s_waiting_mutex;
   volatile std::sig_atomic_t s_signal_status = 0;
@@ -597,53 +612,102 @@ namespace lwrcl
   Clock::ClockType Clock::get_clock_type() const { return type_; }
 
   // Rate implementation
-  Rate::Rate(const Duration &period)
-      : period_(period),
-        next_time_(std::chrono::system_clock::now() +
-                   std::chrono::duration_cast<std::chrono::system_clock::duration>(
-                       std::chrono::nanoseconds(period.nanoseconds())))
+  Rate::Rate(double rate_hz, Clock::SharedPtr clock)
+      : Rate(period_from_rate_hz(rate_hz), std::move(clock))
   {
   }
 
-  void Rate::sleep()
+  Rate::Rate(const Duration &period, Clock::SharedPtr clock)
+      : period_(period),
+        clock_(clock ? clock : std::make_shared<Clock>(Clock::ClockType::SYSTEM_TIME)),
+        next_time_(clock_->now())
   {
-    using sys_clock = std::chrono::system_clock;
-    using sys_dur = sys_clock::duration;
-
-    const sys_dur period_d =
-        std::chrono::duration_cast<sys_dur>(std::chrono::nanoseconds(period_.nanoseconds()));
-
-    auto now = sys_clock::now();
-    if (now >= next_time_)
+    if (period_.nanoseconds() <= 0)
     {
-      const auto behind = now - next_time_;
-      const auto periods_missed = behind / period_d + sys_dur::rep(1);
-      next_time_ += periods_missed * period_d;
+      throw std::invalid_argument("period must be greater than zero");
+    }
+  }
+
+  bool Rate::sleep()
+  {
+    auto now = clock_->now();
+    auto next_interval = next_time_ + period_;
+    if (now < next_time_)
+    {
+      next_interval = now + period_;
+    }
+    next_time_ = next_time_ + period_;
+
+    if (next_interval <= now)
+    {
+      if (now > next_interval + period_)
+      {
+        next_time_ = now + period_;
+      }
+      return false;
     }
 
-    std::this_thread::sleep_until(next_time_);
-    next_time_ += period_d;
+    const int64_t sleep_ns = (next_interval - now).nanoseconds();
+    std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_ns));
+    return true;
+  }
+
+  Clock::ClockType Rate::get_type() const { return clock_->get_clock_type(); }
+
+  void Rate::reset() { next_time_ = clock_->now(); }
+
+  std::chrono::nanoseconds Rate::period() const
+  {
+    return std::chrono::nanoseconds(period_.nanoseconds());
+  }
+
+  WallRate::WallRate(double rate_hz)
+      : WallRate(period_from_rate_hz(rate_hz))
+  {
   }
 
   WallRate::WallRate(const Duration &period)
       : period_(period),
-        next_time_(std::chrono::steady_clock::now() + std::chrono::nanoseconds(period.nanoseconds()))
+        clock_(std::make_shared<Clock>(Clock::ClockType::STEADY_TIME)),
+        next_time_(clock_->now())
   {
+    if (period_.nanoseconds() <= 0)
+    {
+      throw std::invalid_argument("period must be greater than zero");
+    }
   }
 
-  void WallRate::sleep()
+  bool WallRate::sleep()
   {
-    auto now = std::chrono::steady_clock::now();
-    if (now >= next_time_)
+    auto now = clock_->now();
+    auto next_interval = next_time_ + period_;
+    if (now < next_time_)
     {
-      auto periods_missed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - next_time_) /
-                                std::chrono::nanoseconds(period_.nanoseconds()) +
-                            1;
-      next_time_ += periods_missed * std::chrono::nanoseconds(period_.nanoseconds());
+      next_interval = now + period_;
+    }
+    next_time_ = next_time_ + period_;
+
+    if (next_interval <= now)
+    {
+      if (now > next_interval + period_)
+      {
+        next_time_ = now + period_;
+      }
+      return false;
     }
 
-    std::this_thread::sleep_until(next_time_);
-    next_time_ += std::chrono::nanoseconds(period_.nanoseconds());
+    const int64_t sleep_ns = (next_interval - now).nanoseconds();
+    std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_ns));
+    return true;
+  }
+
+  Clock::ClockType WallRate::get_type() const { return clock_->get_clock_type(); }
+
+  void WallRate::reset() { next_time_ = clock_->now(); }
+
+  std::chrono::nanoseconds WallRate::period() const
+  {
+    return std::chrono::nanoseconds(period_.nanoseconds());
   }
 
   // ======================================================================

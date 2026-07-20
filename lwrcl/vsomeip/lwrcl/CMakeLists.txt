@@ -30,7 +30,4 @@ include/timer.hpp
 include/qos.hpp
 DESTINATION include/)
 
-install(FILES
-include/rclcpp/rclcpp.hpp
-include/rclcpp/qos.hpp
-DESTINATION include/rclcpp)
+install(DIRECTORY include/rclcpp DESTINATION include)

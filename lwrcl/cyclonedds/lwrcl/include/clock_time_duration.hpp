@@ -53,6 +53,11 @@ namespace lwrcl
     Duration(int64_t nanoseconds);
     Duration(int32_t seconds, uint32_t nanoseconds);
 
+    static Duration from_seconds(double seconds)
+    {
+      return Duration(std::chrono::duration<double>(seconds));
+    }
+
     template <typename Rep, typename Period>
     Duration(const std::chrono::duration<Rep, Period> &duration)
         : nanoseconds_(std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count())

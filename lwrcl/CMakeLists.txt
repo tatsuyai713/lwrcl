@@ -59,6 +59,7 @@ if(DDS_BACKEND STREQUAL "fastdds")
     if(LWRCL_FASTDDS_INCLUDE_EXTRA)
         include_directories(${LWRCL_FASTDDS_INCLUDE_EXTRA})
     endif()
+    include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/fastdds/lwrcl/include)
     include_directories(${LWRCL_INSTALL_PREFIX}/include
                         ${LWRCL_INSTALL_PREFIX}/include/optionparser)
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
@@ -69,9 +70,9 @@ if(DDS_BACKEND STREQUAL "fastdds")
 
     set(DDS_LIBRARIES fastrtps CACHE INTERNAL "DDS link libraries")
 
+    add_subdirectory(fastdds/lwrcl)
     add_subdirectory(fastdds/tf2)
     add_subdirectory(fastdds/tf2_ros)
-    add_subdirectory(fastdds/lwrcl)
     
     if(BUILD_FFI)
         add_subdirectory(fastdds/lwrcl_ffi)
@@ -120,6 +121,7 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
     foreach(dir ${ICEORYX_INCLUDE_DIRS})
         include_directories(${dir})
     endforeach()
+    include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/cyclonedds/lwrcl/include)
     include_directories(${LWRCL_INSTALL_PREFIX}/include)
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
     link_directories(${DDS_PREFIX}/lib)
@@ -163,9 +165,9 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
             "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath-link,${ICEORYX_PREFIX}/lib")
     endif()
 
+    add_subdirectory(cyclonedds/lwrcl)
     add_subdirectory(cyclonedds/tf2)
     add_subdirectory(cyclonedds/tf2_ros)
-    add_subdirectory(cyclonedds/lwrcl)
 
 elseif(DDS_BACKEND STREQUAL "vsomeip")
     # vsomeip backend: uses vsomeip for transport + standalone CDR for serialization
@@ -193,6 +195,7 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
     # vsomeip headers, CDR headers (all installed under VSOMEIP_PREFIX)
     include_directories(${VSOMEIP_PREFIX}/include)
     # Data type headers
+    include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/vsomeip/lwrcl/include)
     include_directories(${LWRCL_INSTALL_PREFIX}/include)
     link_directories(${LWRCL_INSTALL_PREFIX}/lib)
     link_directories(${VSOMEIP_PREFIX}/lib)
@@ -212,9 +215,9 @@ elseif(DDS_BACKEND STREQUAL "vsomeip")
             "${CMAKE_SHARED_LINKER_FLAGS} -lsocket")
     endif()
 
+    add_subdirectory(vsomeip/lwrcl)
     add_subdirectory(vsomeip/tf2)
     add_subdirectory(vsomeip/tf2_ros)
-    add_subdirectory(vsomeip/lwrcl)
 
 elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
     # Adaptive AUTOSAR DDS backend: uses only ara::com interface APIs.
@@ -282,7 +285,7 @@ elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
     # Adaptive AUTOSAR headers
     include_directories(${AUTOSAR_AP_PREFIX}/include)
     # Prefer workspace lwrcl headers over installed copies in /opt.
-    include_directories(BEFORE ${CMAKE_SOURCE_DIR}/adaptive-autosar/lwrcl/include)
+    include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/adaptive-autosar/lwrcl/include)
     # CycloneDDS headers (needed by data types and tf2, transitive dep)
     include_directories(${DDS_PREFIX}/include)
     include_directories(${DDS_PREFIX}/include/ddscxx)
@@ -308,9 +311,9 @@ elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
     # lwrcl only uses ara::com APIs; ddsc/ddscxx are for data types and tf2
     set(DDS_LIBRARIES AdaptiveAutosarAP::ara_com ddsc ddscxx vsomeip3 CACHE INTERNAL "DDS link libraries")
 
+    add_subdirectory(adaptive-autosar/lwrcl)
     add_subdirectory(adaptive-autosar/tf2)
     add_subdirectory(adaptive-autosar/tf2_ros)
-    add_subdirectory(adaptive-autosar/lwrcl)
 
 else()
     message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', 'vsomeip', or 'adaptive-autosar'.")

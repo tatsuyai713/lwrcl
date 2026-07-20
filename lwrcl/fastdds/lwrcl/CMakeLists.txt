@@ -24,10 +24,7 @@ DESTINATION include/)
 
 install(DIRECTORY ../tf2/include/rcutils DESTINATION include/)
 
-install(FILES
-include/rclcpp/rclcpp.hpp
-include/rclcpp/qos.hpp
-DESTINATION include/rclcpp)
+install(DIRECTORY include/rclcpp DESTINATION include)
 
 install(FILES
 fastdds.xml

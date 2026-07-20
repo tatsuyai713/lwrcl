@@ -14,6 +14,8 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <type_traits>
+#include <utility>
 #include <unordered_map>
 #include <vector>
 #include <cstring>  // for memcpy/memset used by SerializedMessage/Serialization
@@ -29,6 +31,39 @@
 
 namespace lwrcl
 {
+  namespace detail
+  {
+    template <typename T, typename CallbackT>
+    auto make_subscription_callback(CallbackT &&callback, int)
+        -> decltype(std::declval<typename std::decay<CallbackT>::type &>()(std::declval<std::shared_ptr<T>>()),
+                    std::function<void(std::shared_ptr<T>)>())
+    {
+      using Callback = typename std::decay<CallbackT>::type;
+      return [callback = Callback(std::forward<CallbackT>(callback))](std::shared_ptr<T> msg) mutable {
+        callback(msg);
+      };
+    }
+
+    template <typename T, typename CallbackT>
+    auto make_subscription_callback(CallbackT &&callback, long)
+        -> decltype(std::declval<typename std::decay<CallbackT>::type &>()(std::declval<const T &>()),
+                    std::function<void(std::shared_ptr<T>)>())
+    {
+      using Callback = typename std::decay<CallbackT>::type;
+      return [callback = Callback(std::forward<CallbackT>(callback))](std::shared_ptr<T> msg) mutable {
+        callback(*msg);
+      };
+    }
+
+    template <typename T, typename CallbackT>
+    std::function<void(std::shared_ptr<T>)> make_subscription_callback(CallbackT &&callback, ...)
+    {
+      using Callback = typename std::decay<CallbackT>::type;
+      return [callback = Callback(std::forward<CallbackT>(callback))](std::shared_ptr<T> msg) mutable {
+        callback(std::unique_ptr<T>(new T(*msg)));
+      };
+    }
+  } // namespace detail
 
   // Signal handler
   extern void lwrcl_signal_handler(int signal);
@@ -181,22 +216,77 @@ namespace lwrcl
     // Node Options structure
     struct NodeOptions
     {
-      bool use_intra_process_comms = false;
-      bool start_parameter_services = true;
-      bool start_parameter_event_publisher = true;
-      bool allow_undeclared_parameters = false;
-      bool automatically_declare_parameters_from_overrides = false;
+      bool use_intra_process_comms_ = false;
+      bool start_parameter_services_ = true;
+      bool start_parameter_event_publisher_ = true;
+      bool allow_undeclared_parameters_ = false;
+      bool automatically_declare_parameters_from_overrides_ = false;
 
       NodeOptions &set_use_intra_process_comms(bool value)
       {
-        use_intra_process_comms = value;
+        use_intra_process_comms_ = value;
         return *this;
+      }
+
+      NodeOptions &use_intra_process_comms(bool value)
+      {
+        use_intra_process_comms_ = value;
+        return *this;
+      }
+
+      bool use_intra_process_comms() const
+      {
+        return use_intra_process_comms_;
       }
 
       NodeOptions &set_allow_undeclared_parameters(bool value)
       {
-        allow_undeclared_parameters = value;
+        allow_undeclared_parameters_ = value;
         return *this;
+      }
+
+      NodeOptions &allow_undeclared_parameters(bool value)
+      {
+        allow_undeclared_parameters_ = value;
+        return *this;
+      }
+
+      bool allow_undeclared_parameters() const
+      {
+        return allow_undeclared_parameters_;
+      }
+
+      NodeOptions &start_parameter_services(bool value)
+      {
+        start_parameter_services_ = value;
+        return *this;
+      }
+
+      bool start_parameter_services() const
+      {
+        return start_parameter_services_;
+      }
+
+      NodeOptions &start_parameter_event_publisher(bool value)
+      {
+        start_parameter_event_publisher_ = value;
+        return *this;
+      }
+
+      bool start_parameter_event_publisher() const
+      {
+        return start_parameter_event_publisher_;
+      }
+
+      NodeOptions &automatically_declare_parameters_from_overrides(bool value)
+      {
+        automatically_declare_parameters_from_overrides_ = value;
+        return *this;
+      }
+
+      bool automatically_declare_parameters_from_overrides() const
+      {
+        return automatically_declare_parameters_from_overrides_;
       }
     };
 
@@ -230,6 +320,12 @@ namespace lwrcl
       return publisher;
     }
 
+    template <typename T, typename... Args>
+    std::shared_ptr<Publisher<T>> create_publisher(const std::string &topic, const QoS &qos, Args &&...)
+    {
+      return create_publisher<T>(topic, qos);
+    }
+
     template <typename T>
     std::shared_ptr<Subscription<T>> create_subscription(
         const std::string &topic, const uint16_t &depth,
@@ -253,6 +349,27 @@ namespace lwrcl
           participant_.get(), full_topic, qos, std::move(callback_function), callback_mutex_);
       subscription_list_.push_front(subscription);
       return subscription;
+    }
+
+    template <typename T, typename CallbackT, typename... Args>
+    std::shared_ptr<Subscription<T>> create_subscription(
+        const std::string &topic, const QoS &qos, CallbackT &&callback_function, Args &&... args)
+    {
+      std::string full_topic = resolve_topic_name(topic);
+      (void)sizeof...(args);
+      auto callback = detail::make_subscription_callback<T>(std::forward<CallbackT>(callback_function), 0);
+      auto subscription = std::make_shared<Subscription<T>>(
+          participant_.get(), full_topic, qos, std::move(callback), callback_mutex_);
+      subscription_list_.push_front(subscription);
+      return subscription;
+    }
+
+    template <typename T, typename CallbackT, typename... Args>
+    std::shared_ptr<Subscription<T>> create_subscription(
+        const std::string &topic, const uint16_t &depth, CallbackT &&callback_function, Args &&... args)
+    {
+      return create_subscription<T>(
+          topic, QoS(depth), std::forward<CallbackT>(callback_function), std::forward<Args>(args)...);
     }
 
     // Overloads for const reference callback (rclcpp compatible)
@@ -303,6 +420,21 @@ namespace lwrcl
       return service;
     }
 
+    template <typename T, typename CallbackT, typename... Args>
+    std::shared_ptr<Service<T>> create_service(
+        const std::string &service_name, CallbackT &&callback_function, Args &&...)
+    {
+      using Request = typename T::Request;
+      using Response = typename T::Response;
+      using Callback = typename std::decay<CallbackT>::type;
+      std::function<void(std::shared_ptr<Request>, std::shared_ptr<Response>)> callback =
+          [callback = Callback(std::forward<CallbackT>(callback_function))](
+              std::shared_ptr<Request> request, std::shared_ptr<Response> response) mutable {
+            callback(request, response);
+          };
+      return create_service<T>(service_name, std::move(callback));
+    }
+
     template <typename T>
     std::shared_ptr<Client<T>> create_client(const std::string &service_name)
     {
@@ -311,6 +443,12 @@ namespace lwrcl
       client_list_.push_front(client);
 
       return client;
+    }
+
+    template <typename T, typename... Args>
+    std::shared_ptr<Client<T>> create_client(const std::string &service_name, const QoS &, Args &&...)
+    {
+      return create_client<T>(service_name);
     }
 
     template <typename Rep, typename Period>
@@ -327,6 +465,17 @@ namespace lwrcl
       return timer;
     }
 
+    template <typename Rep, typename Period, typename CallbackT, typename... Args>
+    std::shared_ptr<TimerBase> create_timer(
+        std::chrono::duration<Rep, Period> period, CallbackT &&callback_function, Args &&...)
+    {
+      using Callback = typename std::decay<CallbackT>::type;
+      std::function<void()> callback = [callback = Callback(std::forward<CallbackT>(callback_function))]() mutable {
+        callback();
+      };
+      return create_timer(period, std::move(callback));
+    }
+
     template <typename Rep, typename Period>
     std::shared_ptr<TimerBase> create_wall_timer(
         std::chrono::duration<Rep, Period> period, std::function<void()> callback_function)
@@ -341,12 +490,27 @@ namespace lwrcl
       return timer;
     }
 
+    template <typename Rep, typename Period, typename CallbackT, typename... Args>
+    std::shared_ptr<TimerBase> create_wall_timer(
+        std::chrono::duration<Rep, Period> period, CallbackT &&callback_function, Args &&...)
+    {
+      using Callback = typename std::decay<CallbackT>::type;
+      std::function<void()> callback = [callback = Callback(std::forward<CallbackT>(callback_function))]() mutable {
+        callback();
+      };
+      return create_wall_timer(period, std::move(callback));
+    }
+
     // Create node
     static std::shared_ptr<Node> make_shared(int domain_id);
     static std::shared_ptr<Node> make_shared(int domain_id, const std::string &name);
     static std::shared_ptr<Node> make_shared(int domain_id, const std::string &name, const std::string &ns);
     static std::shared_ptr<Node> make_shared(int domain_id, const std::string &name, const std::string &ns, const NodeOptions &options);
     static std::shared_ptr<Node> make_shared(const std::string &name);
+    static std::shared_ptr<Node> make_shared(const std::string &name, const NodeOptions &options)
+    {
+      return make_shared(name, "", options);
+    }
     static std::shared_ptr<Node> make_shared(const std::string &name, const std::string &ns);
     static std::shared_ptr<Node> make_shared(const std::string &name, const std::string &ns, const NodeOptions &options);
     static std::shared_ptr<Node> make_shared(
@@ -375,6 +539,10 @@ namespace lwrcl
     Node(
         std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> participant,
         const std::string &name, const std::string &ns);
+    Node(const std::string &name, const NodeOptions &options)
+        : Node(name, "", options)
+    {
+    }
     // Destructor
     virtual ~Node();
     Node(const Node &) = delete;
@@ -588,23 +756,33 @@ namespace lwrcl
   class Rate
   {
   public:
-    explicit Rate(const Duration &period);
+    explicit Rate(
+        double rate_hz,
+        Clock::SharedPtr clock = std::make_shared<Clock>(Clock::ClockType::SYSTEM_TIME));
+    explicit Rate(
+        const Duration &period,
+        Clock::SharedPtr clock = std::make_shared<Clock>(Clock::ClockType::SYSTEM_TIME));
 
     Rate(const Rate &) = delete;
     Rate &operator=(const Rate &) = delete;
     Rate(Rate &&) = default;
     Rate &operator=(Rate &&) = default;
 
-    void sleep();
+    bool sleep();
+    Clock::ClockType get_type() const;
+    void reset();
+    std::chrono::nanoseconds period() const;
 
   private:
     Duration period_;
-    std::chrono::system_clock::time_point next_time_;
+    Clock::SharedPtr clock_;
+    Time next_time_;
   };
 
   class WallRate
   {
   public:
+    explicit WallRate(double rate_hz);
     explicit WallRate(const Duration &period);
 
     WallRate(const WallRate &) = delete;
@@ -612,11 +790,15 @@ namespace lwrcl
     WallRate(WallRate &&) = default;
     WallRate &operator=(WallRate &&) = default;
 
-    void sleep();
+    bool sleep();
+    Clock::ClockType get_type() const;
+    void reset();
+    std::chrono::nanoseconds period() const;
 
   private:
     Duration period_;
-    std::chrono::steady_clock::time_point next_time_;
+    Clock::SharedPtr clock_;
+    Time next_time_;
   };
 
   // Logger Class

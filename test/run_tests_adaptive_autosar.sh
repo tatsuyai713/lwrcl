@@ -339,10 +339,19 @@ do_run() {
     total=0
     failed=0
     test_names=()
-    while IFS= read -r line; do
-        test_name="$(printf '%s\n' "$line" | sed -nE 's/^  Test +#[0-9]+: //p')"
+    if [ ! -f CTestTestfile.cmake ]; then
+        echo "[ERROR] CTestTestfile.cmake not found in ${BUILD_DIR}" >&2
+        return 1
+    fi
+    while IFS= read -r test_name; do
         [ -n "$test_name" ] && test_names+=("$test_name")
-    done < <(ctest -N)
+    done < <(
+        sed -nE 's/^add_test\(\[?([^] )]+)\]?.*$/\1/p' CTestTestfile.cmake
+    )
+    if [ "${#test_names[@]}" -eq 0 ]; then
+        echo "[ERROR] No tests found in CTestTestfile.cmake" >&2
+        return 1
+    fi
 
     for test_name in "${test_names[@]}"; do
         if [ ! -x "./${test_name}" ]; then
