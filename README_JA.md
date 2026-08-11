@@ -9,29 +9,170 @@
 
 **ROS 2 の rclcpp に似た API を持つ、軽量な DDS 通信ライブラリ**
 
-lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ライブラリです。通信バックエンドとして **CycloneDDS**、**FastDDS**、**vsomeip (SOME/IP)**、**Adaptive AUTOSAR (ara::com)** に対応しており、ROS 2 をフルインストールしなくても ROS 2 ノードとトピック・サービス通信を行えます。
+lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ライブラリです。通信バックエンドとして **CycloneDDS**、**FastDDS**、**RTI Connext DDS**、**vsomeip (SOME/IP)**、**Adaptive AUTOSAR (ara::com)** に対応しています。ネイティブ DDS バックエンドは ROS 2 をフルインストールせず、互換性のある ROS 2 DDS エンドポイントと直接通信できます。SOME/IP と ara::com は独自の wire protocol と service model を使用します。
 
 ---
 
 ## 特徴
 
 - **rclcpp 互換 API** — `rclcpp` 名前空間を使用しているため、既存の ROS 2 コードを少ない変更で移植できます。`RCLCPP_INFO` / `RCLCPP_WARN` などのログマクロも利用可能です。
-- **ROS 2 との相互通信** — ROS 2 ノードと同じ DDS ドメイン上でトピック・サービスを直接やり取りできます。
-- **DDS バックエンド選択** — CycloneDDS、FastDDS、vsomeip、Adaptive AUTOSAR をビルド時に選択できます。複数同時にインストールしておき、用途に応じて切り替えることも可能です。
+- **ROS 2 との相互通信** — ネイティブDDSバックエンドは、同一Domain上の互換ROS 2 DDSエンドポイントと直接通信できます。SOME/IPとara::comでは適切なmappingまたはbridgeが必要です。
+- **バックエンド選択** — CycloneDDS、FastDDS、RTI Connext DDS、vsomeip、Adaptive AUTOSAR をビルド時に選択できます。複数同時にインストールしておき、用途に応じて切り替えることも可能です。
 - **依存関係が少ない** — DDS ライブラリと yaml-cpp のみに依存しており、ビルドが高速です。
 - **マルチプラットフォーム** — Linux (Ubuntu/Debian)、macOS (Homebrew)、QNX 8.0 に対応しています。
 - **tf2 / tf2_ros 同梱** — 座標変換の基本機能を同梱しています。
 
 ---
 
-## 対応する DDS 実装
+## 対応する通信バックエンド
 
-| DDS 実装 | 特徴 |
+| バックエンド | 特徴 |
 |----------|------|
 | **CycloneDDS** | Eclipse Foundation のオープンソース実装。軽量。 |
 | **FastDDS** | eProsima 製。QoS オプションが豊富。 |
+| **RTI Connext DDS** | RTI Modern C++ API と生成 TypePlugin を使用する商用 DDS 実装。 |
 | **vsomeip** | COVESA の SOME/IP 実装。DDS ランタイム不要の車載グレード通信。 |
 | **Adaptive AUTOSAR** | `ara::com` ベースのバックエンド（Adaptive-AUTOSAR 連携）。 |
+
+---
+
+## バックエンドの実装・仕様の違い
+
+各バックエンドは同じ lwrcl／rclcpp 互換 API を公開しますが、wire protocol
+レベルで相互に置き換えられるわけではありません。FastDDS、CycloneDDS、RTI
+Connext DDS はネイティブ DDS 実装です。vsomeip は API を SOME/IP に変換し、
+Adaptive AUTOSAR は生成された `ara::com` proxy/skeleton event に変換します。
+したがってバックエンドを変更すると、リンクするライブラリだけでなく、Discovery、
+serialization、QoS の適用範囲、deployment artifact、zero-copy の条件も変わります。
+
+### アーキテクチャ比較
+
+| 項目 | FastDDS | CycloneDDS | RTI Connext DDS | vsomeip | Adaptive AUTOSAR |
+|---|---|---|---|---|---|
+| Transport／通信モデル | DDS/RTPS | DDS/RTPS | DDS/RTPS | SOME/IP event／method | `ara::com` service／event |
+| lwrcl が使用するネイティブ C++ API | eProsima Fast DDS API | OMG DDS C++ (`dds::...`) | RTI Modern C++ (`dds::...`, `rti::...`) | COVESA `vsomeip` | AUTOSAR `ara::com` proxy/skeleton API |
+| 中心となるruntime entity | `DomainParticipant` | `dds::domain::DomainParticipant` | `dds::domain::DomainParticipant` | `vsomeip::application` | `ara::com` runtime と生成proxy/skeleton |
+| Topic の実装 | DDS Topic/DataWriter/DataReader | DDS Topic/DataWriter/DataReader | DDS Topic/DataWriter/DataReader | hash化したservice ID＋event/eventgroup | 生成service instance＋event |
+| Service の実装 | request/response用DDS Topicの組 | request/response用DDS Topicの組 | request/response用DDS Topicの組 | SOME/IP request/response method | 互換層が生成proxy/skeleton eventをrequest/responseとして使用 |
+| Discovery | DDS participant/endpoint discovery | DDS participant/endpoint discovery | DDS participant/endpoint discovery | SOME/IP-SD | `ara::com` service discovery。下位処理はbinding依存 |
+| ROS 2 DDS wire互換 | Topic名・型名・QoSが互換なら対応 | Topic名・型名・QoSが互換なら対応 | Topic名・型名・QoSが互換なら対応 | 非対応。bridge/gatewayが必要 | 自動では非対応。互換mappingまたはbridgeが必要 |
+| Runtime license | オープンソース | オープンソース | 導入したRTI bundleによってライセンスが必要 | オープンソース | AUTOSAR platform/runtime distributionに依存 |
+
+ソース構造が最も近いのは CycloneDDS と RTI DDS です。どちらも
+`dds::domain`、`dds::pub`、`dds::sub`、`dds::topic` というOMG形式のAPIを
+使用します。FastDDSは同じDDSの概念をeProsima固有APIで実装します。
+vsomeipとAdaptive AUTOSARはDDS実装の差し替えではなく、異なる通信モデルへ
+変換するprotocol adapterです。
+
+### 型生成とSerialization
+
+| バックエンド | 型／コード生成 | 生成されるサポート | Serialization経路 |
+|---|---|---|---|
+| FastDDS | `fastddsgen -typeros2` | Fast DDS TopicDataType/TypeSupport | 生成Fast DDS型サポート経由のFast CDR |
+| CycloneDDS | `idlc -l cxx` | CycloneDDS C++ topic traits | CycloneDDS CDR実装 |
+| RTI Connext DDS | `rtiddsgen -language C++11 -unboundedSupport` | RTI TypeSupport／TypePlugin | `dds::topic::topic_type_support<T>::to_cdr_buffer()`／`from_cdr_buffer()` |
+| vsomeip | CycloneDDS生成のROS型定義 | DDS runtimeへの型登録なし | standalone CycloneDDS CDRでSOME/IP payloadへserialize |
+| Adaptive AUTOSAR | CycloneDDS ROS型＋lwrcl AUTOSAR mapping生成 | `TopicEventProxy<T>`／`TopicEventSkeleton<T>`とmanifest | 選択した`ara::com` binding/runtimeが処理 |
+
+生成型はすべて、lwrclが期待するROS形式のソースAPIへ正規化されます。具体的には
+public field、`SharedPtr`／`ConstSharedPtr`、snake_case include wrapper、serviceの
+Request/Response wrapperを生成します。RTIではstock `rtiddsgen`がaccessor methodを
+生成し、非境界IDL sequenceにもデフォルト上限100を設定するため、追加のpatch処理が
+必要です。RTI型リポジトリでは`-unboundedSupport`を有効にし、
+`sensor_msgs::msg::Image::data`のようなROS arrayを実際の非境界sequenceとして
+生成します。
+
+生成型はバックエンド固有のABI artifactです。同一application binary内で
+`/opt/fast-dds-libs`、`/opt/cyclonedds-libs`、`/opt/rtidds-libs`、
+`/opt/vsomeip-libs`、`/opt/autosar-ap-libs`のheaderやlibraryを混在させないで
+ください。
+
+### QoSの違い
+
+`rclcpp::QoS` APIは全バックエンドにありますが、transportへ実際に適用される範囲が
+異なります。
+
+| QoS | FastDDS | CycloneDDS | RTI Connext DDS | vsomeip | Adaptive AUTOSAR |
+|---|---|---|---|---|---|
+| History／depth | DDSへ反映 | DDSへ反映 | DDSへ反映 | depthはlwrclローカル受信bufferの上限として使用 | depthはlwrcl受信bufferへ反映。transportはbinding依存 |
+| Reliability | DDSへ反映 | DDSへ反映 | DDSへ反映 | SOME/IP transport QoSへは未変換 | binding／deployment定義に依存 |
+| Durability | DDSへ反映 | DDSへ反映 | DDSへ反映 | 未変換 | binding／deployment定義に依存 |
+| Deadline／lifespan／liveliness | FastDDSバックエンドがDDSへ反映 | APIでは保持するが、現在のPublisher/Subscriptionはhistory、reliability、durabilityを中心に反映 | APIでは保持するが、現在のPublisher/Subscriptionはhistory、reliability、durabilityを中心に反映 | API互換値のみ | deployment／binding定義に依存 |
+| 大容量Reliable sample | DDS fragmentation | DDS fragmentation | Reliable fragmentationではRTI asynchronous publish modeを使用 | SOME/IP payload／routing上限に依存 | binding固有の上限に依存 |
+
+RTI Modern C++のQoS objectは、所有entityの設定済みdefaultから初期化する必要が
+あります。そのためRTIバックエンドは`participant.default_topic_qos()`、
+`publisher.default_datawriter_qos()`、`subscriber.default_datareader_qos()`を
+取得してからlwrclのoverrideを適用します。またRTIは、同一Participant内で同じ名前・
+同じ型のTopicを再assertすると拒否するため、既存のtyped Topicを検索して再利用します。
+
+### Loaned MessageとZero Copy
+
+application codeを共通化するため、すべてのバックエンドに
+`borrow_loaned_message()`と`take_loaned_message()`があります。ただし、
+`can_loan_messages()`はAPIが利用可能であることを表し、end-to-endで必ずzero copyに
+なることを保証しません。
+
+| バックエンド | Publisher側 | Subscriber側 | 条件／制約 |
+|---|---|---|---|
+| FastDDS | native `DataWriter::loan_sample()`。失敗時はheap fallback | native DataReader loan／return | Fast DDS transport、memory policy、型によって利用可否が変わる |
+| CycloneDDS | native writer loan。失敗時はheap fallback | `dds::sub::LoanedSamples<T>` | native SHM zero copyにはCycloneDDS SHM、iceoryx、互換性のある固定長型が必要 |
+| RTI Connext DDS | 固定長の生成ROS型はnative `DataWriter::get_loan()`、失敗時はheap fallback | RTI `dds::sub::LoanedSamples<T>` | 固定長IDLは`SHMEM_REF`として生成。string／sequenceはfallbackで通常のSHMまたはnetwork transportを使用 |
+| vsomeip | heap messageをCDR serialize後、SOME/IP payloadへ格納 | payloadを中間copyなしで参照した後、ROS objectへdeserialize | loan API互換であり、end-to-end zero copyではない |
+| Adaptive AUTOSAR | binding対応時は`SkeletonEvent::Allocate()`、非対応時はheap fallback | `ara::com::SamplePtr<T>` | zero copy可否は選択したbinding依存。mutable access時はcopyを生成 |
+
+RTI用の型generatorは、各ROS IDLとinclude先を再帰的に判定し、object graph全体が
+固定長の場合だけ`@transfer_mode(SHMEM_REF)`を付与します。
+`borrow_loaned_message()`はRTIの`DataWriter::get_loan()`から領域を取得し、未publishの
+loanは`discard_loan()`で返却します。`write()`に成功した場合は所有権がRTIへ戻ります。
+型に`string`、`wstring`、`sequence`が含まれる場合、またはRTIのloan poolが一時的に
+枯渇した場合だけ、portable messageをheapに確保します。
+
+RTI shared-memory transportとRTI zero-copy transferは同義ではありません。通常の可変長
+ROS型もshared-memory transportで送れますが、STL表現をserializeし、transport bufferへ
+copyします。RTI FlatDataのmutable型なら可変長データをloan済みserialized buffer内で
+構築できますが、Builder／Offset APIを使う別のC++型であり、patch済みROS型の
+`std::string`／`std::vector` APIとは一致しません。そのため、このバックエンドは公開
+ROS message型を暗黙にFlatDataへ置き換えません。
+
+### 設定・Deploymentの違い
+
+| バックエンド | 主なruntime設定 | デフォルトinstall先 | 主な要件 |
+|---|---|---|---|
+| FastDDS | `FASTDDS_DEFAULT_PROFILES_FILE`とFast DDS XML | `/opt/fast-dds-libs` | Fast DDS、Fast CDR、FastDDS用生成ROS型 |
+| CycloneDDS | `CYCLONEDDS_URI`とCycloneDDS XML | `/opt/cyclonedds-libs` | CycloneDDS/CycloneDDS-CXX。SHMにはiceoryxとRouDiが必要 |
+| RTI Connext DDS | RTI QoS profile、`NDDSHOME`、`CONNEXTDDS_ARCH`、必要に応じて`RTI_LICENSE_FILE` | `/opt/rtidds-libs` | 対象architectureの`rtisetenv`をsourceし、導入bundle／機能に合うlicenseを使用 |
+| vsomeip | vsomeip JSON、routing manager、application/service設定 | `/opt/vsomeip-libs` | runtimeにBoostとvsomeip。CycloneDDS `idlc`／CDR部分はbuild-time serialization依存でありDDS transport依存ではない |
+| Adaptive AUTOSAR | ARXMLと生成mapping／manifest。`ARA_COM_EVENT_BINDING`で`vsomeip`、`dds`、`iceoryx`を選択 | `/opt/autosar-ap-libs` | Adaptive AUTOSAR AP runtime、生成proxy/skeleton metadata、選択bindingの依存関係 |
+
+現在のproject scriptは、FastDDS／CycloneDDSではLinux・macOS・QNX、vsomeipでは
+依存関係を導入できるLinux・macOS・QNX、Adaptive AUTOSARではLinux・QNXを対象に
+しています。RTIバックエンドは現在RTI Connext DDS 7.3.0＋x86_64 Linuxでbuild／test
+済みです。他のRTI targetでは、一致するlicensed architecture packageが必要で、
+platform固有build scriptの追加が必要になる場合があります。
+
+RTI licenseが複数存在する場合は`RTI_LICENSE_FILE`を明示してください。明示しない場合、
+RTI applicationはcurrent directoryと`NDDSHOME`も探索するため、意図したproduction
+licenseとは異なるファイルを選択する可能性があります。
+
+Adaptive AUTOSARは他のバックエンドより多くのbuild-time deployment metadataを
+必要とします。`build_apps.sh adaptive-autosar`はpublisher、subscription、service、
+clientの生成箇所をscanし、applicationが使うmapping、manifest、proxy/skeleton headerを
+生成します。TopicやServiceを変更した場合は、これらartifactの再生成と再deploymentが
+必要になることがあります。
+
+### バックエンド選択の目安
+
+- **CycloneDDS**: 小さいopen-source DDS runtime、ROS 2 wire互換、iceoryx SHMを
+  利用したい場合。
+- **FastDDS**: Fast DDS ecosystemとの互換、拡張QoS mapping、native loan APIを
+  重視する場合。
+- **RTI Connext DDS**: RTIを標準採用している環境、商用tool/support、RTI製品間の
+  interoperabilityが必要で、対象RTI packageとlicenseを利用できる場合。
+- **vsomeip**: DDS DiscoveryやDDS wire互換を必要とせず、native SOME/IPとして
+  deploymentする場合。
+- **Adaptive AUTOSAR**: 公開communication boundaryを`ara::com`とし、AUTOSAR
+  manifestと生成proxy/skeleton artifactでdeploymentを管理する場合。
 
 ---
 
@@ -44,12 +185,12 @@ lwrcl は、ROS 2 の rclcpp と互換性のある API を提供する軽量ラ�
 | Service / Client | ✅ | ✅ |
 | Timer (create_timer / create_wall_timer) | ✅ | ✅ |
 | Executor (Single / Multi-threaded) | ✅ | ✅ |
-| QoS (Reliability, Durability, History) | ✅ | ✅ |
-| QoS (Deadline, Lifespan, Liveliness) | ✅ | ✅ |
+| QoS (Reliability, Durability, History) | ✅（mappingはバックエンド依存） | ✅ |
+| QoS (Deadline, Lifespan, Liveliness) | ⚠️ バックエンド依存 | ✅ |
 | QoS プリセット (SensorDataQoS 等) | ✅ | ✅ |
 | Parameter (declare, get, set) | ✅ | ✅ |
 | Parameter File (YAML) | ✅ | ✅ |
-| Zero Copy (Loaned Messages) | ✅ | ✅ |
+| Zero Copy (Loaned Messages) | ⚠️ バックエンド／型／transport依存 | ✅ |
 | WaitSet | ✅ | ✅ |
 | Namespace サポート | ✅ | ✅ |
 | Time / Duration / Clock / Rate | ✅ | ✅ |
@@ -234,7 +375,7 @@ grep VmRSS /proc/$!/status
 
 - CMake 3.16.3 以上
 - C++14 対応コンパイラ
-- 通信バックエンド（CycloneDDS、FastDDS、vsomeip、または Adaptive AUTOSAR）
+- 通信バックエンド（CycloneDDS、FastDDS、RTI Connext DDS、vsomeip、または Adaptive AUTOSAR）
 - yaml-cpp（サブモジュールとして同梱）
 - Boost（vsomeip バックエンド使用時に必要）
 - macOS では Homebrew を使用します。互換性のため、`install_cmake_macos.sh` で CMake 3.31.6、`install_boost_macos.sh` で Boost 1.85 を導入します。
@@ -246,10 +387,10 @@ grep VmRSS /proc/$!/status
 すべてのビルドスクリプトは以下の形式で実行します:
 
 ```
-./build_<target>.sh <fastdds|cyclonedds|vsomeip|adaptive-autosar> [install|clean]
+./build_<target>.sh <fastdds|cyclonedds|rtidds|vsomeip|adaptive-autosar> [install|clean]
 ```
 
-- 第 1 引数: 通信バックエンド（`fastdds`、`cyclonedds`、`vsomeip`、または `adaptive-autosar`）
+- 第 1 引数: 通信バックエンド（`fastdds`、`cyclonedds`、`rtidds`、`vsomeip`、または `adaptive-autosar`）
 - 第 2 引数: `install` でビルド＆インストール、`clean` でビルドディレクトリ削除
 
 ### 前提条件
@@ -284,6 +425,20 @@ source ~/.bashrc
 ```
 
 > Arch Linux の場合は `install_fast_dds_archlinux.sh` を使用してください。
+
+**RTI Connext DDS:**
+
+RTI Connext DDS本体を別途導入し、対象architectureの環境scriptをsourceして、
+production licenseを明示してからビルドします。
+
+```bash
+source "$HOME/rti_connext_dds-7.3.0/resource/scripts/rtisetenv_x64Linux4gcc7.3.0.bash"
+export RTI_LICENSE_FILE=/path/to/production/rti_license.dat
+./build_all.sh rtidds install
+```
+
+`rtidds`ビルドはlwrcl、生成ROS型library、yaml-cppを`/opt/rtidds-libs`へ
+インストールします。RTI SDK本体やlicenseは再配布しません。
 
 **vsomeip (SOME/IP):**
 
@@ -328,6 +483,7 @@ ROS 2 互換のメッセージ型（`std_msgs`, `sensor_msgs`, `geometry_msgs` �
 ビルド済みバイナリは `apps/install-fastdds/` に配置されます。
 
 > **CycloneDDS を使う場合は、上記コマンドの `fastdds` を `cyclonedds` に置き換えてください。**
+> **RTI Connext DDSを使う場合は、`rtisetenv`をsourceし、`fastdds`を`rtidds`に置き換えてください。**
 > **vsomeip を使う場合は、上記コマンドの `fastdds` を `vsomeip` に置き換えてください。**
 > **Adaptive AUTOSAR の場合は、以下の専用手順を実行してください。**
 

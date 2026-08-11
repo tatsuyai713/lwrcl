@@ -78,6 +78,11 @@ if [ "$BACKEND" = "fastdds" ]; then
 elif [ "$BACKEND" = "cyclonedds" ]; then
     DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
     LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/cyclonedds-libs}"
+elif [ "$BACKEND" = "rtidds" ]; then
+    : "${NDDSHOME:?Source an RTI rtisetenv script before building rtidds}"
+    : "${CONNEXTDDS_ARCH:?Source an RTI rtisetenv script before building rtidds}"
+    DDS_PREFIX="${NDDSHOME}"
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/rtidds-libs}"
 elif [ "$BACKEND" = "vsomeip" ]; then
     DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
     VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
@@ -89,7 +94,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/autosar-ap-libs}"
     AUTOSAR_APP_SOURCE_ROOT="${AUTOSAR_APP_SOURCE_ROOT:-${SCRIPT_DIR}/apps}"
 else
-    echo "Usage: $0 <fastdds|cyclonedds|vsomeip|adaptive-autosar> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|rtidds|vsomeip|adaptive-autosar> [install|clean]"
     exit 1
 fi
 
@@ -174,6 +179,12 @@ elif [ "$BACKEND" = "cyclonedds" ]; then
         -DDDS_PREFIX="$DDS_PREFIX"
         -DICEORYX_PREFIX="$ICEORYX_PREFIX"
         -DCMAKE_PREFIX_PATH="${DDS_PREFIX}/lib/cmake${EXTRA_CMAKE_PREFIX_PATH:+;${EXTRA_CMAKE_PREFIX_PATH}}"
+    )
+elif [ "$BACKEND" = "rtidds" ]; then
+    export LD_LIBRARY_PATH="${NDDSHOME}/lib/${CONNEXTDDS_ARCH}:${LWRCL_PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    CMAKE_ARGS+=(
+        -DNDDSHOME="${NDDSHOME}"
+        -DCONNEXTDDS_ARCH="${CONNEXTDDS_ARCH}"
     )
 elif [ "$BACKEND" = "vsomeip" ]; then
     export PATH="${DDS_PREFIX}/bin:${PATH}"

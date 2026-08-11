@@ -39,6 +39,8 @@ if [ "$BACKEND" = "fastdds" ]; then
 elif [ "$BACKEND" = "cyclonedds" ]; then
     DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
     LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/cyclonedds-libs}"
+elif [ "$BACKEND" = "rtidds" ]; then
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/rtidds-libs}"
 elif [ "$BACKEND" = "adaptive-autosar" ]; then
     # libraries/CMakeLists.txt has no adaptive-autosar backend.
     # Build yaml-cpp with CycloneDDS settings and install it into autosar-ap-libs.
@@ -49,7 +51,7 @@ elif [ "$BACKEND" = "vsomeip" ]; then
     VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
     LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/vsomeip-libs}"
 else
-    echo "Usage: $0 <fastdds|cyclonedds|adaptive-autosar|vsomeip> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|rtidds|adaptive-autosar|vsomeip> [install|clean]"
     exit 1
 fi
 

@@ -14,6 +14,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
+#include "std_msgs/msg/int32.hpp"
 
 using namespace std::chrono_literals;
 
@@ -76,3 +77,31 @@ TEST_F(TransportFastPathTest, NormalPublishReceivesImage) {
   EXPECT_EQ(rx_width, 320u);
   EXPECT_EQ(rx_first_byte, 0x24u);
 }
+
+#if defined(LWRCL_BACKEND_RTIDDS)
+TEST_F(TransportFastPathTest, NativeWriterLoanForFixedSizeRosType) {
+  auto node = rclcpp::Node::make_shared("rti_native_writer_loan_test");
+  auto pub = node->create_publisher<std_msgs::msg::Int32>(
+      "rti_native_writer_loan", rclcpp::QoS(1));
+
+  ASSERT_TRUE(pub->is_native_loan_supported());
+  auto loan = pub->borrow_loaned_message();
+  ASSERT_TRUE(loan.is_valid());
+  EXPECT_TRUE(loan.is_loaned());
+  loan->data = 42;
+
+  EXPECT_NO_THROW(pub->publish(std::move(loan)));
+  EXPECT_FALSE(loan.is_valid());
+}
+
+TEST_F(TransportFastPathTest, VariableSizeRosTypeUsesSafeFallback) {
+  auto node = rclcpp::Node::make_shared("rti_variable_writer_loan_test");
+  auto pub = node->create_publisher<sensor_msgs::msg::Image>(
+      "rti_variable_writer_loan", rclcpp::QoS(1));
+
+  EXPECT_FALSE(pub->is_native_loan_supported());
+  auto loan = pub->borrow_loaned_message();
+  ASSERT_TRUE(loan.is_valid());
+  EXPECT_FALSE(loan.is_loaned());
+}
+#endif

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16.3)
 project(data_types)
 
 set(DDS_BACKEND "fastdds" CACHE STRING "DDS backend to use")
-set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "vsomeip" "adaptive-autosar")
+set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "rtidds" "vsomeip" "adaptive-autosar")
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -82,6 +82,17 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
     endif()
     add_subdirectory(src/ros-data-types-cyclonedds/src)
 
+elseif(DDS_BACKEND STREQUAL "rtidds")
+    if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
+        set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/qnx/rtidds-libs)
+    else()
+        set(LWRCL_INSTALL_PREFIX_DEFAULT /opt/rtidds-libs)
+    endif()
+    set(LWRCL_INSTALL_PREFIX "${LWRCL_INSTALL_PREFIX_DEFAULT}" CACHE PATH "LWRCL install prefix")
+    include_directories(${LWRCL_INSTALL_PREFIX}/include)
+    link_directories(${LWRCL_INSTALL_PREFIX}/lib)
+    add_subdirectory(src/ros-data-types-for-rtidds)
+
 elseif(DDS_BACKEND STREQUAL "vsomeip")
     # vsomeip uses CycloneDDS-generated types but links against standalone CDR
     # library (liblwrcl_cdr.a) instead of the full CycloneDDS runtime.
@@ -111,5 +122,5 @@ elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
     add_subdirectory(src/ros-data-types-cyclonedds/src)
 
 else()
-    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', 'vsomeip', or 'adaptive-autosar'.")
+    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', 'rtidds', 'vsomeip', or 'adaptive-autosar'.")
 endif()

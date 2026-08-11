@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16.3)
 project(lwrcl)
 
 set(DDS_BACKEND "fastdds" CACHE STRING "DDS backend to use")
-set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "vsomeip" "adaptive-autosar")
+set_property(CACHE DDS_BACKEND PROPERTY STRINGS "fastdds" "cyclonedds" "rtidds" "vsomeip" "adaptive-autosar")
 
 option(BUILD_FFI "Build FFI bindings for Dart/Flutter" OFF)
 
@@ -169,6 +169,33 @@ elseif(DDS_BACKEND STREQUAL "cyclonedds")
     add_subdirectory(cyclonedds/tf2)
     add_subdirectory(cyclonedds/tf2_ros)
 
+elseif(DDS_BACKEND STREQUAL "rtidds")
+    set(CMAKE_CXX_STANDARD 14)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+    set(NDDSHOME "$ENV{NDDSHOME}" CACHE PATH "RTI Connext DDS installation")
+    set(CONNEXTDDS_ARCH "$ENV{CONNEXTDDS_ARCH}" CACHE STRING "RTI Connext target architecture")
+    set(LWRCL_INSTALL_PREFIX "$ENV{LWRCL_PREFIX}" CACHE PATH "LWRCL install prefix")
+    if(NOT LWRCL_INSTALL_PREFIX)
+        set(LWRCL_INSTALL_PREFIX "/opt/rtidds-libs" CACHE PATH "LWRCL install prefix" FORCE)
+    endif()
+    if(NOT NDDSHOME)
+        message(FATAL_ERROR "NDDSHOME is not set. Source an RTI rtisetenv script first.")
+    endif()
+    if(NOT CONNEXTDDS_ARCH)
+        message(FATAL_ERROR "CONNEXTDDS_ARCH is not set. Source an RTI rtisetenv script first.")
+    endif()
+
+    include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/rtidds/lwrcl/include)
+    include_directories(${NDDSHOME}/include ${NDDSHOME}/include/ndds ${NDDSHOME}/include/ndds/hpp ${LWRCL_INSTALL_PREFIX}/include)
+    add_compile_definitions(RTI_UNIX RTI_LINUX)
+    link_directories(${NDDSHOME}/lib/${CONNEXTDDS_ARCH} ${LWRCL_INSTALL_PREFIX}/lib)
+    set(DDS_LIBRARIES nddsmetp nddscpp2 nddsc nddscore CACHE INTERNAL "DDS link libraries")
+
+    add_subdirectory(rtidds/lwrcl)
+    add_subdirectory(rtidds/tf2)
+    add_subdirectory(rtidds/tf2_ros)
+
 elseif(DDS_BACKEND STREQUAL "vsomeip")
     # vsomeip backend: uses vsomeip for transport + standalone CDR for serialization
     # NO CycloneDDS runtime dependency required.
@@ -316,5 +343,5 @@ elseif(DDS_BACKEND STREQUAL "adaptive-autosar")
     add_subdirectory(adaptive-autosar/tf2_ros)
 
 else()
-    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', 'vsomeip', or 'adaptive-autosar'.")
+    message(FATAL_ERROR "Unknown DDS_BACKEND: ${DDS_BACKEND}. Use 'fastdds', 'cyclonedds', 'rtidds', 'vsomeip', or 'adaptive-autosar'.")
 endif()

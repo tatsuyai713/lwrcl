@@ -7,3 +7,6 @@
 [submodule "data_types/src/ros-data-types-cyclonedds"]
 	path = data_types/src/ros-data-types-cyclonedds
 	url = https://github.com/tatsuyai713/ros-data-types-cyclonedds.git
+[submodule "data_types/src/ros-data-types-for-rtidds"]
+	path = data_types/src/ros-data-types-for-rtidds
+	url = https://github.com/tatsuyai713/ros-data-types-for-rtidds.git

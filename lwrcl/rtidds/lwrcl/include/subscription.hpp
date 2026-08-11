@@ -1,0 +1,742 @@
+#ifndef LWRCL_SUBSCRIBER_HPP_
+#define LWRCL_SUBSCRIBER_HPP_
+
+#include <atomic>
+#include <chrono>
+#include <iostream>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <deque>
+#include <vector>
+
+#include <dds/dds.hpp>
+#include <dds/topic/find.hpp>
+#include <dds/sub/cond/ReadCondition.hpp>
+#include <dds/core/cond/WaitSet.hpp>
+#include "qos.hpp"
+
+#define MAX_POLLABLE_BUFFER_SIZE 100
+
+namespace lwrcl
+{
+
+  // =========================================================================
+  // LoanedSubscriptionMessage — zero-copy subscription helper (RTI DDS)
+  //
+  // Wraps a single sample from dds::sub::LoanedSamples<T>.  The underlying
+  // loan is reference-counted via shared_ptr so the DDS loan is kept alive
+  // until all LoanedSubscriptionMessage instances referencing it are
+  // destroyed.
+  // =========================================================================
+  template <typename T>
+  class LoanedSubscriptionMessage
+  {
+  public:
+    /// Lightweight sample-info struct compatible with the FastDDS API
+    /// (provides the .valid_data member used by examples / tests).
+    struct SampleInfo
+    {
+      bool valid_data = false;
+    };
+
+    LoanedSubscriptionMessage() = default;
+
+    /**
+     * @brief Construct from a shared LoanedSamples container + pointer to the sample data.
+     *
+     * The shared_ptr keeps the DDS loan alive until all messages sharing
+     * the same loan are destroyed.
+     */
+    LoanedSubscriptionMessage(
+        std::shared_ptr<dds::sub::LoanedSamples<T>> samples,
+        const T* data_ptr)
+        : samples_(std::move(samples)),
+          data_ptr_(data_ptr),
+          is_valid_(data_ptr_ != nullptr)
+    {
+    }
+
+    explicit LoanedSubscriptionMessage(std::shared_ptr<T> shared_message)
+        : shared_message_(std::move(shared_message)),
+          data_ptr_(shared_message_.get()),
+          is_valid_(data_ptr_ != nullptr)
+    {
+    }
+
+    ~LoanedSubscriptionMessage() = default;
+
+    // Move only — no copy
+    LoanedSubscriptionMessage(const LoanedSubscriptionMessage &) = delete;
+    LoanedSubscriptionMessage &operator=(const LoanedSubscriptionMessage &) = delete;
+
+    LoanedSubscriptionMessage(LoanedSubscriptionMessage &&other) noexcept
+        : samples_(std::move(other.samples_)),
+          shared_message_(std::move(other.shared_message_)),
+          data_ptr_(other.data_ptr_),
+          is_valid_(other.is_valid_)
+    {
+      other.data_ptr_ = nullptr;
+      other.is_valid_ = false;
+    }
+
+    LoanedSubscriptionMessage &operator=(LoanedSubscriptionMessage &&other) noexcept
+    {
+      if (this != &other)
+      {
+        samples_ = std::move(other.samples_);
+        shared_message_ = std::move(other.shared_message_);
+        data_ptr_ = other.data_ptr_;
+        is_valid_ = other.is_valid_;
+        other.data_ptr_ = nullptr;
+        other.is_valid_ = false;
+      }
+      return *this;
+    }
+
+    /// Check if the loaned message is valid
+    bool is_valid() const { return is_valid_; }
+    operator bool() const { return is_valid_; }
+
+    /// Get a reference to the loaned message data
+    T &get()
+    {
+      if (!is_valid_)
+        throw std::runtime_error("Attempting to access invalid loaned message");
+      return const_cast<T &>(*data_ptr_);
+    }
+
+    const T &get() const
+    {
+      if (!is_valid_)
+        throw std::runtime_error("Attempting to access invalid loaned message");
+      return *data_ptr_;
+    }
+
+    T *operator->() { return &get(); }
+    const T *operator->() const { return &get(); }
+    T &operator*() { return get(); }
+    const T &operator*() const { return get(); }
+
+    /**
+     * @brief Get sample information.
+     *
+     * Returns a lightweight SampleInfo with a .valid_data field
+     * compatible with the FastDDS zero-copy examples.
+     */
+    SampleInfo get_sample_info() const
+    {
+      if (!is_valid_)
+        throw std::runtime_error("Attempting to access sample info of invalid loaned message");
+      return SampleInfo{true};  // validity already checked during construction
+    }
+
+    /// Release the underlying loan explicitly (automatic on destruction)
+    void release()
+    {
+      samples_.reset();
+      shared_message_.reset();
+      data_ptr_ = nullptr;
+      is_valid_ = false;
+    }
+
+  private:
+    std::shared_ptr<dds::sub::LoanedSamples<T>> samples_;
+    std::shared_ptr<T> shared_message_;
+    const T* data_ptr_ = nullptr;
+    bool is_valid_ = false;
+  };
+
+  struct MessageInfo
+  {
+    std::chrono::system_clock::time_point source_timestamp;
+    bool from_intra_process = false;
+  };
+
+  enum class WaitResultKind
+  {
+    Ready,
+    Timeout,
+    Error
+  };
+
+  class WaitResult
+  {
+  public:
+    explicit WaitResult(WaitResultKind k) : kind_(k) {}
+    WaitResultKind kind() const { return kind_; }
+
+  private:
+    WaitResultKind kind_;
+  };
+
+  struct SubscriptionHolder
+  {
+    std::function<bool()> has_message;
+    std::function<bool(void *, MessageInfo &)> take;
+  };
+
+  // Compute the pollable-buffer bound from the QoS so buffered history follows
+  // the requested depth instead of an arbitrary fixed size. This also bounds
+  // how many RTI DataReader loans may be held by the buffer.
+  inline size_t pollable_buffer_bound(const QoS &qos)
+  {
+    if (qos.get_history() == QoS::HistoryPolicy::KEEP_ALL || qos.get_depth() == 0)
+    {
+      return MAX_POLLABLE_BUFFER_SIZE;
+    }
+    return qos.get_depth();
+  }
+
+  template <typename T>
+  class SubscriberWaitSet
+  {
+  public:
+    SubscriberWaitSet(
+        std::function<void(std::shared_ptr<T>)> callback_function,
+        std::shared_ptr<std::mutex> node_mutex,
+        size_t buffer_bound = MAX_POLLABLE_BUFFER_SIZE)
+        : callback_function_(callback_function),
+          node_mutex_(node_mutex),
+          reader_(nullptr),
+          stop_flag_(false),
+          waitset_thread_(),
+          lwrcl_subscriber_mutex_(std::make_shared<std::mutex>()),
+          pollable_buffer_(),
+          buffer_bound_(buffer_bound > 0 ? buffer_bound : 1),
+          count_(0)
+    {
+    }
+
+    ~SubscriberWaitSet() { stop(); }
+
+    SubscriberWaitSet(const SubscriberWaitSet &) = delete;
+    SubscriberWaitSet &operator=(const SubscriberWaitSet &) = delete;
+    SubscriberWaitSet(SubscriberWaitSet &&) = delete;
+    SubscriberWaitSet &operator=(SubscriberWaitSet &&) = delete;
+
+    void ready(std::shared_ptr<dds::sub::DataReader<T>> reader)
+    {
+      reader_ = reader;
+      stop_flag_.store(false);
+      // Pre-create ReadCondition so it can be shared with a unified WaitSet.
+      read_cond_ = std::make_shared<dds::sub::cond::ReadCondition>(
+          *reader_, dds::sub::status::DataState::any_data());
+    }
+
+    void start()
+    {
+      waitset_thread_ = std::thread(&SubscriberWaitSet::run, this);
+    }
+
+    void stop()
+    {
+      stop_flag_.store(true);
+      if (waitset_thread_.joinable())
+      {
+        waitset_thread_.join();
+      }
+    }
+
+    // Register this subscription's ReadCondition with an external (unified) WaitSet.
+    // Stops the per-subscription thread so that the caller's WaitSet drives delivery.
+    void add_to_waitset(dds::core::cond::WaitSet& ws)
+    {
+      stop(); // stop per-subscription thread; unified WaitSet takes over
+      if (read_cond_) ws += *read_cond_;
+    }
+
+    // Invoke the callback if the ReadCondition has triggered (data is available).
+    // Called from the unified-WaitSet spin loop after a successful wait().
+    // Returns true if any data was processed.
+    bool invoke_if_data()
+    {
+      if (read_cond_ && read_cond_->trigger_value())
+      {
+        take_available();
+        return true;
+      }
+      return false;
+    }
+
+    int32_t get_publisher_count()
+    {
+      return count_.load();
+    }
+
+    bool take(std::shared_ptr<T> &out_msg, lwrcl::MessageInfo &info)
+    {
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+      if (pollable_buffer_.empty())
+      {
+        return false;
+      }
+      auto front = std::move(pollable_buffer_.front());
+      pollable_buffer_.pop_front();
+      out_msg = std::move(front.first);
+      info = front.second;
+      return true;
+    }
+
+    bool take(T &out_msg, lwrcl::MessageInfo &info)
+    {
+      std::shared_ptr<T> msg_ptr;
+      if (!take(msg_ptr, info))
+      {
+        return false;
+      }
+      out_msg = std::move(*msg_ptr);
+      return true;
+    }
+
+    bool has_message()
+    {
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+      return !pollable_buffer_.empty();
+    }
+
+    size_t buffered_count() const
+    {
+      std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+      return pollable_buffer_.size();
+    }
+
+    /**
+     * @brief Take a loaned message directly from the reader (zero-copy).
+     *
+     * LoanedSubscriptionMessage keeps the RTI DataReader loan alive until it
+     * is destroyed.
+     *
+     * @param out_loaned  Output loaned message
+     * @return true if a message was successfully taken
+     */
+    bool take_loaned(LoanedSubscriptionMessage<T> &out_loaned)
+    {
+      if (!reader_)
+      {
+        return false;
+      }
+
+      try
+      {
+        dds::sub::LoanedSamples<T> samples = reader_->take();
+        if (samples.length() > 0)
+        {
+          auto loan_guard =
+              std::make_shared<dds::sub::LoanedSamples<T>>(std::move(samples));
+          for (auto &s : *loan_guard)
+          {
+            if (s.info().valid())
+            {
+              const T* data_ptr = &s.data();
+              out_loaned = LoanedSubscriptionMessage<T>(loan_guard, data_ptr);
+              return true;
+            }
+          }
+        }
+      }
+      catch (const dds::core::Exception &)
+      {
+      }
+      return false;
+    }
+
+    /**
+     * @brief Get the DataReader for direct access (advanced use)
+     */
+    dds::sub::DataReader<T> *get_reader() { return reader_.get(); }
+
+  private:
+    // Serialized by take_mutex_: reachable concurrently from the
+    // per-subscription WaitSet thread and from spin()/try_spin_some().
+    void take_available()
+    {
+      std::lock_guard<std::mutex> take_lock(take_mutex_);
+      try {
+        dds::sub::LoanedSamples<T> samples = reader_->take();
+        if (samples.length() > 0) {
+          auto loan_guard = std::make_shared<dds::sub::LoanedSamples<T>>(std::move(samples));
+          for (auto &sample : *loan_guard) {
+            if (sample.info().valid()) {
+              auto message_view = std::shared_ptr<T>(loan_guard, const_cast<T *>(&sample.data()));
+              lwrcl::MessageInfo new_info;
+              // Publisher-side timestamp from the DDS SampleInfo
+              // (rclcpp MessageInfo semantics) instead of reception time.
+              const auto ts = sample.info().source_timestamp();
+              new_info.source_timestamp = std::chrono::system_clock::time_point(
+                  std::chrono::duration_cast<std::chrono::system_clock::duration>(
+                      std::chrono::seconds(ts.sec()) + std::chrono::nanoseconds(ts.nanosec())));
+              new_info.from_intra_process = false;
+              {
+                std::lock_guard<std::mutex> lock(*lwrcl_subscriber_mutex_);
+                pollable_buffer_.emplace_back(message_view, new_info);
+                if (pollable_buffer_.size() > buffer_bound_) {
+                  pollable_buffer_.pop_front();
+                }
+              }
+              // Direct invocation in WaitSet thread — eliminates channel/executor hop.
+              // node_mutex_ serializes concurrent callbacks (subscriptions + timers).
+              {
+                std::lock_guard<std::mutex> lock(*node_mutex_);
+                try {
+                  callback_function_(message_view);
+                } catch (const std::exception &e) {
+                  std::cerr << "Exception in subscription callback: " << e.what() << std::endl;
+                } catch (...) {
+                  std::cerr << "Unknown exception in subscription callback." << std::endl;
+                }
+              }
+            }
+          }
+        }
+      }
+      catch (const dds::core::Exception& e) {
+        std::cerr << "DDS Exception in take_available: " << e.what() << std::endl;
+      }
+    }
+
+    void run()
+    {
+      // Wait for reader_ to be set
+      while (!reader_ && !stop_flag_.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+      if (stop_flag_.load()) return;
+
+      try {
+        // Use a ReadCondition + WaitSet for event-driven data reception
+        dds::sub::cond::ReadCondition read_cond(
+            *reader_, dds::sub::status::DataState::any_data());
+        dds::core::cond::WaitSet waitset;
+        waitset += read_cond;
+
+        while (!stop_flag_.load())
+        {
+          try {
+            // Update subscription-match count
+            try {
+              auto matched_status = reader_->subscription_matched_status();
+              count_.store(matched_status.current_count());
+            } catch (const dds::core::Exception&) {}
+
+            // Block until data arrives (or 10 ms timeout to recheck stop_flag_)
+            waitset.wait(dds::core::Duration::from_millisecs(10));
+            if (!stop_flag_.load()) {
+              take_available();
+            }
+          }
+          catch (const dds::core::TimeoutError&) {
+            // Normal timeout — just loop to check stop_flag_
+          }
+          catch (const dds::core::Exception& e) {
+            std::cerr << "DDS Exception in SubscriberWaitSet: " << e.what() << std::endl;
+          }
+          catch (const std::exception& e) {
+            std::cerr << "Exception in SubscriberWaitSet: " << e.what() << std::endl;
+          }
+        }
+      }
+      catch (const dds::core::Exception& e) {
+        std::cerr << "Failed to create WaitSet in SubscriberWaitSet: " << e.what() << std::endl;
+      }
+    }
+
+    std::function<void(std::shared_ptr<T>)> callback_function_;
+    std::shared_ptr<std::mutex> node_mutex_;
+    std::shared_ptr<dds::sub::DataReader<T>> reader_;
+    std::atomic<bool> stop_flag_;
+    std::thread waitset_thread_;
+    // ReadCondition shared with the unified Node-level WaitSet (created in ready()).
+    std::shared_ptr<dds::sub::cond::ReadCondition> read_cond_;
+
+    std::shared_ptr<std::mutex> lwrcl_subscriber_mutex_;
+    std::mutex take_mutex_;
+    std::deque<std::pair<std::shared_ptr<T>, lwrcl::MessageInfo>> pollable_buffer_;
+    size_t buffer_bound_;
+    std::atomic<int32_t> count_{0};
+  };
+
+  class ISubscription
+  {
+  public:
+    virtual ~ISubscription() = default;
+    virtual void stop() = 0;
+    virtual void add_to_waitset(dds::core::cond::WaitSet& ws) = 0;
+    virtual bool invoke_if_data() = 0;
+
+  protected:
+    ISubscription() = default;
+  };
+
+  template <typename T>
+  class Subscription : public ISubscription, public std::enable_shared_from_this<Subscription<T>>
+  {
+  public:
+    using SharedPtr = std::shared_ptr<Subscription<T>>;
+
+    Subscription(
+        dds::domain::DomainParticipant *participant, const std::string &topic_name,
+        const QoS &qos, std::function<void(std::shared_ptr<T>)> callback_function,
+        std::shared_ptr<std::mutex> node_mutex)
+        : participant_(participant),
+          waitset_(callback_function, node_mutex, pollable_buffer_bound(qos)),
+          topic_(nullptr),
+          subscriber_(nullptr),
+          reader_(nullptr),
+          topic_owned_(false)
+    {
+      try {
+        // Create subscriber
+        subscriber_ = std::make_shared<dds::sub::Subscriber>(*participant_);
+
+        auto existing_topic =
+            dds::topic::find<dds::topic::Topic<T>>(*participant_, topic_name);
+        if (existing_topic != dds::core::null) {
+          topic_ = std::make_shared<dds::topic::Topic<T>>(existing_topic);
+        } else {
+          auto topic_qos = participant_->default_topic_qos();
+          topic_ = std::make_shared<dds::topic::Topic<T>>(
+              *participant_, topic_name, topic_qos);
+          topic_owned_ = true;
+        }
+
+        // Configure DataReader QoS
+        auto reader_qos = subscriber_->default_datareader_qos();
+
+        // Set history policy
+        if (qos.get_history() == QoS::HistoryPolicy::KEEP_ALL) {
+          reader_qos << dds::core::policy::History::KeepAll();
+        } else {
+          reader_qos << dds::core::policy::History::KeepLast(qos.get_depth());
+        }
+
+        // Set reliability policy
+        if (qos.get_reliability() == QoS::ReliabilityPolicy::BEST_EFFORT) {
+          reader_qos << dds::core::policy::Reliability::BestEffort();
+        } else {
+          reader_qos << dds::core::policy::Reliability::Reliable();
+        }
+
+        // Set durability policy
+        if (qos.get_durability() == QoS::DurabilityPolicy::VOLATILE) {
+          reader_qos << dds::core::policy::Durability::Volatile();
+        } else {
+          reader_qos << dds::core::policy::Durability::TransientLocal();
+        }
+
+        // Create DataReader without listener (listener handling will be done differently)
+        reader_ = std::make_shared<dds::sub::DataReader<T>>(*subscriber_, *topic_, reader_qos);
+
+        // Initialize and start the waitset
+        waitset_.ready(reader_);
+        waitset_.start();
+
+      } catch (const dds::core::Exception& e) {
+        cleanup();
+        throw std::runtime_error("Failed to create subscription: " + std::string(e.what()));
+      }
+    }
+
+    ~Subscription()
+    {
+      cleanup();
+    }
+
+    Subscription(const Subscription &) = delete;
+    Subscription &operator=(const Subscription &) = delete;
+    Subscription(Subscription &&) = delete;
+    Subscription &operator=(Subscription &&) = delete;
+
+    int32_t get_publisher_count()
+    {
+      return waitset_.get_publisher_count();
+    }
+
+    void stop() override
+    {
+      waitset_.stop();
+    }
+
+    void add_to_waitset(dds::core::cond::WaitSet& ws) override
+    {
+      waitset_.add_to_waitset(ws);
+    }
+
+    bool invoke_if_data() override
+    {
+      return waitset_.invoke_if_data();
+    }
+
+    bool take(std::shared_ptr<T> &out_msg, lwrcl::MessageInfo &info)
+    {
+      return waitset_.take(out_msg, info);
+    }
+
+    bool take(T &out_msg, lwrcl::MessageInfo &info)
+    {
+      return waitset_.take(out_msg, info);
+    }
+
+    // Take without MessageInfo (convenience overloads, FastDDS-backend parity)
+    bool take(std::shared_ptr<T> &out_msg)
+    {
+      lwrcl::MessageInfo info;
+      return waitset_.take(out_msg, info);
+    }
+
+    bool take(T &out_msg)
+    {
+      lwrcl::MessageInfo info;
+      return waitset_.take(out_msg, info);
+    }
+
+    bool has_message()
+    {
+      return waitset_.has_message();
+    }
+
+    // Alias for rclcpp compatibility
+    bool has_data() { return has_message(); }
+
+    /**
+     * @brief Take a loaned message using RTI's DataReader loan lifecycle.
+     *
+     * @param out_loaned Output loaned message
+     * @return true if a message was successfully taken
+     */
+    bool take_loaned_message(LoanedSubscriptionMessage<T> &out_loaned)
+    {
+      return waitset_.take_loaned(out_loaned);
+    }
+
+    /**
+     * @brief Check if the subscription can loan messages.
+     * @return true — the loaned-message API is always available.
+     */
+    bool can_loan_messages() const
+    {
+      return true;
+    }
+
+    // Get the number of messages waiting in the pollable buffer
+    size_t get_message_count() const
+    {
+      return waitset_.buffered_count();
+    }
+
+    // Get the topic name
+    std::string get_topic_name() const
+    {
+      if (topic_)
+      {
+        return topic_->name();
+      }
+      return "";
+    }
+
+  private:
+    void cleanup()
+    {
+      waitset_.stop();
+
+      // Reset shared_ptrs explicitly to preserve RTI entity destruction order.
+      if (reader_) {
+        reader_.reset();
+      }
+      if (subscriber_) {
+        subscriber_.reset();
+      }
+      if (topic_ && topic_owned_) {
+        topic_.reset();
+      }
+    }
+
+    dds::domain::DomainParticipant *participant_;
+    SubscriberWaitSet<T> waitset_;
+    std::shared_ptr<dds::topic::Topic<T>> topic_;
+    std::shared_ptr<dds::sub::Subscriber> subscriber_;
+    std::shared_ptr<dds::sub::DataReader<T>> reader_;
+    bool topic_owned_;
+  };
+
+  class WaitSet
+  {
+  public:
+    WaitSet() = default;
+
+    template <typename T>
+    WaitSet(std::initializer_list<std::shared_ptr<Subscription<T>>> init_list)
+    {
+      for (auto &sub : init_list)
+      {
+        add_subscription<T>(sub);
+      }
+    }
+
+    template <typename T>
+    void add_subscription(std::shared_ptr<Subscription<T>> sub)
+    {
+      SubscriptionHolder holder;
+      holder.has_message = [sub]() -> bool
+      { return sub->has_message(); };
+      holder.take = [sub](void *data_ptr, MessageInfo &info) -> bool
+      {
+        T *typed_ptr = static_cast<T *>(data_ptr);
+        return sub->take(*typed_ptr, info);
+      };
+      subs_.push_back(holder);
+    }
+
+    WaitResult wait()
+    {
+      return wait_for(std::chrono::nanoseconds(-1));
+    }
+
+    template <typename Rep, typename Period>
+    WaitResult wait(std::chrono::duration<Rep, Period> timeout)
+    {
+      auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(timeout);
+      return wait_for(ns);
+    }
+
+    WaitResult wait_for(std::chrono::nanoseconds timeout)
+    {
+      auto start = std::chrono::steady_clock::now();
+
+      while (true)
+      {
+        for (auto &holder : subs_)
+        {
+          if (holder.has_message())
+          {
+            return WaitResult(WaitResultKind::Ready);
+          }
+        }
+
+        if (timeout.count() >= 0)
+        {
+          auto now = std::chrono::steady_clock::now();
+          if (now - start >= timeout)
+          {
+            return WaitResult(WaitResultKind::Timeout);
+          }
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+      return WaitResult(WaitResultKind::Error);
+    }
+
+    const std::vector<SubscriptionHolder> &get_subscriptions() const
+    {
+      return subs_;
+    }
+
+  private:
+    std::vector<SubscriptionHolder> subs_;
+  };
+} // namespace lwrcl
+
+#endif // LWRCL_SUBSCRIBER_HPP_

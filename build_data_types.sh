@@ -186,6 +186,8 @@ if [ "$BACKEND" = "fastdds" ]; then
 elif [ "$BACKEND" = "cyclonedds" ]; then
     DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
     LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/cyclonedds-libs}"
+elif [ "$BACKEND" = "rtidds" ]; then
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/rtidds-libs}"
 elif [ "$BACKEND" = "vsomeip" ]; then
     # vsomeip compiles data types against the standalone CDR library.
     # CycloneDDS is needed ONLY for the idlc code generator tool.
@@ -205,7 +207,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     # Override backend to cyclonedds for data type generation pipeline
     BACKEND="cyclonedds"
 else
-    echo "Usage: $0 <fastdds|cyclonedds|vsomeip|adaptive-autosar> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|rtidds|vsomeip|adaptive-autosar> [install|clean]"
     exit 1
 fi
 

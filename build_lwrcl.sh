@@ -50,6 +50,8 @@ if [ "$BACKEND" = "fastdds" ]; then
 elif [ "$BACKEND" = "cyclonedds" ]; then
     DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
     LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/cyclonedds-libs}"
+elif [ "$BACKEND" = "rtidds" ]; then
+    LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/rtidds-libs}"
 elif [ "$BACKEND" = "vsomeip" ]; then
     VSOMEIP_PREFIX="${VSOMEIP_PREFIX:-/opt/vsomeip}"
     LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/vsomeip-libs}"
@@ -58,7 +60,7 @@ elif [ "$BACKEND" = "adaptive-autosar" ]; then
     DDS_PREFIX="${DDS_PREFIX:-/opt/cyclonedds}"
     LWRCL_PREFIX="${LWRCL_PREFIX:-/opt/autosar-ap-libs}"
 else
-    echo "Usage: $0 <fastdds|cyclonedds|vsomeip|adaptive-autosar> [install|clean]"
+    echo "Usage: $0 <fastdds|cyclonedds|rtidds|vsomeip|adaptive-autosar> [install|clean]"
     exit 1
 fi
 

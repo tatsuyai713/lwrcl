@@ -9,29 +9,178 @@
 
 **A lightweight DDS communication library with an rclcpp-compatible API**
 
-lwrcl provides an API compatible with ROS 2's rclcpp. It supports **CycloneDDS**, **FastDDS**, **vsomeip (SOME/IP)**, and **Adaptive AUTOSAR (ara::com)** as communication backends, enabling direct topic and service communication with ROS 2 nodes without a full ROS 2 installation.
+lwrcl provides an API compatible with ROS 2's rclcpp. It supports **CycloneDDS**, **FastDDS**, **RTI Connext DDS**, **vsomeip (SOME/IP)**, and **Adaptive AUTOSAR (ara::com)** as communication backends. The native DDS backends can communicate directly with compatible ROS 2 DDS endpoints without a full ROS 2 installation; SOME/IP and ara::com use their own wire protocols and service models.
 
 ---
 
 ## Features
 
 - **rclcpp-compatible API** — Uses the `rclcpp` namespace, allowing existing ROS 2 code to be ported with minimal changes. Logging macros such as `RCLCPP_INFO` and `RCLCPP_WARN` are also available.
-- **Interoperability with ROS 2** — Communicates directly with ROS 2 nodes via topics and services on the same DDS domain.
-- **DDS backend selection** — Choose between CycloneDDS, FastDDS, vsomeip, or Adaptive AUTOSAR at build time. Multiple backends can be installed simultaneously and switched as needed.
+- **Interoperability with ROS 2** — Native DDS backends communicate with compatible ROS 2 DDS endpoints on the same domain. SOME/IP and ara::com deployments require an appropriate mapping or bridge.
+- **Backend selection** — Choose between CycloneDDS, FastDDS, RTI Connext DDS, vsomeip, or Adaptive AUTOSAR at build time. Multiple backends can be installed simultaneously and switched as needed.
 - **Minimal dependencies** — Depends only on a DDS library and yaml-cpp, resulting in fast builds.
 - **Multi-platform** — Supports Linux (Ubuntu/Debian), macOS (Homebrew), and QNX 8.0.
 - **Includes tf2 / tf2_ros** — Bundled coordinate transformation support.
 
 ---
 
-## Supported DDS Implementations
+## Supported Communication Backends
 
-| DDS Implementation | Description |
+| Backend | Description |
 |-------------------|-------------|
 | **CycloneDDS** | Eclipse Foundation open-source implementation. Lightweight. |
 | **FastDDS** | By eProsima. Rich QoS options. |
+| **RTI Connext DDS** | Commercial DDS implementation using the RTI Modern C++ API and generated TypePlugin support. |
 | **vsomeip** | COVESA SOME/IP implementation. Automotive-grade transport without DDS runtime dependency. |
 | **Adaptive AUTOSAR** | `ara::com`-based backend (Adaptive-AUTOSAR integration) running on CycloneDDS. |
+
+---
+
+## Backend Implementation and Semantic Differences
+
+The backends expose the same lwrcl/rclcpp-compatible surface API, but they are
+not interchangeable at the wire-protocol level. FastDDS, CycloneDDS, and RTI
+Connext DDS are native DDS implementations. The vsomeip backend maps the API to
+SOME/IP, while the Adaptive AUTOSAR backend maps it to generated `ara::com`
+proxy/skeleton events. Selecting a backend therefore changes discovery,
+serialization, QoS enforcement, deployment artifacts, and zero-copy behavior—not
+only the library linked by the application.
+
+### Architecture Overview
+
+| Property | FastDDS | CycloneDDS | RTI Connext DDS | vsomeip | Adaptive AUTOSAR |
+|---|---|---|---|---|---|
+| Transport/model | DDS/RTPS | DDS/RTPS | DDS/RTPS | SOME/IP events and methods | `ara::com` services/events |
+| Native C++ API used by lwrcl | eProsima Fast DDS API | OMG DDS C++ (`dds::...`) | RTI Modern C++ (`dds::...`, `rti::...`) | COVESA `vsomeip` | AUTOSAR `ara::com` proxy/skeleton API |
+| Central runtime entity | `DomainParticipant` | `dds::domain::DomainParticipant` | `dds::domain::DomainParticipant` | `vsomeip::application` | `ara::com` runtime plus generated proxies/skeletons |
+| Topic implementation | DDS Topic/DataWriter/DataReader | DDS Topic/DataWriter/DataReader | DDS Topic/DataWriter/DataReader | Hashed service ID plus event/eventgroup | Generated service instance plus event |
+| Service implementation | Paired request/response DDS topics | Paired request/response DDS topics | Paired request/response DDS topics | SOME/IP request/response methods | Generated proxy/skeleton events used by the compatibility layer |
+| Discovery | DDS participant/endpoint discovery | DDS participant/endpoint discovery | DDS participant/endpoint discovery | SOME/IP-SD | `ara::com` service discovery; binding-specific underneath |
+| ROS 2 DDS wire interoperability | Yes, with compatible topic/type/QoS mapping | Yes, with compatible topic/type/QoS mapping | Yes, with compatible topic/type/QoS mapping | No; requires a SOME/IP bridge/gateway | Not automatic; requires a compatible binding/mapping or bridge |
+| Runtime license | Open source | Open source | RTI license may be required by the installed bundle | Open source | Depends on the AUTOSAR platform/runtime distribution |
+
+The CycloneDDS and RTI backends are the closest implementations in source
+structure because both use the OMG-style `dds::domain`, `dds::pub`, `dds::sub`,
+and `dds::topic` APIs. FastDDS implements the same DDS concepts through the
+eProsima-specific API. The vsomeip and Adaptive AUTOSAR backends are protocol
+adapters rather than alternative DDS implementations.
+
+### Type Generation and Serialization
+
+| Backend | Type/code generator | Generated support | Serialization path |
+|---|---|---|---|
+| FastDDS | `fastddsgen -typeros2` | Fast DDS TopicDataType/TypeSupport | Fast CDR through generated Fast DDS type support |
+| CycloneDDS | `idlc -l cxx` | CycloneDDS C++ topic traits | CycloneDDS CDR implementation |
+| RTI Connext DDS | `rtiddsgen -language C++11 -unboundedSupport` | RTI TypeSupport and TypePlugin | `dds::topic::topic_type_support<T>::to_cdr_buffer()` / `from_cdr_buffer()` |
+| vsomeip | CycloneDDS-generated ROS type definitions | No DDS runtime type registration | Standalone CycloneDDS CDR serializes into a SOME/IP payload |
+| Adaptive AUTOSAR | CycloneDDS ROS types plus lwrcl AUTOSAR mapping generation | Generated `TopicEventProxy<T>` / `TopicEventSkeleton<T>` and manifests | Performed by the selected `ara::com` binding/runtime |
+
+All generated ROS types are normalized to the source-level API expected by
+lwrcl: public ROS-style fields, `SharedPtr`/`ConstSharedPtr`, snake-case include
+wrappers, and service Request/Response wrappers. RTI code generation needs an
+additional patch step because stock `rtiddsgen` emits accessor methods and uses
+a default maximum of 100 elements for an unbounded IDL sequence. The RTI type
+repository enables `-unboundedSupport` so ROS arrays such as
+`sensor_msgs::msg::Image::data` remain truly unbounded.
+
+Generated types are backend-specific ABI artifacts. Do not mix headers or
+libraries from `/opt/fast-dds-libs`, `/opt/cyclonedds-libs`,
+`/opt/rtidds-libs`, `/opt/vsomeip-libs`, and `/opt/autosar-ap-libs` in one
+application binary.
+
+### QoS Semantics
+
+The `rclcpp::QoS` API is available for every backend, but transport enforcement
+differs:
+
+| QoS behavior | FastDDS | CycloneDDS | RTI Connext DDS | vsomeip | Adaptive AUTOSAR |
+|---|---|---|---|---|---|
+| History/depth | Mapped to DDS | Mapped to DDS | Mapped to DDS | Depth bounds the local lwrcl receive buffer | Depth bounds the lwrcl receive buffer; transport behavior is binding-defined |
+| Reliability | Mapped to DDS | Mapped to DDS | Mapped to DDS | Not mapped to SOME/IP transport QoS | Binding/deployment-defined |
+| Durability | Mapped to DDS | Mapped to DDS | Mapped to DDS | Not mapped | Binding/deployment-defined |
+| Deadline/lifespan/liveliness | Mapped by the FastDDS backend | Represented by the API; current Publisher/Subscription mapping focuses on history, reliability, and durability | Represented by the API; current Publisher/Subscription mapping focuses on history, reliability, and durability | API-compatible values only | Deployment/binding-defined |
+| Large reliable samples | DDS fragmentation | DDS fragmentation | Reliable fragmented samples use RTI asynchronous publish mode | SOME/IP payload/routing limits apply | Binding-specific limits apply |
+
+RTI Modern C++ QoS objects must be initialized from the owning entity's
+configured defaults. The RTI backend therefore starts with
+`participant.default_topic_qos()`, `publisher.default_datawriter_qos()`, and
+`subscriber.default_datareader_qos()` before applying lwrcl overrides. It also
+reuses an existing typed Topic within a participant because RTI rejects a
+second Topic assertion with the same name and type.
+
+### Loaned Messages and Zero Copy
+
+`borrow_loaned_message()` and `take_loaned_message()` exist on every backend so
+application code remains portable. `can_loan_messages()` means that the API is
+available; it does not guarantee an end-to-end zero-copy transport path.
+
+| Backend | Publisher path | Subscriber path | Conditions/limitations |
+|---|---|---|---|
+| FastDDS | Native `DataWriter::loan_sample()` with heap fallback | Native DataReader loan/return | Actual availability depends on Fast DDS transport, memory policy, and type |
+| CycloneDDS | Native writer loan with heap fallback | `dds::sub::LoanedSamples<T>` | Native shared-memory zero copy requires CycloneDDS SHM, iceoryx, and a compatible fixed-size type |
+| RTI Connext DDS | Native `DataWriter::get_loan()` for fixed-size generated ROS types, with heap fallback | RTI `dds::sub::LoanedSamples<T>` | Fixed-size IDL is generated as `SHMEM_REF`; strings/sequences use the fallback with the ordinary SHM or network transport |
+| vsomeip | Heap message, CDR serialization, then SOME/IP payload | Payload is viewed without an intermediate payload copy, then deserialized into a ROS object | API-compatible loan wrapper, not end-to-end zero copy |
+| Adaptive AUTOSAR | `SkeletonEvent::Allocate()` when the binding supports it, otherwise heap fallback | `ara::com::SamplePtr<T>` | Whether this is zero copy depends on the selected `ara::com` binding; mutable access creates a copy |
+
+The RTI type generator classifies each ROS IDL and its included dependencies.
+It adds `@transfer_mode(SHMEM_REF)` only when the complete object graph is
+fixed-size. `borrow_loaned_message()` then obtains storage with RTI
+`DataWriter::get_loan()` and returns an unpublished loan with `discard_loan()`.
+A successful `write()` transfers ownership back to RTI. If the type contains a
+`string`, `wstring`, or `sequence`, or the RTI loan pool is temporarily
+exhausted, lwrcl allocates the portable message on the heap instead.
+
+RTI shared-memory transport and RTI zero-copy transfer are not synonymous.
+Ordinary variable-length ROS types can still travel over the shared-memory
+transport, but their STL representation is serialized and copied into the
+transport buffer. RTI FlatData mutable types can build variable-length data in
+a loaned serialized buffer, but they have a Builder/Offset API and are not the
+same C++ type as the patched ROS `std::string`/`std::vector` message. Therefore
+the backend does not silently substitute FlatData for the public ROS message
+type.
+
+### Configuration and Deployment
+
+| Backend | Main runtime configuration | Default install prefix | Important build/runtime requirements |
+|---|---|---|---|
+| FastDDS | `FASTDDS_DEFAULT_PROFILES_FILE` and Fast DDS XML | `/opt/fast-dds-libs` | Fast DDS, Fast CDR, and generated FastDDS ROS types |
+| CycloneDDS | `CYCLONEDDS_URI` and CycloneDDS XML | `/opt/cyclonedds-libs` | CycloneDDS/CycloneDDS-CXX; iceoryx and RouDi for SHM |
+| RTI Connext DDS | RTI QoS profiles, `NDDSHOME`, `CONNEXTDDS_ARCH`, and optionally `RTI_LICENSE_FILE` | `/opt/rtidds-libs` | Source the target `rtisetenv` script; the license must match the installed RTI bundle/features |
+| vsomeip | vsomeip JSON, routing manager, application/service configuration | `/opt/vsomeip-libs` | Boost and vsomeip at runtime; CycloneDDS `idlc`/CDR pieces are build-time serialization dependencies, not a DDS transport dependency |
+| Adaptive AUTOSAR | ARXML plus generated mapping/manifest files; `ARA_COM_EVENT_BINDING` selects `vsomeip`, `dds`, or `iceoryx` | `/opt/autosar-ap-libs` | Adaptive AUTOSAR AP runtime and generated proxy/skeleton metadata; selected binding dependencies must be installed |
+
+Current project scripts cover Linux/macOS/QNX for FastDDS and CycloneDDS,
+Linux/macOS/QNX for vsomeip where its dependencies are available, and
+Linux/QNX for Adaptive AUTOSAR. The RTI backend is currently built and tested
+with RTI Connext DDS 7.3.0 on x86_64 Linux; additional RTI targets require the
+matching licensed RTI architecture package and may need platform-specific build
+script additions.
+
+For RTI, `RTI_LICENSE_FILE` should be set explicitly when multiple license
+files exist. RTI applications otherwise search the current directory and
+`NDDSHOME`, which can select a different license than the intended production
+license.
+
+Adaptive AUTOSAR requires more build-time deployment metadata than the other
+backends. `build_apps.sh adaptive-autosar` scans publisher, subscription,
+service, and client creation sites and generates the mapping, manifest, and
+proxy/skeleton header used by the application. Changing a topic or service can
+therefore require regenerating and deploying these artifacts.
+
+### Backend Selection Guide
+
+- Choose **CycloneDDS** for a small open-source DDS runtime, ROS 2 wire
+  interoperability, and optional iceoryx shared-memory transport.
+- Choose **FastDDS** when Fast DDS ecosystem compatibility, its extended QoS
+  mapping, or native loan APIs are required.
+- Choose **RTI Connext DDS** when deployment already standardizes on RTI,
+  commercial tooling/support or RTI interoperability is required, and the RTI
+  target package/license is available.
+- Choose **vsomeip** for a native SOME/IP deployment where DDS discovery and
+  DDS wire compatibility are not required.
+- Choose **Adaptive AUTOSAR** when the public communication boundary must be
+  `ara::com` and deployment is controlled through AUTOSAR manifests and
+  generated proxy/skeleton artifacts.
 
 ---
 
@@ -44,12 +193,12 @@ lwrcl provides an API compatible with ROS 2's rclcpp. It supports **CycloneDDS**
 | Service / Client | ✅ | ✅ |
 | Timer (create_timer / create_wall_timer) | ✅ | ✅ |
 | Executor (Single / Multi-threaded) | ✅ | ✅ |
-| QoS (Reliability, Durability, History) | ✅ | ✅ |
-| QoS (Deadline, Lifespan, Liveliness) | ✅ | ✅ |
+| QoS (Reliability, Durability, History) | ✅ (backend-dependent mapping) | ✅ |
+| QoS (Deadline, Lifespan, Liveliness) | ⚠️ Backend-dependent | ✅ |
 | QoS Presets (SensorDataQoS, etc.) | ✅ | ✅ |
 | Parameter (declare, get, set) | ✅ | ✅ |
 | Parameter File (YAML) | ✅ | ✅ |
-| Zero Copy (Loaned Messages) | ✅ | ✅ |
+| Zero Copy (Loaned Messages) | ⚠️ Backend/type/transport-dependent | ✅ |
 | WaitSet | ✅ | ✅ |
 | Namespace Support | ✅ | ✅ |
 | Time / Duration / Clock / Rate | ✅ | ✅ |
@@ -235,7 +384,7 @@ Each value is the **median of 5 independent runs**.
 
 - CMake 3.16.3 or later
 - C++14-compatible compiler
-- Communication backend (CycloneDDS, FastDDS, vsomeip, or Adaptive AUTOSAR)
+- Communication backend (CycloneDDS, FastDDS, RTI Connext DDS, vsomeip, or Adaptive AUTOSAR)
 - yaml-cpp (included as a submodule)
 - Boost (required for vsomeip backend)
 - macOS uses Homebrew. For compatibility, `install_cmake_macos.sh` installs/pins CMake 3.31.6 and `install_boost_macos.sh` installs Boost 1.85.
@@ -247,10 +396,10 @@ Each value is the **median of 5 independent runs**.
 All build scripts follow this pattern:
 
 ```
-./build_<target>.sh <fastdds|cyclonedds|vsomeip|adaptive-autosar> [install|clean]
+./build_<target>.sh <fastdds|cyclonedds|rtidds|vsomeip|adaptive-autosar> [install|clean]
 ```
 
-- 1st argument: Communication backend (`fastdds`, `cyclonedds`, `vsomeip`, or `adaptive-autosar`)
+- 1st argument: Communication backend (`fastdds`, `cyclonedds`, `rtidds`, `vsomeip`, or `adaptive-autosar`)
 - 2nd argument: `install` to build & install, `clean` to remove build directory
 
 ### Prerequisites
@@ -285,6 +434,21 @@ source ~/.bashrc
 ```
 
 > For Arch Linux, use `install_fast_dds_archlinux.sh` instead.
+
+**RTI Connext DDS:**
+
+Install RTI Connext DDS separately, ensure that its license enables the
+Connext Professional runtime, and source the environment for the target
+architecture before configuring or running lwrcl:
+
+```bash
+source "$HOME/rti_connext_dds-7.3.0/resource/scripts/rtisetenv_x64Linux4gcc7.3.0.bash"
+export RTI_LICENSE_FILE=/path/to/production/rti_license.dat
+./build_all.sh rtidds install
+```
+
+The `rtidds` build installs lwrcl, generated ROS type libraries, and
+`yaml-cpp` under `/opt/rtidds-libs`. The RTI SDK itself is not redistributed.
 
 **vsomeip (SOME/IP):**
 
@@ -329,6 +493,7 @@ Builds ROS 2 compatible message types (`std_msgs`, `sensor_msgs`, `geometry_msgs
 Built binaries are placed in `apps/install-fastdds/`.
 
 > **To use CycloneDDS, replace `fastdds` with `cyclonedds` in the commands above.**
+> **To use RTI Connext DDS, source its `rtisetenv` script and replace `fastdds` with `rtidds`.**
 > **To use vsomeip, replace `fastdds` with `vsomeip` in the commands above.**
 > **For Adaptive AUTOSAR, run the backend-specific steps below.**
 
