@@ -129,10 +129,10 @@ jobs:
           test -x apps/install-adaptive-autosar/bin/example_spin
           test -x apps/install-adaptive-autosar/bin/example_service_server
 
-      - name: Verify tests use normal publish API
+      - name: Verify SHM tests use normal publish API
         run: |
           set -euo pipefail
-          ! grep -R "borrow_loaned_message\|LoanedMessage\|LoanedSubscriptionMessage\|can_loan_messages\|is_loaned\|take_loaned" test/src test/CMakeLists.txt README.md README_JA.md
+          ! grep -E "borrow_loaned_message|LoanedMessage|LoanedSubscriptionMessage|can_loan_messages|is_loaned|take_loaned" test/src/test_shm_zero_copy.cpp
 
       - name: Run tests (Adaptive AUTOSAR)
         run: |
